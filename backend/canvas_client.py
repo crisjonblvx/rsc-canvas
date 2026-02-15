@@ -416,6 +416,76 @@ class CanvasClient:
     # SYLLABUS
     # ==========================================================================
 
+    # ==========================================================================
+    # STUDENT ENDPOINTS
+    # ==========================================================================
+
+    def get_student_courses(self) -> List[Dict]:
+        """
+        Get all courses where the authenticated user is enrolled as a student
+
+        Returns:
+            list: List of course objects
+        """
+        courses = self._make_request(
+            method="GET",
+            endpoint="/api/v1/courses",
+            params={
+                "enrollment_type": "student",
+                "enrollment_state": "active",
+                "state[]": ["available"],
+                "include[]": ["term", "total_scores", "current_grading_period_scores"]
+            }
+        )
+        return courses if courses else []
+
+    def get_student_assignments(self, course_id: int, order_by: str = "due_at") -> List[Dict]:
+        """
+        Get all assignments for a course (student view)
+
+        Args:
+            course_id: Canvas course ID
+            order_by: Sort order (due_at, name, position)
+
+        Returns:
+            list: List of assignment objects with submission info
+        """
+        assignments = self._make_request(
+            method="GET",
+            endpoint=f"/api/v1/courses/{course_id}/assignments",
+            params={
+                "order_by": order_by,
+                "include[]": ["submission", "score_statistics"],
+                "per_page": 100
+            }
+        )
+        return assignments if assignments else []
+
+    def get_student_submissions(self, course_id: int) -> List[Dict]:
+        """
+        Get all submissions for the current student in a course
+
+        Args:
+            course_id: Canvas course ID
+
+        Returns:
+            list: List of submission objects
+        """
+        submissions = self._make_request(
+            method="GET",
+            endpoint=f"/api/v1/courses/{course_id}/students/submissions",
+            params={
+                "student_ids[]": ["self"],
+                "include[]": ["assignment", "course"],
+                "per_page": 100
+            }
+        )
+        return submissions if submissions else []
+
+    # ==========================================================================
+    # SYLLABUS
+    # ==========================================================================
+
     def update_syllabus(self, course_id: int, syllabus_body: str) -> Optional[Dict]:
         """
         Update the course syllabus

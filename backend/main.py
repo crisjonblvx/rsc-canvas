@@ -53,6 +53,7 @@ app.add_middleware(
     allow_origins=[
         "https://www.readysetclass.app",
         "https://readysetclass.app",
+        "https://student.readysetclass.app",
         "https://www.readysetclass.com",
         "https://readysetclass.com",
         "http://localhost:3000",
@@ -3261,4 +3262,11 @@ from routes_ai_grading import router as ai_grading_router
 
 # Include AI grading routes
 app.include_router(ai_grading_router)
+
+# ============================================================================
+# STUDENT ROUTES (Phife)
+# ============================================================================
+
+from routers.student import router as student_router
+app.include_router(student_router)
 

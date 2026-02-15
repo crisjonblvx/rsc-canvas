@@ -154,6 +154,10 @@ class StudentRegisterRequest(BaseModel):
     full_name: str
     institution: Optional[str] = None
 
+class StudentLoginRequest(BaseModel):
+    email: str
+    password: str
+
 class CanvasConnectRequest(BaseModel):
     canvas_url: str
     access_token: str
@@ -162,6 +166,87 @@ class CanvasConnectRequest(BaseModel):
 # ============================================================================
 # AUTH ENDPOINTS
 # ============================================================================
+
+@router.post("/api/auth/student/login")
+async def student_login(request: StudentLoginRequest):
+    """Login for student accounts"""
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Get user
+        cursor.execute("""
+            SELECT id, email, password_hash, role, is_active, full_name,
+                   institution, canvas_url, canvas_token_encrypted
+            FROM users
+            WHERE email = %s
+        """, (request.email,))
+
+        user = cursor.fetchone()
+
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        user_id, email, password_hash, role, is_active, full_name, institution, canvas_url, canvas_token = user
+
+        # Verify password
+        password_bytes = request.password.encode('utf-8')
+        stored_hash_bytes = password_hash.encode('utf-8')
+        if not bcrypt.checkpw(password_bytes, stored_hash_bytes):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        if not is_active:
+            raise HTTPException(status_code=403, detail="Account disabled")
+
+        # Create session
+        session_token = secrets.token_urlsafe(32)
+        expires_at = datetime.now() + timedelta(hours=24)
+
+        cursor.execute("""
+            INSERT INTO sessions (user_id, session_token, expires_at)
+            VALUES (%s, %s, %s)
+        """, (user_id, session_token, expires_at))
+
+        # Log activity
+        cursor.execute("""
+            INSERT INTO activity_log (user_id, action, details)
+            VALUES (%s, 'login', '{"type": "student"}')
+        """, (user_id,))
+
+        # Update last active
+        cursor.execute("""
+            UPDATE users SET last_active_at = NOW() WHERE id = %s
+        """, (user_id,))
+
+        conn.commit()
+
+        # Detect Canvas URL if not set
+        _, suggested_canvas_url = _detect_institution_from_email(email)
+
+        return {
+            "token": session_token,
+            "user": {
+                "id": user_id,
+                "email": email,
+                "full_name": full_name,
+                "role": role,
+                "institution": institution,
+                "is_demo": False
+            },
+            "canvas_connected": canvas_url is not None and canvas_token is not None,
+            "suggested_canvas_url": suggested_canvas_url if not canvas_url else canvas_url
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Student login error: {e}")
+        raise HTTPException(status_code=500, detail="Login failed")
+    finally:
+        cursor.close()
+        conn.close()
+
 
 @router.post("/api/auth/register")
 async def register_student(request: StudentRegisterRequest):
@@ -734,3 +819,142 @@ def _get_letter_grade(percentage: float) -> str:
         return "D"
     else:
         return "F"
+
+
+# ============================================================================
+# NUCLEAR CACHE CLEAR (Phase 1 utility)
+# ============================================================================
+
+@router.get("/api/v1/student/nuclear-cache")
+async def nuclear_cache():
+    """
+    Returns JavaScript to nuke all caches, service workers, and local storage.
+    Frontend should call this endpoint and eval the response, or redirect to
+    the HTML version at /nuclear-cache.
+
+    This is a no-auth endpoint so it works even when auth is broken.
+    """
+    return {
+        "action": "nuclear_cache_clear",
+        "instructions": "Execute the 'script' field in your browser console, or visit /api/v1/student/nuclear-cache/html",
+        "script": """
+            // Unregister all service workers
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for (let registration of registrations) {
+                        registration.unregister();
+                        console.log('Unregistered service worker:', registration.scope);
+                    }
+                });
+            }
+            // Clear all caches
+            if ('caches' in window) {
+                caches.keys().then(function(names) {
+                    for (let name of names) {
+                        caches.delete(name);
+                        console.log('Deleted cache:', name);
+                    }
+                });
+            }
+            // Clear localStorage and sessionStorage
+            localStorage.clear();
+            sessionStorage.clear();
+            console.log('Cleared localStorage and sessionStorage');
+            // Force reload without cache
+            setTimeout(function() { window.location.reload(true); }, 500);
+        """
+    }
+
+
+@router.get("/api/v1/student/nuclear-cache/html")
+async def nuclear_cache_html():
+    """
+    Self-contained HTML page that nukes all caches and redirects to setup.
+    Visit this URL directly in the browser to clear everything.
+    """
+    from fastapi.responses import HTMLResponse
+
+    html = """<!DOCTYPE html>
+<html>
+<head>
+    <title>ReadySetClass - Cache Reset</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+        }
+        h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+        p { font-size: 1.1rem; opacity: 0.9; }
+        .status { margin-top: 1.5rem; font-size: 0.95rem; }
+        .check { color: #4ade80; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Clearing Cache...</h1>
+        <p>Resetting ReadySetClass Student Edition</p>
+        <div class="status" id="status"></div>
+    </div>
+    <script>
+        const status = document.getElementById('status');
+        function log(msg) {
+            status.innerHTML += '<div class="check">' + msg + '</div>';
+        }
+
+        async function nuclearClear() {
+            // 1. Unregister service workers
+            if ('serviceWorker' in navigator) {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                for (const reg of regs) {
+                    await reg.unregister();
+                    log('Unregistered service worker');
+                }
+            }
+            log('Service workers cleared');
+
+            // 2. Delete all caches
+            if ('caches' in window) {
+                const names = await caches.keys();
+                for (const name of names) {
+                    await caches.delete(name);
+                    log('Deleted cache: ' + name);
+                }
+            }
+            log('Browser caches cleared');
+
+            // 3. Clear storage
+            localStorage.clear();
+            sessionStorage.clear();
+            log('Local storage cleared');
+
+            // 4. Clear cookies for this domain
+            document.cookie.split(';').forEach(function(c) {
+                document.cookie = c.trim().split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/';
+            });
+            log('Cookies cleared');
+
+            log('');
+            log('All clear! Redirecting...');
+
+            // 5. Redirect after a moment
+            setTimeout(function() {
+                window.location.href = '/setup';
+            }, 1500);
+        }
+
+        nuclearClear();
+    </script>
+</body>
+</html>"""
+
+    return HTMLResponse(content=html)

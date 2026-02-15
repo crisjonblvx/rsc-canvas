@@ -64,6 +64,10 @@
     {
       "source": "/grading",
       "destination": "/grading.html"
+    },
+    {
+      "source": "/r/:code",
+      "destination": "/login.html?ref=:code"
     }
   ]
 }

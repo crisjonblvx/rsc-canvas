@@ -3275,6 +3275,302 @@ async def get_analytics_data(current_user=Depends(get_current_user_from_token)):
 
 
 # ============================================================================
+# REFERRAL / AFFILIATE PROGRAM
+# ============================================================================
+
+import re as _re
+import random as _random
+
+
+class ReferralApplyRequest(BaseModel):
+    code: str
+
+
+class ReferralTierUpdateRequest(BaseModel):
+    tier: str
+    commission_rate: float
+
+
+def _generate_referral_code(email: str) -> str:
+    """Generate a referral code from email: RSCE- + first 5 alphanumeric chars uppercased"""
+    clean = _re.sub(r'[^a-zA-Z0-9]', '', email.split('@')[0]).upper()
+    base = clean[:5].ljust(5, 'X')
+    return f"RSCE-{base}"
+
+
+@app.get("/api/referral/my-code")
+async def get_my_referral_code(current_user=Depends(get_current_user_from_token)):
+    """Get or generate the current user's referral code"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        user_id = current_user['user_id']
+        email = current_user['email']
+
+        cursor.execute("""
+            SELECT code, tier, commission_rate, total_referrals,
+                   successful_referrals, total_earnings
+            FROM referral_codes
+            WHERE user_id = %s AND is_active = TRUE
+        """, (user_id,))
+        existing = cursor.fetchone()
+
+        if existing:
+            code, tier, rate, total, successful, earnings = existing
+            return {
+                "code": code, "tier": tier,
+                "commission_rate": float(rate),
+                "total_referrals": total,
+                "successful_referrals": successful,
+                "total_earnings": float(earnings),
+                "shareable_link": f"https://readysetclass.app/r/{code}"
+            }
+
+        # Generate new code
+        code = _generate_referral_code(email)
+        cursor.execute("SELECT id FROM referral_codes WHERE code = %s", (code,))
+        if cursor.fetchone():
+            code = f"{code}{_random.randint(10, 99)}"
+
+        cursor.execute("""
+            INSERT INTO referral_codes (user_id, code, tier, commission_rate)
+            VALUES (%s, %s, 'ambassador', 15.00)
+            RETURNING code, tier, commission_rate, total_referrals, successful_referrals, total_earnings
+        """, (user_id, code))
+        row = cursor.fetchone()
+
+        cursor.execute("UPDATE users SET referral_code = %s WHERE id = %s", (code, user_id))
+        conn.commit()
+
+        return {
+            "code": row[0], "tier": row[1],
+            "commission_rate": float(row[2]),
+            "total_referrals": row[3],
+            "successful_referrals": row[4],
+            "total_earnings": float(row[5]),
+            "shareable_link": f"https://readysetclass.app/r/{row[0]}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Referral code error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/referral/stats")
+async def get_referral_stats(current_user=Depends(get_current_user_from_token)):
+    """Get detailed referral stats for the current user"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        user_id = current_user['user_id']
+
+        cursor.execute("""
+            SELECT code, tier, commission_rate, total_referrals,
+                   successful_referrals, total_earnings
+            FROM referral_codes
+            WHERE user_id = %s AND is_active = TRUE
+        """, (user_id,))
+        code_row = cursor.fetchone()
+
+        if not code_row:
+            raise HTTPException(status_code=404, detail="No referral code found. Visit your account page first.")
+
+        code, tier, rate, total, successful, earnings = code_row
+
+        cursor.execute("""
+            SELECT COUNT(*) FROM referrals
+            WHERE referrer_id = %s AND status = 'pending'
+        """, (user_id,))
+        pending = cursor.fetchone()[0]
+
+        cursor.execute("""
+            SELECT u.email, r.status, r.created_at, r.converted_at
+            FROM referrals r
+            JOIN users u ON r.referred_user_id = u.id
+            WHERE r.referrer_id = %s
+            ORDER BY r.created_at DESC
+        """, (user_id,))
+
+        referrals_list = []
+        for row in cursor.fetchall():
+            email = row[0]
+            at_idx = email.index('@')
+            masked = email[:2] + '***' + email[at_idx:]
+            referrals_list.append({
+                "email": masked, "status": row[1],
+                "created_at": row[2].isoformat() if row[2] else None,
+                "converted_at": row[3].isoformat() if row[3] else None
+            })
+
+        return {
+            "code": code, "tier": tier,
+            "commission_rate": float(rate),
+            "total_referrals": total,
+            "successful_referrals": successful,
+            "pending_referrals": pending,
+            "total_earnings": float(earnings),
+            "referrals": referrals_list
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Referral stats error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/referral/apply")
+async def apply_referral_code(request: ReferralApplyRequest, current_user=Depends(get_current_user_from_token)):
+    """Apply a referral code to the current user"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        user_id = current_user['user_id']
+        code = request.code.strip().upper()
+
+        cursor.execute("SELECT referred_by FROM users WHERE id = %s", (user_id,))
+        user_row = cursor.fetchone()
+        if user_row and user_row[0]:
+            raise HTTPException(status_code=400, detail="You have already applied a referral code")
+
+        cursor.execute("""
+            SELECT id, user_id, code
+            FROM referral_codes
+            WHERE code = %s AND is_active = TRUE
+        """, (code,))
+        code_row = cursor.fetchone()
+        if not code_row:
+            raise HTTPException(status_code=404, detail="Invalid referral code")
+
+        referrer_code_id, referrer_user_id, referral_code = code_row
+
+        if referrer_user_id == user_id:
+            raise HTTPException(status_code=400, detail="You cannot use your own referral code")
+
+        cursor.execute("""
+            INSERT INTO referrals (referrer_id, referred_user_id, referral_code, status)
+            VALUES (%s, %s, %s, 'pending')
+        """, (referrer_user_id, user_id, referral_code))
+
+        cursor.execute("""
+            UPDATE referral_codes SET total_referrals = total_referrals + 1
+            WHERE id = %s
+        """, (referrer_code_id,))
+
+        cursor.execute("UPDATE users SET referred_by = %s WHERE id = %s", (referral_code, user_id))
+        conn.commit()
+
+        return {"success": True, "message": "Referral code applied"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Referral apply error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/admin/referrals")
+async def get_all_referrals(current_user=Depends(get_current_user_from_token)):
+    """Get all referral codes with user info (admin only)"""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT u.id, u.email, rc.code, rc.tier, rc.commission_rate,
+                   rc.total_referrals, rc.successful_referrals,
+                   rc.total_earnings, rc.is_active, rc.created_at
+            FROM referral_codes rc
+            JOIN users u ON rc.user_id = u.id
+            ORDER BY rc.created_at DESC
+        """)
+
+        referrals = []
+        for row in cursor.fetchall():
+            referrals.append({
+                "user_id": row[0], "user_email": row[1],
+                "code": row[2], "tier": row[3],
+                "commission_rate": float(row[4]),
+                "total_referrals": row[5],
+                "successful_referrals": row[6],
+                "total_earnings": float(row[7]),
+                "is_active": row[8],
+                "created_at": row[9].isoformat() if row[9] else None
+            })
+
+        return {"referrals": referrals}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Admin referrals error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.patch("/api/admin/referral/{user_id}/tier")
+async def update_referral_tier(
+    user_id: int,
+    request: ReferralTierUpdateRequest,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Update a user's affiliate tier and commission rate (admin only)"""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    valid_tiers = {'ambassador', 'champion', 'partner'}
+    if request.tier not in valid_tiers:
+        raise HTTPException(status_code=400, detail=f"Invalid tier. Must be one of: {', '.join(valid_tiers)}")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE referral_codes
+            SET tier = %s, commission_rate = %s
+            WHERE user_id = %s
+            RETURNING code, tier, commission_rate, successful_referrals
+        """, (request.tier, request.commission_rate, user_id))
+
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="Referral code not found for this user")
+
+        code, tier, rate, successful = result
+
+        # Auto-upgrade: if 5+ successful referrals and still ambassador, bump to champion
+        if successful >= 5 and tier == 'ambassador':
+            cursor.execute("""
+                UPDATE referral_codes SET tier = 'champion', commission_rate = 25.00
+                WHERE user_id = %s RETURNING tier, commission_rate
+            """, (user_id,))
+            upgraded = cursor.fetchone()
+            tier, rate = upgraded
+
+        conn.commit()
+        return {"message": f"Tier updated to {tier}", "code": code, "tier": tier, "commission_rate": float(rate)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Admin tier update error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================================
 # AI GRADING ROUTES
 # ============================================================================
 

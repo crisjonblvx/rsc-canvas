@@ -256,12 +256,31 @@
             border-radius: 6px;
             font-family: var(--font-body);
         }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .header { flex-direction: column; gap: 1rem; text-align: center; }
+            .header-actions { flex-direction: column; width: 100%; }
+            .header-actions .btn { width: 100%; text-align: center; }
+            h1 { font-size: 1.5rem; }
+            .stats-grid { grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+            .stat-card { padding: 1rem; }
+            .stat-value { font-size: 1.5rem; }
+            .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; gap: 0; }
+            .tab { padding: 0.75rem 1rem; white-space: nowrap; font-size: 0.9rem; }
+            .table-container { padding: 0.75rem; }
+            th, td { padding: 0.5rem 0.4rem; font-size: 0.8rem; }
+            .btn { min-height: 44px; }
+            .btn-small { min-height: 36px; }
+            select { font-size: 16px; min-height: 44px; }
+        }
     </style>
 </head>
 <body>
     <script>
       (function() {
-        var APP_VERSION = '2.2.0';
+        var APP_VERSION = '2.3.0';
         if ('serviceWorker' in navigator) {
           navigator.serviceWorker.getRegistrations().then(function(registrations) {
             registrations.forEach(function(r) { r.unregister(); });
@@ -301,6 +320,7 @@
         <div class="tabs">
             <button class="tab active" onclick="showTab('users')">👥 Users</button>
             <button class="tab" onclick="showTab('analytics')">📊 Analytics</button>
+            <button class="tab" onclick="showTab('referrals')">🤝 Referrals</button>
             <button class="tab" onclick="showTab('system')">⚙️ System</button>
         </div>
 
@@ -320,6 +340,16 @@
                 <h2 style="margin-bottom: 1rem;">📊 Analytics & Insights</h2>
                 <div id="analyticsData">
                     <div class="loading">Loading analytics...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Referrals Tab -->
+        <div id="referrals" class="tab-content">
+            <div class="table-container">
+                <h2 style="margin-bottom: 1rem;">🤝 Referral Management</h2>
+                <div id="referralsTable">
+                    <div class="loading">Loading referrals...</div>
                 </div>
             </div>
         </div>
@@ -381,9 +411,10 @@
             event.target.classList.add('active');
             document.getElementById(tabName).classList.add('active');
 
-            // Load analytics when analytics tab is shown
             if (tabName === 'analytics') {
                 loadAnalytics();
+            } else if (tabName === 'referrals') {
+                loadReferrals();
             }
         }
 
@@ -635,6 +666,98 @@
                 }
             } catch (error) {
                 showAlert('error', 'Failed to cleanup demos');
+            }
+        }
+
+        // Load referrals
+        async function loadReferrals() {
+            try {
+                const response = await fetch(`${API_URL}/api/admin/referrals`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                if (!response.ok) {
+                    document.getElementById('referralsTable').innerHTML = '<p style="color: var(--error);">Failed to load referrals. Endpoint may not be deployed yet.</p>';
+                    return;
+                }
+
+                const data = await response.json();
+                const referrals = data.referrals || [];
+
+                if (referrals.length === 0) {
+                    document.getElementById('referralsTable').innerHTML = '<p style="color: var(--text-light);">No referral codes created yet.</p>';
+                    return;
+                }
+
+                let html = `<table style="width: 100%; border-collapse: collapse; font-size: 0.875rem;">
+                    <thead>
+                        <tr style="background: var(--background-cream); text-align: left;">
+                            <th style="padding: 0.75rem;">User</th>
+                            <th style="padding: 0.75rem;">Code</th>
+                            <th style="padding: 0.75rem;">Tier</th>
+                            <th style="padding: 0.75rem;">Rate</th>
+                            <th style="padding: 0.75rem;">Referrals</th>
+                            <th style="padding: 0.75rem;">Conversions</th>
+                            <th style="padding: 0.75rem;">Earnings</th>
+                            <th style="padding: 0.75rem;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+                referrals.forEach(r => {
+                    const tierClass = r.tier === 'partner' ? 'color: #065f46; background: #d1fae5;' :
+                                     r.tier === 'champion' ? 'color: #92400e; background: #fef3c7;' :
+                                     'color: #1e40af; background: #dbeafe;';
+                    html += `<tr style="border-bottom: 1px solid #e5e7eb;">
+                        <td style="padding: 0.75rem;">${r.user_email}</td>
+                        <td style="padding: 0.75rem; font-family: monospace; font-weight: 600;">${r.code}</td>
+                        <td style="padding: 0.75rem;">
+                            <span style="padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; ${tierClass}">${r.tier}</span>
+                        </td>
+                        <td style="padding: 0.75rem;">${r.commission_rate}%</td>
+                        <td style="padding: 0.75rem;">${r.total_referrals}</td>
+                        <td style="padding: 0.75rem;">${r.successful_referrals}</td>
+                        <td style="padding: 0.75rem;">$${(r.total_earnings || 0).toFixed(2)}</td>
+                        <td style="padding: 0.75rem;">
+                            <select onchange="updateTier(${r.user_id || 0}, this.value)" style="padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid #d1d5db; font-size: 0.8rem;">
+                                <option value="ambassador" ${r.tier === 'ambassador' ? 'selected' : ''}>Ambassador (15%)</option>
+                                <option value="champion" ${r.tier === 'champion' ? 'selected' : ''}>Champion (25%)</option>
+                                <option value="partner" ${r.tier === 'partner' ? 'selected' : ''}>Partner (30%+)</option>
+                            </select>
+                        </td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+                document.getElementById('referralsTable').innerHTML = html;
+
+            } catch (error) {
+                console.error('Referrals load error:', error);
+                document.getElementById('referralsTable').innerHTML = '<p style="color: var(--error);">Error loading referrals.</p>';
+            }
+        }
+
+        // Update affiliate tier
+        async function updateTier(userId, newTier) {
+            const rates = { ambassador: 15, champion: 25, partner: 30 };
+            try {
+                const response = await fetch(`${API_URL}/api/admin/referral/${userId}/tier`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ tier: newTier, commission_rate: rates[newTier] || 15 })
+                });
+
+                if (response.ok) {
+                    showAlert('success', `Tier updated to ${newTier}`);
+                    loadReferrals();
+                } else {
+                    showAlert('error', 'Failed to update tier');
+                }
+            } catch (error) {
+                showAlert('error', 'Failed to update tier');
             }
         }
 

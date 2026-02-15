@@ -269,7 +269,7 @@ This is a private commercial project, but feedback is welcome!
 
 **Found a bug?** Open an issue.  
 **Have a feature idea?** Open an issue.  
-**Want to collaborate?** Email cj@contentcreators.life
+**Want to collaborate?** Email hello@readysetclass.com
 
 ---
 
@@ -277,7 +277,7 @@ This is a private commercial project, but feedback is welcome!
 
 **Proprietary** - All rights reserved.
 
-This software is the intellectual property of ContentCreators.life.
+This software is the intellectual property of ReadySetClass.
 
 Unauthorized copying, distribution, or use is prohibited.
 
@@ -315,7 +315,7 @@ Unauthorized copying, distribution, or use is prohibited.
 
 ---
 
-**Built with 🦋 by [ContentCreators.life](https://contentcreators.life)**
+**Built by the ReadySetClass Team | Powered by Bonita AI**
 
 *"Rise and dime!"* 💸
 

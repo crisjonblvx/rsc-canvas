@@ -187,6 +187,55 @@ def init_db():
     """
     if engine:
         Base.metadata.create_all(bind=engine)
+
+        # Create referral/affiliate tables using raw SQL
+        import psycopg2
+        db_url = os.getenv("DATABASE_URL")
+        if db_url and db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+        try:
+            conn = psycopg2.connect(db_url)
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS referral_codes (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    code VARCHAR(50) UNIQUE NOT NULL,
+                    tier VARCHAR(20) DEFAULT 'ambassador',
+                    commission_rate DECIMAL(5,2) DEFAULT 15.00,
+                    total_referrals INTEGER DEFAULT 0,
+                    successful_referrals INTEGER DEFAULT 0,
+                    total_earnings DECIMAL(10,2) DEFAULT 0,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS referrals (
+                    id SERIAL PRIMARY KEY,
+                    referrer_id INTEGER REFERENCES users(id),
+                    referred_user_id INTEGER REFERENCES users(id),
+                    referral_code VARCHAR(50),
+                    status VARCHAR(20) DEFAULT 'pending',
+                    converted_at TIMESTAMP,
+                    commission_amount DECIMAL(10,2) DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by VARCHAR(50)")
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code VARCHAR(50)")
+
+            conn.commit()
+            cursor.close()
+            conn.close()
+            print("✅ Referral tables created")
+        except Exception as e:
+            print(f"⚠️  Referral table creation error: {e}")
+
         print("✅ Database tables created")
     else:
         print("⚠️  No DATABASE_URL - running without database")

@@ -12,7 +12,7 @@
 
 **Original Version:** 1.0
 **Original Date:** February 10, 2026
-**Built for:** CJ @ ContentCreators.life
+**Built for:** CJ @ ReadySetClass
 
 ---
 
@@ -264,7 +264,7 @@ Use when space is limited (favicons, app icons, social media avatars).
 ## Questions?
 
 For brand usage questions or custom needs, contact:  
-**CJ Nurse** - cj@contentcreators.life
+**CJ Nurse** - hello@readysetclass.com
 
 ---
 

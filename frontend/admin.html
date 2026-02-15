@@ -292,17 +292,10 @@
         <!-- Analytics Tab -->
         <div id="analytics" class="tab-content">
             <div class="table-container">
-                <h2 style="margin-bottom: 1rem;">Analytics & Insights</h2>
-                <p style="color: var(--text-light); margin-top: 1rem;">
-                    Detailed analytics dashboard coming soon. This will include:
-                </p>
-                <ul style="margin: 1rem 0; color: var(--text-light); list-style-position: inside;">
-                    <li>Most-used features</li>
-                    <li>Average time spent in app</li>
-                    <li>Content creation trends</li>
-                    <li>User engagement metrics</li>
-                    <li>Canvas integration usage</li>
-                </ul>
+                <h2 style="margin-bottom: 1rem;">📊 Analytics & Insights</h2>
+                <div id="analyticsData">
+                    <div class="loading">Loading analytics...</div>
+                </div>
             </div>
         </div>
 
@@ -362,6 +355,11 @@
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             event.target.classList.add('active');
             document.getElementById(tabName).classList.add('active');
+
+            // Load analytics when analytics tab is shown
+            if (tabName === 'analytics') {
+                loadAnalytics();
+            }
         }
 
         // Load stats
@@ -510,6 +508,82 @@
                 }
             } catch (error) {
                 showAlert('error', 'Failed to update status');
+            }
+        }
+
+        // Load analytics
+        async function loadAnalytics() {
+            try {
+                const response = await fetch(`${API_URL}/api/admin/analytics`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const data = await response.json();
+
+                const avgMinutes = Math.floor(data.avg_session_duration_seconds / 60);
+                const avgSeconds = data.avg_session_duration_seconds % 60;
+
+                const analyticsHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                        <div style="background: var(--background-cream); padding: 1.5rem; border-radius: 8px;">
+                            <h3 style="color: var(--primary-navy); margin-bottom: 0.5rem;">⏱️ Avg Session Duration</h3>
+                            <div style="font-size: 2rem; font-weight: 700; color: var(--primary-navy);">
+                                ${avgMinutes}m ${avgSeconds}s
+                            </div>
+                        </div>
+                        <div style="background: var(--background-cream); padding: 1.5rem; border-radius: 8px;">
+                            <h3 style="color: var(--primary-navy); margin-bottom: 0.5rem;">📍 Total Events Tracked</h3>
+                            <div style="font-size: 2rem; font-weight: 700; color: var(--primary-navy);">
+                                ${data.total_events.toLocaleString()}
+                            </div>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-bottom: 1rem; color: var(--primary-navy);">🔥 Most Used Features (Last 30 Days)</h3>
+                    ${data.top_features.length > 0 ? `
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Feature</th>
+                                    <th>Usage Count</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.top_features.map(f => `
+                                    <tr>
+                                        <td><strong>${f.feature}</strong></td>
+                                        <td>${f.count}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    ` : '<p style="color: var(--text-light);">No feature usage data yet.</p>'}
+
+                    <h3 style="margin: 2rem 0 1rem; color: var(--primary-navy);">📈 Daily Active Users (Last 30 Days)</h3>
+                    ${data.daily_active_users.length > 0 ? `
+                        <div style="max-height: 300px; overflow-y: auto;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Active Users</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.daily_active_users.slice(0, 15).map(d => `
+                                        <tr>
+                                            <td>${new Date(d.date).toLocaleDateString()}</td>
+                                            <td>${d.users}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    ` : '<p style="color: var(--text-light);">No user activity data yet.</p>'}
+                `;
+
+                document.getElementById('analyticsData').innerHTML = analyticsHTML;
+            } catch (error) {
+                document.getElementById('analyticsData').innerHTML = '<p style="color: var(--error);">Failed to load analytics data</p>';
             }
         }
 

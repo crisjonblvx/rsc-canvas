@@ -3138,6 +3138,121 @@ async def create_customer_portal_session(current_user=Depends(get_current_user_f
 
 
 # ============================================================================
+# ANALYTICS & TRACKING ROUTES
+# ============================================================================
+
+@app.post("/api/analytics/track")
+async def track_event(request: dict, current_user=Depends(get_current_user_from_token)):
+    """Track user activity and feature usage"""
+    event_type = request.get('event_type')
+    feature = request.get('feature')
+    duration = request.get('duration')  # time in seconds
+    metadata = request.get('metadata', {})
+
+    if not event_type:
+        raise HTTPException(status_code=400, detail="event_type is required")
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Create analytics table if it doesn't exist
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_analytics (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                event_type VARCHAR(100) NOT NULL,
+                feature VARCHAR(100),
+                duration INTEGER,
+                metadata JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Insert tracking event
+        cursor.execute("""
+            INSERT INTO user_analytics (user_id, event_type, feature, duration, metadata)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (
+            current_user['user_id'],
+            event_type,
+            feature,
+            duration,
+            str(metadata) if metadata else None
+        ))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return {"status": "tracked"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/analytics")
+async def get_analytics_data(current_user=Depends(get_current_user_from_token)):
+    """Get analytics data (admin only)"""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Most used features (last 30 days)
+        cursor.execute("""
+            SELECT feature, COUNT(*) as count
+            FROM user_analytics
+            WHERE feature IS NOT NULL
+            AND created_at > NOW() - INTERVAL '30 days'
+            GROUP BY feature
+            ORDER BY count DESC
+            LIMIT 10
+        """)
+        top_features = [{"feature": row[0], "count": row[1]} for row in cursor.fetchall()]
+
+        # Average session duration
+        cursor.execute("""
+            SELECT AVG(duration) as avg_duration
+            FROM user_analytics
+            WHERE event_type = 'session_end' AND duration IS NOT NULL
+            AND created_at > NOW() - INTERVAL '30 days'
+        """)
+        avg_duration_result = cursor.fetchone()
+        avg_session_duration = int(avg_duration_result[0]) if avg_duration_result and avg_duration_result[0] else 0
+
+        # Daily active users (last 30 days)
+        cursor.execute("""
+            SELECT DATE(created_at) as date, COUNT(DISTINCT user_id) as users
+            FROM user_analytics
+            WHERE created_at > NOW() - INTERVAL '30 days'
+            GROUP BY DATE(created_at)
+            ORDER BY date DESC
+        """)
+        daily_active = [{"date": str(row[0]), "users": row[1]} for row in cursor.fetchall()]
+
+        # Total events tracked
+        cursor.execute("SELECT COUNT(*) FROM user_analytics")
+        total_events = cursor.fetchone()[0]
+
+        cursor.close()
+        conn.close()
+
+        return {
+            "top_features": top_features,
+            "avg_session_duration_seconds": avg_session_duration,
+            "daily_active_users": daily_active,
+            "total_events": total_events
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # AI GRADING ROUTES
 # ============================================================================
 

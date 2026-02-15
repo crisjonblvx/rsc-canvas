@@ -1709,6 +1709,56 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         })();
 
         // ============================================================================
+        // ANALYTICS TRACKING
+        // ============================================================================
+        const Analytics = {
+            sessionStart: Date.now(),
+            lastFeature: null,
+
+            track(eventType, feature = null, metadata = {}) {
+                const duration = eventType === 'session_end' ? Math.floor((Date.now() - this.sessionStart) / 1000) : null;
+
+                fetch(`${API_URL}/api/analytics/track`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        event_type: eventType,
+                        feature: feature,
+                        duration: duration,
+                        metadata: metadata
+                    })
+                }).catch(err => console.log('Analytics error:', err));
+            },
+
+            trackFeature(feature) {
+                if (this.lastFeature !== feature) {
+                    this.track('feature_used', feature);
+                    this.lastFeature = feature;
+                }
+            }
+        };
+
+        // Track session start
+        Analytics.track('session_start');
+
+        // Track session end on page unload
+        window.addEventListener('beforeunload', () => {
+            Analytics.track('session_end');
+        });
+
+        // Track feature usage when sections are shown
+        const originalShowSection = window.showSection;
+        if (typeof originalShowSection === 'function') {
+            window.showSection = function(section) {
+                Analytics.trackFeature(section);
+                return originalShowSection(section);
+            };
+        }
+
+        // ============================================================================
         // LANGUAGE MANAGEMENT
         // ============================================================================
         // Function to change language

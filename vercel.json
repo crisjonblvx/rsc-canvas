@@ -52,30 +52,18 @@
       ]
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/",
-      "dest": "/index.html"
+      "source": "/dashboard",
+      "destination": "/dashboard-v2.html"
     },
     {
-      "src": "/dashboard",
-      "dest": "/dashboard-v2.html"
+      "source": "/v2",
+      "destination": "/dashboard-v2.html"
     },
     {
-      "src": "/v2",
-      "dest": "/dashboard-v2.html"
-    },
-    {
-      "src": "/grading.html",
-      "dest": "/grading.html"
-    },
-    {
-      "src": "/grading",
-      "dest": "/grading.html"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
+      "source": "/grading",
+      "destination": "/grading.html"
     }
   ]
 }

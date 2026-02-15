@@ -308,9 +308,13 @@
         // Load profile
         function loadProfile() {
             try {
+                console.log('Loading profile...');
                 const userStr = localStorage.getItem('user');
+                console.log('User data from localStorage:', userStr);
+
                 if (userStr && userStr !== 'undefined') {
                     currentUser = JSON.parse(userStr);
+                    console.log('Parsed user:', currentUser);
 
                     const roleBadge = currentUser.role === 'admin'
                         ? '<span class="badge badge-admin">ADMIN</span>'
@@ -351,9 +355,15 @@
                         </div>
                         ${adminSection}
                     `;
+                    console.log('Profile loaded successfully');
+                } else {
+                    console.log('No valid user data found');
+                    document.getElementById('profileGrid').innerHTML = '<p style="color: var(--error);">No profile data found. Try logging in again.</p>';
                 }
             } catch (e) {
-                showAlert('error', 'Failed to load profile');
+                console.error('Profile load error:', e);
+                showAlert('error', 'Failed to load profile: ' + e.message);
+                document.getElementById('profileGrid').innerHTML = '<p style="color: var(--error);">Error loading profile. Check console for details.</p>';
             }
         }
 

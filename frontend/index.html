@@ -598,16 +598,31 @@
     </style>
 </head>
 <body>
-    <!-- Unregister any service workers to prevent aggressive caching -->
+    <!-- Nuclear Cache Buster - runs on every page load -->
     <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(registrations => {
-          registrations.forEach(registration => {
-            registration.unregister();
-            console.log('🗑️ Service worker unregistered:', registration.scope);
+      (function() {
+        var APP_VERSION = '2.2.0';
+        // Unregister all service workers
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            registrations.forEach(function(r) { r.unregister(); });
           });
-        });
-      }
+        }
+        // Delete all caches
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            names.forEach(function(name) { caches.delete(name); });
+          });
+        }
+        // Version check - force reload if outdated
+        var storedVersion = localStorage.getItem('rsc_version');
+        if (storedVersion && storedVersion !== APP_VERSION) {
+          localStorage.setItem('rsc_version', APP_VERSION);
+          window.location.reload(true);
+          return;
+        }
+        localStorage.setItem('rsc_version', APP_VERSION);
+      })();
     </script>
 
     <!-- Navigation -->

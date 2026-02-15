@@ -1906,9 +1906,40 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             }
         }
 
-        // Initialize on page load
-        window.addEventListener('DOMContentLoaded', function() {
+        // Initialize on page load - check for saved Canvas credentials
+        window.addEventListener('DOMContentLoaded', async function() {
             updateCanvasInstructions();
+
+            // Check if Canvas is already connected
+            try {
+                const response = await fetch(`${API_URL}/api/v2/canvas/status`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (response.ok) {
+                    const status = await response.json();
+                    if (status.connected) {
+                        // Auto-connect UI
+                        document.getElementById('connectionStatus').textContent = '✓ Connected';
+                        document.getElementById('connectionStatus').className = 'status-badge connected';
+                        document.getElementById('connectionForm').classList.add('hidden');
+                        document.getElementById('connectedInfo').classList.remove('hidden');
+                        document.getElementById('connectedUrl').textContent = status.canvas_url;
+
+                        // Auto-load courses
+                        const coursesResponse = await fetch(`${API_URL}/api/v2/canvas/courses`, {
+                            headers: { 'Authorization': `Bearer ${authToken}` }
+                        });
+                        if (coursesResponse.ok) {
+                            const coursesData = await coursesResponse.json();
+                            if (coursesData.courses && coursesData.courses.length > 0) {
+                                displayCourses(coursesData.courses);
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.log('Canvas status check:', e.message);
+            }
         });
 
 
@@ -3747,16 +3778,28 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         }
 
         // ============================================================================
-        // Unregister Service Workers (prevents aggressive caching issues)
+        // Nuclear Cache Buster
         // ============================================================================
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(registrations => {
-                registrations.forEach(registration => {
-                    registration.unregister();
-                    console.log('🗑️ Service worker unregistered:', registration.scope);
+        (function() {
+            var APP_VERSION = '2.2.0';
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    registrations.forEach(function(r) { r.unregister(); });
                 });
-            });
-        }
+            }
+            if ('caches' in window) {
+                caches.keys().then(function(names) {
+                    names.forEach(function(name) { caches.delete(name); });
+                });
+            }
+            var storedVersion = localStorage.getItem('rsc_version');
+            if (storedVersion && storedVersion !== APP_VERSION) {
+                localStorage.setItem('rsc_version', APP_VERSION);
+                window.location.reload(true);
+                return;
+            }
+            localStorage.setItem('rsc_version', APP_VERSION);
+        })();
     </script>
 
     <!-- Footer -->

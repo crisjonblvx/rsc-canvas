@@ -1162,6 +1162,28 @@ async def cancel_subscription(current_user = Depends(get_current_user_from_token
 # CANVAS INTEGRATION ENDPOINTS
 # ============================================================================
 
+@app.get("/api/v2/canvas/status")
+async def canvas_status(db: Session = Depends(get_db)):
+    """Check if user has saved Canvas credentials"""
+    try:
+        user_id = 1  # TODO: Use real user ID from authentication
+
+        if not db:
+            return {"connected": False}
+
+        credentials = db.query(CanvasCredentials).filter_by(user_id=user_id).first()
+
+        if not credentials:
+            return {"connected": False}
+
+        return {
+            "connected": True,
+            "canvas_url": credentials.canvas_url
+        }
+    except Exception as e:
+        print(f"Canvas status check error: {e}")
+        return {"connected": False}
+
 @app.post("/api/v2/canvas/connect")
 async def connect_canvas_v2(
     request: CanvasConnectionRequest,

@@ -259,6 +259,28 @@
     </style>
 </head>
 <body>
+    <script>
+      (function() {
+        var APP_VERSION = '2.2.0';
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            registrations.forEach(function(r) { r.unregister(); });
+          });
+        }
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            names.forEach(function(name) { caches.delete(name); });
+          });
+        }
+        var storedVersion = localStorage.getItem('rsc_version');
+        if (storedVersion && storedVersion !== APP_VERSION) {
+          localStorage.setItem('rsc_version', APP_VERSION);
+          window.location.reload(true);
+          return;
+        }
+        localStorage.setItem('rsc_version', APP_VERSION);
+      })();
+    </script>
     <div class="container">
         <div class="header">
             <h1>🛡️ Admin Dashboard</h1>

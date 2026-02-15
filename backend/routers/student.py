@@ -9,8 +9,9 @@ Endpoints:
   POST /api/v1/student/assignments/sync - Sync assignments from Canvas
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime, timedelta
@@ -23,6 +24,8 @@ import psycopg2
 # ============================================================================
 # ROUTER SETUP
 # ============================================================================
+
+STUDENT_APP_VERSION = "1.0.0"
 
 router = APIRouter()
 security = HTTPBearer()
@@ -822,45 +825,122 @@ def _get_letter_grade(percentage: float) -> str:
 
 
 # ============================================================================
-# NUCLEAR CACHE CLEAR (Phase 1 utility)
+# NUCLEAR CACHE SYSTEM
 # ============================================================================
+# Auto-clearing cache system for the student frontend.
+# - /api/v1/student/version    → Frontend checks this on every load
+# - /api/v1/student/boot.js    → Auto-clearing script (include in <head>)
+# - /api/v1/student/nuclear-cache      → JSON with clear script
+# - /api/v1/student/nuclear-cache/html → Self-contained clear page
+
+@router.get("/api/v1/student/version")
+async def get_version():
+    """
+    Version check endpoint. Frontend calls this on load to see if
+    cache needs to be cleared. No auth required.
+    """
+    return {
+        "version": STUDENT_APP_VERSION,
+        "action": "check",
+        "clear_cache": False
+    }
+
+
+@router.get("/api/v1/student/boot.js")
+async def boot_script():
+    """
+    Auto-clearing boot script. Include this in the student frontend <head>:
+      <script src="https://facultyflow-production.up.railway.app/api/v1/student/boot.js"></script>
+
+    On every page load it:
+      1. Checks the server version against local version
+      2. If version changed → nukes all caches, service workers, storage
+      3. Stores the new version so it only clears once per update
+      4. Unregisters any rogue service workers on every load
+    """
+    from fastapi.responses import Response
+
+    js = f"""// ReadySetClass Student Edition - Auto Cache Manager v{STUDENT_APP_VERSION}
+(function() {{
+    var SERVER_VERSION = '{STUDENT_APP_VERSION}';
+    var LOCAL_VERSION = localStorage.getItem('rsc_student_version');
+
+    // Always unregister stale service workers
+    if ('serviceWorker' in navigator) {{
+        navigator.serviceWorker.getRegistrations().then(function(regs) {{
+            regs.forEach(function(r) {{ r.unregister(); }});
+        }});
+    }}
+
+    // Version mismatch → nuclear clear
+    if (LOCAL_VERSION && LOCAL_VERSION !== SERVER_VERSION) {{
+        console.log('[RSC] Version changed: ' + LOCAL_VERSION + ' → ' + SERVER_VERSION + '. Clearing cache...');
+
+        // Clear all browser caches
+        if ('caches' in window) {{
+            caches.keys().then(function(names) {{
+                names.forEach(function(name) {{ caches.delete(name); }});
+            }});
+        }}
+
+        // Clear storage (but save version first)
+        var authToken = localStorage.getItem('auth_token');
+        localStorage.clear();
+        sessionStorage.clear();
+        if (authToken) localStorage.setItem('auth_token', authToken);
+
+        // Clear cookies
+        document.cookie.split(';').forEach(function(c) {{
+            document.cookie = c.trim().split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/';
+        }});
+
+        // Save new version and reload
+        localStorage.setItem('rsc_student_version', SERVER_VERSION);
+        window.location.reload(true);
+        return;
+    }}
+
+    // First visit or same version → just save it
+    localStorage.setItem('rsc_student_version', SERVER_VERSION);
+}})();
+"""
+    return Response(
+        content=js,
+        media_type="application/javascript",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+    )
+
 
 @router.get("/api/v1/student/nuclear-cache")
 async def nuclear_cache():
     """
     Returns JavaScript to nuke all caches, service workers, and local storage.
-    Frontend should call this endpoint and eval the response, or redirect to
-    the HTML version at /nuclear-cache.
-
-    This is a no-auth endpoint so it works even when auth is broken.
+    No-auth endpoint so it works even when auth is broken.
     """
     return {
+        "version": STUDENT_APP_VERSION,
         "action": "nuclear_cache_clear",
         "instructions": "Execute the 'script' field in your browser console, or visit /api/v1/student/nuclear-cache/html",
         "script": """
-            // Unregister all service workers
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                    for (let registration of registrations) {
-                        registration.unregister();
-                        console.log('Unregistered service worker:', registration.scope);
-                    }
+                navigator.serviceWorker.getRegistrations().then(function(regs) {
+                    regs.forEach(function(r) { r.unregister(); });
                 });
             }
-            // Clear all caches
             if ('caches' in window) {
                 caches.keys().then(function(names) {
-                    for (let name of names) {
-                        caches.delete(name);
-                        console.log('Deleted cache:', name);
-                    }
+                    names.forEach(function(name) { caches.delete(name); });
                 });
             }
-            // Clear localStorage and sessionStorage
             localStorage.clear();
             sessionStorage.clear();
-            console.log('Cleared localStorage and sessionStorage');
-            // Force reload without cache
+            document.cookie.split(';').forEach(function(c) {
+                document.cookie = c.trim().split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/';
+            });
             setTimeout(function() { window.location.reload(true); }, 500);
         """
     }
@@ -869,88 +949,86 @@ async def nuclear_cache():
 @router.get("/api/v1/student/nuclear-cache/html")
 async def nuclear_cache_html():
     """
-    Self-contained HTML page that nukes all caches and redirects to setup.
+    Self-contained HTML page that nukes everything and redirects to login.
     Visit this URL directly in the browser to clear everything.
     """
-    from fastapi.responses import HTMLResponse
-
-    html = """<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html>
 <head>
     <title>ReadySetClass - Cache Reset</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <style>
-        body {
+        body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1E3A5F 0%, #2C5F8A 100%);
             color: white;
-        }
-        .container {
+        }}
+        .container {{
             text-align: center;
             padding: 2rem;
-        }
-        h1 { font-size: 2rem; margin-bottom: 0.5rem; }
-        p { font-size: 1.1rem; opacity: 0.9; }
-        .status { margin-top: 1.5rem; font-size: 0.95rem; }
-        .check { color: #4ade80; }
+            max-width: 400px;
+        }}
+        h1 {{ font-size: 1.8rem; margin-bottom: 0.5rem; }}
+        p {{ font-size: 1rem; opacity: 0.85; }}
+        .status {{ margin-top: 1.5rem; font-size: 0.9rem; text-align: left; }}
+        .check {{ color: #4ade80; padding: 4px 0; }}
+        .version {{ opacity: 0.5; font-size: 0.75rem; margin-top: 2rem; }}
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Clearing Cache...</h1>
-        <p>Resetting ReadySetClass Student Edition</p>
+        <h1>Resetting ReadySetClass</h1>
+        <p>Clearing cached data...</p>
         <div class="status" id="status"></div>
+        <div class="version">v{STUDENT_APP_VERSION}</div>
     </div>
     <script>
-        const status = document.getElementById('status');
-        function log(msg) {
+        var status = document.getElementById('status');
+        function log(msg) {{
             status.innerHTML += '<div class="check">' + msg + '</div>';
-        }
+        }}
 
-        async function nuclearClear() {
-            // 1. Unregister service workers
-            if ('serviceWorker' in navigator) {
-                const regs = await navigator.serviceWorker.getRegistrations();
-                for (const reg of regs) {
-                    await reg.unregister();
-                    log('Unregistered service worker');
-                }
-            }
+        async function nuclearClear() {{
+            if ('serviceWorker' in navigator) {{
+                var regs = await navigator.serviceWorker.getRegistrations();
+                for (var i = 0; i < regs.length; i++) {{
+                    await regs[i].unregister();
+                }}
+            }}
             log('Service workers cleared');
 
-            // 2. Delete all caches
-            if ('caches' in window) {
-                const names = await caches.keys();
-                for (const name of names) {
-                    await caches.delete(name);
-                    log('Deleted cache: ' + name);
-                }
-            }
+            if ('caches' in window) {{
+                var names = await caches.keys();
+                for (var i = 0; i < names.length; i++) {{
+                    await caches.delete(names[i]);
+                }}
+            }}
             log('Browser caches cleared');
 
-            // 3. Clear storage
             localStorage.clear();
             sessionStorage.clear();
             log('Local storage cleared');
 
-            // 4. Clear cookies for this domain
-            document.cookie.split(';').forEach(function(c) {
+            document.cookie.split(';').forEach(function(c) {{
                 document.cookie = c.trim().split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/';
-            });
+            }});
             log('Cookies cleared');
 
+            localStorage.setItem('rsc_student_version', '{STUDENT_APP_VERSION}');
             log('');
             log('All clear! Redirecting...');
 
-            // 5. Redirect after a moment
-            setTimeout(function() {
-                window.location.href = '/setup';
-            }, 1500);
-        }
+            setTimeout(function() {{
+                window.location.href = '/login';
+            }}, 1200);
+        }}
 
         nuclearClear();
     </script>

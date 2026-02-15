@@ -660,17 +660,6 @@ async def signup(user: UserSignup):
         }
     }
 
-@app.post("/api/auth/login")
-async def login(user: UserLogin):
-    """User login"""
-    # In production: verify against database
-    # For now: return token
-    token = create_access_token({"email": user.email})
-    return {
-        "access_token": token,
-        "token_type": "bearer"
-    }
-
 @app.post("/api/canvas/connect")
 async def connect_canvas(canvas_data: CanvasToken, user=Depends(verify_token)):
     """Save user's Canvas credentials (encrypted)"""

@@ -320,6 +320,14 @@
                         ? '<span class="badge badge-demo">DEMO</span>'
                         : '';
 
+                    const adminSection = currentUser.role === 'admin'
+                        ? `<div style="grid-column: 1 / -1; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
+                               <button class="btn btn-primary" onclick="window.location.href='/admin.html'" style="width: 100%;">
+                                   🛡️ Open Admin Dashboard
+                               </button>
+                           </div>`
+                        : '';
+
                     document.getElementById('profileGrid').innerHTML = `
                         <div class="profile-item">
                             <span class="profile-label">Email</span>
@@ -341,6 +349,7 @@
                             <span class="profile-label">Member Since</span>
                             <span class="profile-value">${new Date().toLocaleDateString()}</span>
                         </div>
+                        ${adminSection}
                     `;
                 }
             } catch (e) {

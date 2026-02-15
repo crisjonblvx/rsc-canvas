@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>ReadySetClass™ - AI Course Builder for Canvas</title>
     <meta name="description" content="Less time setting up. More time teaching. Build complete Canvas courses in minutes. Syllabi, quizzes, assignments - all automated. $9.99-29/month for educators.">
 
@@ -595,6 +598,18 @@
     </style>
 </head>
 <body>
+    <!-- Unregister any service workers to prevent aggressive caching -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+          registrations.forEach(registration => {
+            registration.unregister();
+            console.log('🗑️ Service worker unregistered:', registration.scope);
+          });
+        });
+      }
+    </script>
+
     <!-- Navigation -->
     <nav>
         <div class="nav-content">

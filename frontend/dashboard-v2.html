@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Dashboard - ReadySetClass™</title>
     <link rel="icon" href="/assets/ReadySetClass_alpha_badge.png" type="image/png">
 
@@ -3678,43 +3681,14 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         }
 
         // ============================================================================
-        // PWA: Register Service Worker with Auto-Update
+        // Unregister Service Workers (prevents aggressive caching issues)
         // ============================================================================
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then((registration) => {
-                        console.log('✅ Service Worker registered:', registration.scope);
-
-                        // Check for updates every 30 seconds
-                        setInterval(() => {
-                            registration.update();
-                        }, 30000);
-
-                        // Listen for updates
-                        registration.addEventListener('updatefound', () => {
-                            const newWorker = registration.installing;
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // New service worker installed, reload to activate
-                                    console.log('🔄 New version available, reloading...');
-                                    window.location.reload();
-                                }
-                            });
-                        });
-                    })
-                    .catch((error) => {
-                        console.log('❌ Service Worker registration failed:', error);
-                    });
-            });
-
-            // Handle service worker controller change
-            let refreshing = false;
-            navigator.serviceWorker.addEventListener('controllerchange', () => {
-                if (!refreshing) {
-                    refreshing = true;
-                    window.location.reload();
-                }
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                registrations.forEach(registration => {
+                    registration.unregister();
+                    console.log('🗑️ Service worker unregistered:', registration.scope);
+                });
             });
         }
     </script>

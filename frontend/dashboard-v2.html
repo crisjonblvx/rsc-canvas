@@ -2729,7 +2729,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                 const response = await fetch(`${API_URL}/api/v2/canvas/discussion`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ course_id: selectedCourse.id, topic, message: content })
+                    body: JSON.stringify({ course_id: selectedCourse.id, topic, prompt: content })
                 });
                 const result = await response.json();
                 if (response.ok) {
@@ -2766,7 +2766,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                     body: JSON.stringify({
                         course_id: selectedCourse.id,
                         topic: topic,
-                        message: message
+                        prompt: message
                     })
                 });
 

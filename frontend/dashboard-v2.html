@@ -799,6 +799,7 @@
                 <li class="nav-item" onclick="showSection('module')">📦 Modules</li>
                 <li class="nav-item" onclick="showSection('syllabus')">📋 Syllabus</li>
                 <li class="nav-item" onclick="showSection('reference')">📚 Reference Materials</li>
+                <li class="nav-item" id="adminNavItem" style="display: none; margin-top: 2rem; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 1rem;" onclick="window.location.href='/admin.html'">🛡️ Admin Panel</li>
             </ul>
         </aside>
 
@@ -1694,6 +1695,14 @@ Participation: 10%" style="min-height: 80px;"></textarea>
 
             // Set auth token for API calls
             window.authToken = token;
+
+            // Show admin nav item if user is admin
+            if (user.role === 'admin') {
+                const adminNavItem = document.getElementById('adminNavItem');
+                if (adminNavItem) {
+                    adminNavItem.style.display = 'block';
+                }
+            }
         })();
 
         // ============================================================================

@@ -2894,6 +2894,182 @@ async def cleanup_expired_demos(current_user=Depends(get_current_user_from_token
 
 
 # ============================================================================
+# ADMIN ROUTES
+# ============================================================================
+
+@app.get("/api/admin/users")
+async def get_all_users(current_user=Depends(get_current_user_from_token)):
+    """Get all users (admin only)"""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT id, email, full_name, role, institution, is_active, is_demo,
+                   demo_expires_at, created_at, last_active_at
+            FROM users
+            ORDER BY created_at DESC
+        """)
+
+        users = []
+        for row in cursor.fetchall():
+            users.append({
+                "id": row[0],
+                "email": row[1],
+                "full_name": row[2],
+                "role": row[3],
+                "institution": row[4],
+                "is_active": row[5],
+                "is_demo": row[6],
+                "demo_expires_at": row[7].isoformat() if row[7] else None,
+                "created_at": row[8].isoformat() if row[8] else None,
+                "last_active_at": row[9].isoformat() if row[9] else None
+            })
+
+        cursor.close()
+        conn.close()
+
+        return {"users": users}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/admin/users/{user_id}/role")
+async def update_user_role(
+    user_id: int,
+    request: dict,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Update user role (admin only)"""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    new_role = request.get('role')
+    if new_role not in ['user', 'admin', 'demo']:
+        raise HTTPException(status_code=400, detail="Invalid role")
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE users SET role = %s WHERE id = %s
+            RETURNING email
+        """, (new_role, user_id))
+
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return {"message": f"Updated role to {new_role}", "email": result[0]}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/admin/users/{user_id}/status")
+async def update_user_status(
+    user_id: int,
+    request: dict,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Enable/disable user account (admin only)"""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    is_active = request.get('is_active')
+    if not isinstance(is_active, bool):
+        raise HTTPException(status_code=400, detail="is_active must be boolean")
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE users SET is_active = %s WHERE id = %s
+            RETURNING email
+        """, (is_active, user_id))
+
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        status = "enabled" if is_active else "disabled"
+        return {"message": f"Account {status}", "email": result[0]}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/stats")
+async def get_system_stats(current_user=Depends(get_current_user_from_token)):
+    """Get system statistics (admin only)"""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Total users
+        cursor.execute("SELECT COUNT(*) FROM users WHERE is_demo = FALSE")
+        total_users = cursor.fetchone()[0]
+
+        # Active users (last 7 days)
+        cursor.execute("""
+            SELECT COUNT(*) FROM users
+            WHERE last_active_at > NOW() - INTERVAL '7 days' AND is_demo = FALSE
+        """)
+        active_users = cursor.fetchone()[0]
+
+        # Demo accounts
+        cursor.execute("SELECT COUNT(*) FROM users WHERE is_demo = TRUE")
+        demo_count = cursor.fetchone()[0]
+
+        # Active sessions
+        cursor.execute("SELECT COUNT(*) FROM sessions WHERE expires_at > NOW()")
+        active_sessions = cursor.fetchone()[0]
+
+        # Canvas connections
+        cursor.execute("SELECT COUNT(DISTINCT user_id) FROM canvas_credentials")
+        canvas_connected = cursor.fetchone()[0]
+
+        # Total content created (rough estimate from activity log)
+        cursor.execute("""
+            SELECT COUNT(*) FROM activity_log
+            WHERE action IN ('assignment_created', 'quiz_created', 'discussion_created')
+        """)
+        content_created = cursor.fetchone()[0]
+
+        cursor.close()
+        conn.close()
+
+        return {
+            "total_users": total_users,
+            "active_users_7d": active_users,
+            "demo_accounts": demo_count,
+            "active_sessions": active_sessions,
+            "canvas_connected": canvas_connected,
+            "content_created": content_created
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # AI GRADING ROUTES
 # ============================================================================
 

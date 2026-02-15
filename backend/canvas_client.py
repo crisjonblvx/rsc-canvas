@@ -478,6 +478,66 @@ class CanvasClient:
         )
         return submissions if submissions else []
 
+    def get_student_grades(self, course_id: int) -> Dict:
+        """
+        Get student's grades for all assignments in a course
+
+        Args:
+            course_id: Canvas course ID
+
+        Returns:
+            dict: Enrollments with grade information
+        """
+        enrollments = self._make_request(
+            method="GET",
+            endpoint=f"/api/v1/courses/{course_id}/enrollments",
+            params={
+                "user_id": "self",
+                "type[]": ["StudentEnrollment"],
+                "include[]": ["current_grading_period_scores", "total_scores"]
+            }
+        )
+        return enrollments[0] if enrollments else {}
+
+    def get_assignment_groups(self, course_id: int) -> List[Dict]:
+        """
+        Get assignment groups (categories) for a course
+
+        Args:
+            course_id: Canvas course ID
+
+        Returns:
+            list: Assignment groups with weights
+        """
+        groups = self._make_request(
+            method="GET",
+            endpoint=f"/api/v1/courses/{course_id}/assignment_groups",
+            params={
+                "include[]": ["assignments"],
+                "per_page": 100
+            }
+        )
+        return groups if groups else []
+
+    def get_course_grading_scheme(self, course_id: int) -> Dict:
+        """
+        Get course grading scheme (A/B/C cutoffs, weighted vs points)
+
+        Args:
+            course_id: Canvas course ID
+
+        Returns:
+            dict: Course object with grading info
+        """
+        course = self._make_request(
+            method="GET",
+            endpoint=f"/api/v1/courses/{course_id}",
+            params={
+                "include[]": ["grading_standard"]
+            }
+        )
+        return course if course else {}
+
     # ==========================================================================
     # SYLLABUS
     # ==========================================================================

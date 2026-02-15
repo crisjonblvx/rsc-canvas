@@ -371,3 +371,295 @@ async def sync_assignments(current_user=Depends(get_current_student)):
     finally:
         cursor.close()
         conn.close()
+
+
+# ============================================================================
+# DEADLINE DASHBOARD ENDPOINTS (Phase 2.1)
+# ============================================================================
+
+@router.get("/api/v1/student/assignments/upcoming")
+async def get_upcoming_assignments(
+    days: int = 7,
+    current_user=Depends(get_current_student)
+):
+    """Get assignments due in the next N days"""
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT assignment_id, title, course_name, due_at, points_possible,
+                   score, submitted, workflow_state
+            FROM student_assignments
+            WHERE user_id = %s
+              AND due_at IS NOT NULL
+              AND due_at >= NOW()
+              AND due_at <= NOW() + INTERVAL '%s days'
+            ORDER BY due_at ASC
+        """, (current_user["user_id"], days))
+
+        assignments = []
+        for row in cursor.fetchall():
+            assignments.append({
+                "assignment_id": row[0],
+                "title": row[1],
+                "course_name": row[2],
+                "due_at": row[3].isoformat() if row[3] else None,
+                "points_possible": row[4],
+                "score": row[5],
+                "submitted": row[6],
+                "workflow_state": row[7]
+            })
+
+        return {
+            "assignments": assignments,
+            "total": len(assignments),
+            "days": days
+        }
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/api/v1/student/dashboard/deadlines")
+async def get_deadline_dashboard(current_user=Depends(get_current_student)):
+    """Get deadline dashboard with assignments grouped by urgency"""
+    from datetime import datetime, timedelta
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Get all assignments
+        cursor.execute("""
+            SELECT assignment_id, title, course_name, due_at, points_possible,
+                   score, submitted, workflow_state
+            FROM student_assignments
+            WHERE user_id = %s
+            ORDER BY due_at ASC NULLS LAST
+        """, (current_user["user_id"],))
+
+        now = datetime.now()
+        end_of_this_week = now + timedelta(days=7)
+        end_of_next_week = now + timedelta(days=14)
+
+        this_week = []
+        next_week = []
+        overdue = []
+        no_due_date = []
+
+        for row in cursor.fetchall():
+            assignment = {
+                "assignment_id": row[0],
+                "title": row[1],
+                "course_name": row[2],
+                "due_at": row[3].isoformat() if row[3] else None,
+                "points_possible": row[4],
+                "score": row[5],
+                "submitted": row[6],
+                "workflow_state": row[7]
+            }
+
+            due_at = row[3]
+
+            if due_at is None:
+                no_due_date.append(assignment)
+            elif due_at < now and not row[6]:  # Overdue and not submitted
+                assignment["urgency"] = "overdue"
+                overdue.append(assignment)
+            elif due_at <= end_of_this_week:
+                assignment["urgency"] = "this_week"
+                this_week.append(assignment)
+            elif due_at <= end_of_next_week:
+                assignment["urgency"] = "next_week"
+                next_week.append(assignment)
+
+        return {
+            "this_week": this_week,
+            "next_week": next_week,
+            "overdue": overdue,
+            "no_due_date": no_due_date,
+            "summary": {
+                "total": len(this_week) + len(next_week) + len(overdue) + len(no_due_date),
+                "this_week_count": len(this_week),
+                "next_week_count": len(next_week),
+                "overdue_count": len(overdue),
+                "no_due_date_count": len(no_due_date)
+            }
+        }
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================================
+# GRADE CALCULATOR ENDPOINTS (Phase 2.2)
+# ============================================================================
+
+@router.get("/api/v1/student/courses/{course_id}/grade-calculator")
+async def get_grade_calculator(course_id: int, current_user=Depends(get_current_student)):
+    """
+    Calculate current grade and "what you need" scenarios
+
+    Returns:
+        - Current grade (percentage and letter)
+        - Points earned vs possible
+        - Scenarios: what score needed on remaining work for target grade
+    """
+    from canvas_client import CanvasClient
+
+    canvas_url = current_user.get("canvas_url")
+    canvas_token = current_user.get("canvas_token")
+
+    if not canvas_url or not canvas_token:
+        raise HTTPException(400, "Canvas not connected")
+
+    client = CanvasClient(canvas_url, canvas_token)
+
+    # Get student's enrollment/grades
+    enrollment = client.get_student_grades(course_id)
+
+    # Get assignment groups for breakdown
+    assignment_groups = client.get_assignment_groups(course_id)
+
+    # Get grading scheme (A/B/C cutoffs)
+    course_info = client.get_course_grading_scheme(course_id)
+
+    # Calculate current grade
+    current_score = enrollment.get("grades", {}).get("current_score")
+    final_score = enrollment.get("grades", {}).get("final_score")
+
+    # Calculate points earned and possible
+    total_earned = 0
+    total_possible = 0
+    remaining_points = 0
+
+    for group in assignment_groups:
+        for assignment in group.get("assignments", []):
+            points = assignment.get("points_possible", 0)
+            submission = assignment.get("submission", {})
+            score = submission.get("score")
+
+            total_possible += points
+            if score is not None:
+                total_earned += score
+            else:
+                remaining_points += points
+
+    # "What you need" scenarios
+    scenarios = []
+    target_grades = [
+        ("A", 90),
+        ("B", 80),
+        ("C", 70),
+        ("D", 60)
+    ]
+
+    for letter, target_pct in target_grades:
+        target_points = (target_pct / 100) * total_possible
+        points_needed = target_points - total_earned
+
+        if remaining_points > 0:
+            pct_needed = (points_needed / remaining_points) * 100
+            scenarios.append({
+                "target_grade": letter,
+                "target_percentage": target_pct,
+                "points_needed": round(points_needed, 2),
+                "percentage_needed_on_remaining": round(pct_needed, 2),
+                "is_achievable": pct_needed <= 100
+            })
+
+    return {
+        "current_grade": {
+            "score": current_score,
+            "final_score": final_score,
+            "letter": _get_letter_grade(current_score) if current_score else None
+        },
+        "points": {
+            "earned": total_earned,
+            "possible": total_possible,
+            "remaining": remaining_points
+        },
+        "scenarios": scenarios,
+        "grading_scheme": course_info.get("grading_standard")
+    }
+
+
+@router.get("/api/v1/student/courses/{course_id}/grade-breakdown")
+async def get_grade_breakdown(course_id: int, current_user=Depends(get_current_student)):
+    """
+    Get grade breakdown by assignment category/group
+
+    Returns:
+        - Grade per assignment group (Quizzes 85%, Homework 92%, etc.)
+        - Weighted vs total points
+    """
+    from canvas_client import CanvasClient
+
+    canvas_url = current_user.get("canvas_url")
+    canvas_token = current_user.get("canvas_token")
+
+    if not canvas_url or not canvas_token:
+        raise HTTPException(400, "Canvas not connected")
+
+    client = CanvasClient(canvas_url, canvas_token)
+    assignment_groups = client.get_assignment_groups(course_id)
+    course_info = client.get_course_grading_scheme(course_id)
+
+    # Check if weighted grading
+    is_weighted = course_info.get("apply_assignment_group_weights", False)
+
+    breakdown = []
+    for group in assignment_groups:
+        group_earned = 0
+        group_possible = 0
+        assignments_in_group = []
+
+        for assignment in group.get("assignments", []):
+            points = assignment.get("points_possible", 0)
+            submission = assignment.get("submission", {})
+            score = submission.get("score")
+
+            group_possible += points
+            if score is not None:
+                group_earned += score
+
+            assignments_in_group.append({
+                "name": assignment.get("name"),
+                "points_possible": points,
+                "score": score,
+                "percentage": round((score / points * 100), 2) if score and points else None
+            })
+
+        group_percentage = round((group_earned / group_possible * 100), 2) if group_possible > 0 else 0
+
+        breakdown.append({
+            "name": group.get("name"),
+            "weight": group.get("group_weight") if is_weighted else None,
+            "earned": group_earned,
+            "possible": group_possible,
+            "percentage": group_percentage,
+            "assignments": assignments_in_group
+        })
+
+    return {
+        "is_weighted": is_weighted,
+        "groups": breakdown
+    }
+
+
+def _get_letter_grade(percentage: float) -> str:
+    """Convert percentage to letter grade"""
+    if percentage >= 90:
+        return "A"
+    elif percentage >= 80:
+        return "B"
+    elif percentage >= 70:
+        return "C"
+    elif percentage >= 60:
+        return "D"
+    else:
+        return "F"

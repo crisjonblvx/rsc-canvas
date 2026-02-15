@@ -1,14 +1,11 @@
 // ReadySetClass Service Worker
 // Enables offline support and fast loading
 
-const CACHE_NAME = 'readysetclass-v1';
+const CACHE_NAME = 'readysetclass-v2'; // Increment this to force cache update
 const urlsToCache = [
-  '/',
-  '/dashboard-v2.html',
-  '/login.html',
-  '/pricing.html',
   '/assets/ReadySetClass_alpha_full.png',
   '/assets/ReadySetClass_alpha_badge.png'
+  // Don't cache HTML pages - they change too often
 ];
 
 // Install service worker and cache assets

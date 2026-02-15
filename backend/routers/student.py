@@ -41,6 +41,62 @@ def get_db_connection():
 
 
 # ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def _detect_institution_from_email(email: str) -> str:
+    """
+    Auto-detect institution from email domain
+
+    Maps common educational email domains to institution names
+    """
+    domain = email.split('@')[-1].lower()
+
+    # Institution mapping
+    institution_map = {
+        # Virginia
+        "vuu.edu": "Virginia Union University",
+        "vsu.edu": "Virginia State University",
+        "uva.edu": "University of Virginia",
+        "vt.edu": "Virginia Tech",
+        "wm.edu": "College of William & Mary",
+        "gmu.edu": "George Mason University",
+        "odu.edu": "Old Dominion University",
+        "jmu.edu": "James Madison University",
+        "liberty.edu": "Liberty University",
+
+        # HBCUs
+        "howard.edu": "Howard University",
+        "morehouse.edu": "Morehouse College",
+        "spelman.edu": "Spelman College",
+        "famu.edu": "Florida A&M University",
+        "ncat.edu": "North Carolina A&T State University",
+
+        # Generic patterns
+        "student.edu": email.split('@')[-1].replace(".edu", "").title() + " University",
+    }
+
+    # Try exact match first
+    if domain in institution_map:
+        return institution_map[domain]
+
+    # Try pattern matching for .edu domains
+    if domain.endswith(".edu"):
+        # Extract institution name from domain
+        name_part = domain.replace(".edu", "").replace(".", " ")
+
+        # Handle common acronyms (all caps)
+        known_acronyms = ["mit", "usc", "ucla", "nyu", "ucf", "unt", "utd", "uci", "ucsd"]
+        if name_part.lower() in known_acronyms:
+            return name_part.upper()
+
+        return f"{name_part.title()} University"
+
+    # Fallback for non-.edu domains
+    return None
+
+
+# ============================================================================
 # AUTH DEPENDENCY
 # ============================================================================
 
@@ -116,6 +172,11 @@ async def register_student(request: StudentRegisterRequest):
         if cursor.fetchone():
             raise HTTPException(status_code=409, detail="Email already registered")
 
+        # Auto-detect institution from email domain
+        institution = request.institution
+        if not institution:
+            institution = _detect_institution_from_email(request.email)
+
         # Hash password
         password_bytes = request.password.encode('utf-8')
         salt = bcrypt.gensalt()
@@ -126,7 +187,7 @@ async def register_student(request: StudentRegisterRequest):
             INSERT INTO users (email, password_hash, full_name, role, institution, is_active)
             VALUES (%s, %s, %s, 'student', %s, TRUE)
             RETURNING id
-        """, (request.email, password_hash, request.full_name, request.institution))
+        """, (request.email, password_hash, request.full_name, institution))
 
         user_id = cursor.fetchone()[0]
 
@@ -154,6 +215,7 @@ async def register_student(request: StudentRegisterRequest):
                 "email": request.email,
                 "full_name": request.full_name,
                 "role": "student",
+                "institution": institution,
                 "is_demo": False
             }
         }

@@ -353,6 +353,37 @@
 
         .hidden { display: none; }
 
+        /* Rendered Preview Styles */
+        .rendered-preview {
+            min-height: 200px;
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            line-height: 1.8;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.95rem;
+            color: #333;
+            overflow-y: auto;
+            max-height: 500px;
+        }
+        .rendered-preview h1, .rendered-preview h2, .rendered-preview h3, .rendered-preview h4 {
+            color: var(--navy);
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        .rendered-preview ul, .rendered-preview ol {
+            padding-left: 1.5rem;
+            margin: 0.5rem 0;
+        }
+        .rendered-preview li { margin-bottom: 0.3rem; }
+        .rendered-preview p { margin-bottom: 0.75rem; }
+        .rendered-preview strong { color: #1a1a1a; }
+        .rendered-preview hr { border: none; border-top: 1px solid #e0e0e0; margin: 1rem 0; }
+        .rendered-preview table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        .rendered-preview th, .rendered-preview td { border: 1px solid #ddd; padding: 0.5rem 0.75rem; text-align: left; }
+        .rendered-preview th { background: var(--navy); color: white; }
+
         /* Drag & Drop Styles */
         #dropZone:hover {
             border-color: var(--purple) !important;
@@ -1291,12 +1322,13 @@ Students should demonstrate understanding of how technology challenges tradition
                     </div>
 
                     <div class="form-group">
-                        <label>Edit Assignment Content (if needed)</label>
-                        <textarea id="aiGeneratedContent" style="min-height: 300px; font-family: 'DM Sans', sans-serif; line-height: 1.6;"></textarea>
+                        <div id="aiGeneratedContentPreview" class="rendered-preview"></div>
+                        <textarea id="aiGeneratedContent" style="display: none; min-height: 300px; font-family: 'DM Sans', sans-serif; line-height: 1.6;"></textarea>
                     </div>
 
                     <div style="display: flex; gap: 1rem;">
                         <button class="btn btn-primary" onclick="uploadAIAssignment()">📤 Upload to Canvas</button>
+                        <button class="btn" onclick="togglePreviewMode('aiGeneratedContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
                         <button class="btn" onclick="cancelAIAssignment()" style="background: #666; color: white;">Cancel</button>
                     </div>
                 </div>
@@ -1383,12 +1415,13 @@ Students should demonstrate understanding of how technology challenges tradition
                     </div>
 
                     <div class="form-group">
-                        <label>Edit Page Content (if needed)</label>
-                        <textarea id="aiGeneratedPageContent" style="min-height: 300px; font-family: 'DM Sans', sans-serif; line-height: 1.6;"></textarea>
+                        <div id="aiGeneratedPageContentPreview" class="rendered-preview"></div>
+                        <textarea id="aiGeneratedPageContent" style="display: none; min-height: 300px; font-family: 'DM Sans', sans-serif; line-height: 1.6;"></textarea>
                     </div>
 
                     <div style="display: flex; gap: 1rem;">
                         <button class="btn btn-primary" onclick="uploadAIPage()">📤 Upload to Canvas</button>
+                        <button class="btn" onclick="togglePreviewMode('aiGeneratedPageContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
                         <button class="btn" onclick="cancelAIPage()" style="background: #666; color: white;">Cancel</button>
                     </div>
                 </div>
@@ -1470,12 +1503,13 @@ Students should demonstrate understanding of how technology challenges tradition
                     </div>
 
                     <div class="form-group">
-                        <label>Edit Discussion Content (if needed)</label>
-                        <textarea id="aiGeneratedDiscussionContent" style="min-height: 300px; font-family: 'DM Sans', sans-serif; line-height: 1.6;"></textarea>
+                        <div id="aiGeneratedDiscussionContentPreview" class="rendered-preview"></div>
+                        <textarea id="aiGeneratedDiscussionContent" style="display: none; min-height: 300px; font-family: 'DM Sans', sans-serif; line-height: 1.6;"></textarea>
                     </div>
 
                     <div style="display: flex; gap: 1rem;">
                         <button class="btn btn-primary" onclick="uploadAIDiscussion()">📤 Upload to Canvas</button>
+                        <button class="btn" onclick="togglePreviewMode('aiGeneratedDiscussionContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
                         <button class="btn" onclick="cancelAIDiscussion()" style="background: #666; color: white;">Cancel</button>
                     </div>
                 </div>
@@ -1572,11 +1606,12 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         <button onclick="regenerateAISyllabus()" class="btn" style="background: var(--coral); color: white; padding: 0.5rem 1rem;">🔄 Regenerate</button>
                     </div>
                     <div class="form-group">
-                        <label>Edit Syllabus (if needed)</label>
-                        <textarea id="aiGeneratedSyllabusContent" style="min-height: 400px;"></textarea>
+                        <div id="aiGeneratedSyllabusContentPreview" class="rendered-preview"></div>
+                        <textarea id="aiGeneratedSyllabusContent" style="display: none; min-height: 400px;"></textarea>
                     </div>
                     <div style="display: flex; gap: 1rem;">
                         <button class="btn btn-primary" onclick="uploadAISyllabus()">📤 Upload to Canvas</button>
+                        <button class="btn" onclick="togglePreviewMode('aiGeneratedSyllabusContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
                         <button class="btn" onclick="cancelAISyllabus()" style="background: #666; color: white;">Cancel</button>
                     </div>
                 </div>
@@ -1908,7 +1943,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                 });
                 const result = await response.json();
                 if (response.ok) {
-                    document.getElementById('aiGeneratedSyllabusContent').value = result.generated_content;
+                    showPreview('aiGeneratedSyllabusContent', result.generated_content);
                     document.getElementById('aiSyllabusPreview').style.display = 'block';
                     document.getElementById('aiSyllabusForm').style.display = 'none';
                     showAlert('syllabusAlert', 'success', '✅ Syllabus ready!');
@@ -1966,6 +2001,37 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         }
 
         // Navigation
+        // ============================================================================
+        // PREVIEW / EDIT TOGGLE
+        // ============================================================================
+        function togglePreviewMode(textareaId) {
+            const textarea = document.getElementById(textareaId);
+            const preview = document.getElementById(textareaId + 'Preview');
+            const btn = event.target.closest('button');
+
+            if (textarea.style.display === 'none') {
+                // Switch to Edit mode
+                textarea.style.display = 'block';
+                preview.style.display = 'none';
+                btn.innerHTML = '👁️ Show Preview';
+            } else {
+                // Switch to Preview mode - sync edits back to preview
+                preview.innerHTML = textarea.value;
+                textarea.style.display = 'none';
+                preview.style.display = 'block';
+                btn.innerHTML = '✏️ Edit Source';
+            }
+        }
+
+        function showPreview(textareaId, content) {
+            const textarea = document.getElementById(textareaId);
+            const preview = document.getElementById(textareaId + 'Preview');
+            textarea.value = content;
+            preview.innerHTML = content;
+            preview.style.display = 'block';
+            textarea.style.display = 'none';
+        }
+
         function showSection(section) {
             // Update nav
             document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
@@ -2469,7 +2535,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
 
                 if (response.ok) {
                     // Show preview with AI-generated content
-                    document.getElementById('aiGeneratedContent').value = result.generated_content;
+                    showPreview('aiGeneratedContent', result.generated_content);
                     document.getElementById('aiAssignmentPreview').style.display = 'block';
                     document.getElementById('aiAssignmentForm').style.display = 'none';
                     showAlert('assignmentAlert', 'success', '✅ AI-generated content ready! Review and edit if needed, then upload.');
@@ -2646,7 +2712,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
 
                 if (response.ok) {
                     // Show preview with AI-generated content
-                    document.getElementById('aiGeneratedPageContent').value = result.generated_content;
+                    showPreview('aiGeneratedPageContent', result.generated_content);
                     document.getElementById('aiPagePreview').style.display = 'block';
                     document.getElementById('aiPageForm').style.display = 'none';
                     showAlert('pageAlert', 'success', '✅ AI-generated page ready! Review and edit if needed, then upload.');
@@ -2782,7 +2848,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                 });
                 const result = await response.json();
                 if (response.ok) {
-                    document.getElementById('aiGeneratedDiscussionContent').value = result.generated_content;
+                    showPreview('aiGeneratedDiscussionContent', result.generated_content);
                     document.getElementById('aiDiscussionPreview').style.display = 'block';
                     document.getElementById('aiDiscussionForm').style.display = 'none';
                     showAlert('discussionAlert', 'success', '✅ AI discussion ready!');
@@ -2847,7 +2913,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                 if (response.ok) {
                     showAlert('discussionAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank" style="color: var(--purple);">View in Canvas →</a>`);
                     document.getElementById('discussionTopic').value = '';
-                    document.getElementById('discussionPrompt').value = '';
+                    document.getElementById('discussionMessage').value = '';
                 } else {
                     showAlert('discussionAlert', 'error', '❌ ' + result.detail);
                 }

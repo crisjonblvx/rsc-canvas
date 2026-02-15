@@ -1,6 +1,9 @@
 {
   "version": 2,
   "name": "readysetclass",
+  "github": {
+    "silent": false
+  },
   "buildCommand": "echo 'No build needed'",
   "outputDirectory": "frontend",
   "headers": [

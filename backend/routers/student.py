@@ -44,36 +44,34 @@ def get_db_connection():
 # HELPER FUNCTIONS
 # ============================================================================
 
-def _detect_institution_from_email(email: str) -> str:
+def _detect_institution_from_email(email: str) -> tuple[str, str]:
     """
-    Auto-detect institution from email domain
+    Auto-detect institution and Canvas URL from email domain
 
-    Maps common educational email domains to institution names
+    Returns:
+        tuple: (institution_name, canvas_url) or (None, None)
     """
     domain = email.split('@')[-1].lower()
 
-    # Institution mapping
+    # Institution mapping with Canvas URLs
     institution_map = {
         # Virginia
-        "vuu.edu": "Virginia Union University",
-        "vsu.edu": "Virginia State University",
-        "uva.edu": "University of Virginia",
-        "vt.edu": "Virginia Tech",
-        "wm.edu": "College of William & Mary",
-        "gmu.edu": "George Mason University",
-        "odu.edu": "Old Dominion University",
-        "jmu.edu": "James Madison University",
-        "liberty.edu": "Liberty University",
+        "vuu.edu": ("Virginia Union University", "https://vuu.instructure.com"),
+        "vsu.edu": ("Virginia State University", "https://vsu.instructure.com"),
+        "uva.edu": ("University of Virginia", "https://canvas.its.virginia.edu"),
+        "vt.edu": ("Virginia Tech", "https://canvas.vt.edu"),
+        "wm.edu": ("College of William & Mary", "https://canvas.wm.edu"),
+        "gmu.edu": ("George Mason University", "https://mymasonportal.gmu.edu"),
+        "odu.edu": ("Old Dominion University", "https://canvas.odu.edu"),
+        "jmu.edu": ("James Madison University", "https://canvas.jmu.edu"),
+        "liberty.edu": ("Liberty University", "https://liberty.instructure.com"),
 
         # HBCUs
-        "howard.edu": "Howard University",
-        "morehouse.edu": "Morehouse College",
-        "spelman.edu": "Spelman College",
-        "famu.edu": "Florida A&M University",
-        "ncat.edu": "North Carolina A&T State University",
-
-        # Generic patterns
-        "student.edu": email.split('@')[-1].replace(".edu", "").title() + " University",
+        "howard.edu": ("Howard University", "https://howard.instructure.com"),
+        "morehouse.edu": ("Morehouse College", "https://morehouse.instructure.com"),
+        "spelman.edu": ("Spelman College", "https://spelman.instructure.com"),
+        "famu.edu": ("Florida A&M University", "https://famu.instructure.com"),
+        "ncat.edu": ("North Carolina A&T State University", "https://ncat.instructure.com"),
     }
 
     # Try exact match first
@@ -88,12 +86,18 @@ def _detect_institution_from_email(email: str) -> str:
         # Handle common acronyms (all caps)
         known_acronyms = ["mit", "usc", "ucla", "nyu", "ucf", "unt", "utd", "uci", "ucsd"]
         if name_part.lower() in known_acronyms:
-            return name_part.upper()
+            institution_name = name_part.upper()
+        else:
+            institution_name = f"{name_part.title()} University"
 
-        return f"{name_part.title()} University"
+        # Generate Canvas URL guess
+        canvas_subdomain = domain.replace(".edu", "")
+        canvas_url = f"https://{canvas_subdomain}.instructure.com"
+
+        return (institution_name, canvas_url)
 
     # Fallback for non-.edu domains
-    return None
+    return (None, None)
 
 
 # ============================================================================
@@ -172,10 +176,14 @@ async def register_student(request: StudentRegisterRequest):
         if cursor.fetchone():
             raise HTTPException(status_code=409, detail="Email already registered")
 
-        # Auto-detect institution from email domain
+        # Auto-detect institution and Canvas URL from email domain
         institution = request.institution
+        suggested_canvas_url = None
         if not institution:
-            institution = _detect_institution_from_email(request.email)
+            institution, suggested_canvas_url = _detect_institution_from_email(request.email)
+        else:
+            # If institution provided manually, still try to detect Canvas URL
+            _, suggested_canvas_url = _detect_institution_from_email(request.email)
 
         # Hash password
         password_bytes = request.password.encode('utf-8')
@@ -217,7 +225,8 @@ async def register_student(request: StudentRegisterRequest):
                 "role": "student",
                 "institution": institution,
                 "is_demo": False
-            }
+            },
+            "suggested_canvas_url": suggested_canvas_url
         }
 
     except HTTPException:

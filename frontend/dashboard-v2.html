@@ -1701,6 +1701,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
 
             // Show admin nav item if user is admin
             if (user.role === 'admin') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    const adminNavItem = document.getElementById('adminNavItem');
+                    if (adminNavItem) {
+                        adminNavItem.style.display = 'block';
+                    }
+                });
+                // Also try immediately in case DOM is already ready
                 const adminNavItem = document.getElementById('adminNavItem');
                 if (adminNavItem) {
                     adminNavItem.style.display = 'block';

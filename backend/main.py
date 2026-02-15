@@ -3070,6 +3070,74 @@ async def get_system_stats(current_user=Depends(get_current_user_from_token)):
 
 
 # ============================================================================
+# USER ACCOUNT ROUTES
+# ============================================================================
+
+@app.post("/api/feedback")
+async def submit_feedback(request: dict, current_user=Depends(get_current_user_from_token)):
+    """Submit user feedback"""
+    message = request.get('message', '').strip()
+
+    if not message:
+        raise HTTPException(status_code=400, detail="Feedback message is required")
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Store feedback in activity log for now
+        # TODO: Create dedicated feedback table
+        cursor.execute("""
+            INSERT INTO activity_log (user_id, action, details)
+            VALUES (%s, 'feedback_submitted', %s)
+        """, (current_user['user_id'], f'{{"message": "{message}", "timestamp": "{datetime.now().isoformat()}"}}'))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return {"message": "Thank you for your feedback!"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/billing/customer-portal")
+async def create_customer_portal_session(current_user=Depends(get_current_user_from_token)):
+    """Create Stripe Customer Portal session for subscription management"""
+    try:
+        # Get user's Stripe customer ID from database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT stripe_customer_id FROM users WHERE id = %s
+        """, (current_user['user_id'],))
+
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not result or not result[0]:
+            raise HTTPException(status_code=404, detail="No active subscription found")
+
+        stripe_customer_id = result[0]
+
+        # Create Stripe Customer Portal session
+        session = stripe.billing_portal.Session.create(
+            customer=stripe_customer_id,
+            return_url="https://www.readysetclass.app/account.html"
+        )
+
+        return {"url": session.url}
+
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # AI GRADING ROUTES
 # ============================================================================
 

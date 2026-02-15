@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Settings - ReadySetClass™</title>
+    <link rel="icon" href="/assets/ReadySetClass_alpha_badge.png" type="image/png">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-navy: #1E3A5F;
+            --accent-gold: #C9A961;
+            --background-cream: #F5F2E8;
+            --text-dark: #2C3E50;
+            --text-light: #666666;
+            --white: #ffffff;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --font-display: 'Sora', sans-serif;
+            --font-body: 'DM Sans', sans-serif;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--background-cream);
+            color: var(--text-dark);
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--primary-navy);
+        }
+
+        h1 {
+            font-family: var(--font-display);
+            font-size: 2rem;
+            color: var(--primary-navy);
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: var(--font-body);
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: var(--primary-navy);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #152944;
+        }
+
+        .btn-secondary {
+            background: var(--accent-gold);
+            color: var(--primary-navy);
+        }
+
+        .btn-secondary:hover {
+            background: #b89851;
+        }
+
+        .btn-danger {
+            background: var(--error);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--primary-navy);
+        }
+
+        .card p {
+            color: var(--text-light);
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+
+        .profile-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .profile-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .profile-label {
+            font-size: 0.875rem;
+            color: var(--text-light);
+            margin-bottom: 0.25rem;
+        }
+
+        .profile-value {
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .badge-admin {
+            background: var(--accent-gold);
+            color: var(--primary-navy);
+        }
+
+        .badge-demo {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-family: var(--font-body);
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .action-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .alert {
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #6ee7b7;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+        }
+
+        .support-links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .support-link {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem;
+            background: var(--background-cream);
+            border-radius: 8px;
+            text-decoration: none;
+            color: var(--text-dark);
+            transition: all 0.2s;
+        }
+
+        .support-link:hover {
+            background: var(--accent-gold);
+            color: var(--primary-navy);
+        }
+
+        .divider {
+            height: 1px;
+            background: #e5e7eb;
+            margin: 1.5rem 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚙️ Account Settings</h1>
+            <button class="btn btn-secondary" onclick="window.location.href='/dashboard-v2.html'">← Back to Dashboard</button>
+        </div>
+
+        <div id="alertContainer"></div>
+
+        <!-- Profile Card -->
+        <div class="card">
+            <h2>👤 Profile</h2>
+            <div class="profile-grid" id="profileGrid">
+                <div class="loading" style="grid-column: 1/-1; text-align: center; padding: 2rem;">Loading profile...</div>
+            </div>
+        </div>
+
+        <!-- Subscription Card -->
+        <div class="card">
+            <h2>💳 Subscription</h2>
+            <p>Manage your ReadySetClass subscription, billing, and payment methods.</p>
+            <button class="btn btn-primary" onclick="openCustomerPortal()">Manage Subscription</button>
+            <p style="font-size: 0.875rem; color: var(--text-light); margin-top: 0.5rem;">
+                You'll be redirected to our secure billing portal powered by Stripe.
+            </p>
+        </div>
+
+        <!-- Feedback Card -->
+        <div class="card">
+            <h2>💬 Send Feedback</h2>
+            <p>Help us improve ReadySetClass! Share your thoughts, report bugs, or request features.</p>
+            <textarea id="feedbackText" placeholder="Your feedback here..."></textarea>
+            <div class="action-group">
+                <button class="btn btn-primary" onclick="submitFeedback()">Send Feedback</button>
+            </div>
+        </div>
+
+        <!-- Support Card -->
+        <div class="card">
+            <h2>🆘 Support & Help</h2>
+            <p>Need assistance? We're here to help.</p>
+            <div class="support-links">
+                <a href="mailto:support@readysetclass.com" class="support-link">
+                    📧 Email Support
+                </a>
+                <a href="https://readysetclass.com/help" target="_blank" class="support-link">
+                    📚 Help Center
+                </a>
+                <a href="https://readysetclass.com/tutorials" target="_blank" class="support-link">
+                    🎥 Video Tutorials
+                </a>
+            </div>
+        </div>
+
+        <!-- Danger Zone -->
+        <div class="card" style="border: 2px solid var(--error);">
+            <h2 style="color: var(--error);">⚠️ Danger Zone</h2>
+            <p>Permanent actions that cannot be undone.</p>
+            <div class="divider"></div>
+            <div class="action-group">
+                <button class="btn btn-danger" onclick="logout()">🚪 Logout</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://facultyflow-production.up.railway.app';
+        let authToken = localStorage.getItem('auth_token');
+        let currentUser = null;
+
+        // Show alert
+        function showAlert(type, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            document.getElementById('alertContainer').appendChild(alertDiv);
+            setTimeout(() => alertDiv.remove(), 5000);
+        }
+
+        // Load profile
+        function loadProfile() {
+            try {
+                const userStr = localStorage.getItem('user');
+                if (userStr && userStr !== 'undefined') {
+                    currentUser = JSON.parse(userStr);
+
+                    const roleBadge = currentUser.role === 'admin'
+                        ? '<span class="badge badge-admin">ADMIN</span>'
+                        : '';
+
+                    const demoBadge = currentUser.is_demo
+                        ? '<span class="badge badge-demo">DEMO</span>'
+                        : '';
+
+                    document.getElementById('profileGrid').innerHTML = `
+                        <div class="profile-item">
+                            <span class="profile-label">Email</span>
+                            <span class="profile-value">${currentUser.email}</span>
+                        </div>
+                        <div class="profile-item">
+                            <span class="profile-label">Name</span>
+                            <span class="profile-value">${currentUser.full_name || 'Not set'}</span>
+                        </div>
+                        <div class="profile-item">
+                            <span class="profile-label">Account Type</span>
+                            <span class="profile-value">
+                                ${currentUser.role || 'User'}
+                                ${roleBadge}
+                                ${demoBadge}
+                            </span>
+                        </div>
+                        <div class="profile-item">
+                            <span class="profile-label">Member Since</span>
+                            <span class="profile-value">${new Date().toLocaleDateString()}</span>
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                showAlert('error', 'Failed to load profile');
+            }
+        }
+
+        // Open Stripe Customer Portal
+        async function openCustomerPortal() {
+            try {
+                const response = await fetch(`${API_URL}/api/billing/customer-portal`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.url) {
+                    window.location.href = data.url;
+                } else {
+                    showAlert('error', data.detail || 'Failed to open billing portal');
+                }
+            } catch (error) {
+                showAlert('error', 'Failed to open billing portal. Feature coming soon!');
+            }
+        }
+
+        // Submit feedback
+        async function submitFeedback() {
+            const feedback = document.getElementById('feedbackText').value.trim();
+
+            if (!feedback) {
+                showAlert('error', 'Please enter your feedback');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/api/feedback`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message: feedback })
+                });
+
+                if (response.ok) {
+                    showAlert('success', 'Thank you for your feedback!');
+                    document.getElementById('feedbackText').value = '';
+                } else {
+                    showAlert('error', 'Failed to submit feedback');
+                }
+            } catch (error) {
+                showAlert('error', 'Failed to submit feedback');
+            }
+        }
+
+        // Logout
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                localStorage.clear();
+                window.location.href = '/login.html';
+            }
+        }
+
+        // Check auth
+        if (!authToken) {
+            window.location.href = '/login.html';
+        } else {
+            loadProfile();
+        }
+    </script>
+</body>
+</html>

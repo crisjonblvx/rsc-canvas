@@ -810,15 +810,18 @@
                     <h1>Welcome to ReadySetClass</h1>
                     <p>Less time setting up. More time teaching.</p>
                 </div>
-                <div class="language-selector">
-                    <select id="languageSelect" onchange="changeLanguage(this.value)">
-                        <option value="en">🇺🇸 English</option>
-                        <option value="es">🇪🇸 Español</option>
-                        <option value="fr">🇫🇷 Français</option>
-                        <option value="pt">🇧🇷 Português</option>
-                        <option value="ar">🇸🇦 العربية</option>
-                        <option value="zh">🇨🇳 中文</option>
-                    </select>
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <div class="language-selector">
+                        <select id="languageSelect" onchange="changeLanguage(this.value)">
+                            <option value="en">🇺🇸 English</option>
+                            <option value="es">🇪🇸 Español</option>
+                            <option value="fr">🇫🇷 Français</option>
+                            <option value="pt">🇧🇷 Português</option>
+                            <option value="ar">🇸🇦 العربية</option>
+                            <option value="zh">🇨🇳 中文</option>
+                        </select>
+                    </div>
+                    <button onclick="window.location.href='/account.html'" style="padding: 0.5rem 1rem; background: var(--purple); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: var(--font-body);">⚙️ Account</button>
                 </div>
             </div>
 

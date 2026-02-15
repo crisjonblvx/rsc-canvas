@@ -3678,17 +3678,43 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         }
 
         // ============================================================================
-        // PWA: Register Service Worker
+        // PWA: Register Service Worker with Auto-Update
         // ============================================================================
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/service-worker.js')
                     .then((registration) => {
                         console.log('✅ Service Worker registered:', registration.scope);
+
+                        // Check for updates every 30 seconds
+                        setInterval(() => {
+                            registration.update();
+                        }, 30000);
+
+                        // Listen for updates
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // New service worker installed, reload to activate
+                                    console.log('🔄 New version available, reloading...');
+                                    window.location.reload();
+                                }
+                            });
+                        });
                     })
                     .catch((error) => {
                         console.log('❌ Service Worker registration failed:', error);
                     });
+            });
+
+            // Handle service worker controller change
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) {
+                    refreshing = true;
+                    window.location.reload();
+                }
             });
         }
     </script>

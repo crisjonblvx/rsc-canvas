@@ -1,7 +1,7 @@
 // ReadySetClass Service Worker
 // Enables offline support and fast loading
 
-const CACHE_NAME = 'readysetclass-v2'; // Increment this to force cache update
+const CACHE_NAME = 'readysetclass-v3'; // Increment this to force cache update
 const urlsToCache = [
   '/assets/ReadySetClass_alpha_full.png',
   '/assets/ReadySetClass_alpha_badge.png'
@@ -10,6 +10,9 @@ const urlsToCache = [
 
 // Install service worker and cache assets
 self.addEventListener('install', (event) => {
+  // Force the waiting service worker to become the active service worker
+  self.skipWaiting();
+
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
@@ -66,6 +69,9 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
+    }).then(() => {
+      // Take control of all pages immediately
+      return self.clients.claim();
     })
   );
 });

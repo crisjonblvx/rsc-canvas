@@ -167,8 +167,68 @@ function renderNav(activePage) {
         <div class="nav-links">
             <a href="/dashboard" class="${activePage === 'dashboard' ? 'active' : ''}">Home</a>
             <a href="/courses" class="${activePage === 'courses' ? 'active' : ''}">Courses</a>
+            <a href="/calendar" class="${activePage === 'calendar' ? 'active' : ''}">Calendar</a>
             <a href="/grades" class="${activePage === 'grades' ? 'active' : ''}">Grades</a>
             <a href="/profile" class="${activePage === 'profile' ? 'active' : ''}">Profile</a>
         </div>
     `;
+}
+
+// ===== PWA INSTALL PROMPT =====
+
+let deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    showInstallBanner();
+});
+
+function showInstallBanner() {
+    if (document.getElementById('install-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'install-banner';
+    banner.style.cssText = 'position: fixed; bottom: 0; left: 0; right: 0; background: #1B3A52; color: white; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; z-index: 300; box-shadow: 0 -2px 8px rgba(0,0,0,0.15);';
+    banner.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.3rem;">📱</span>
+            <div>
+                <div style="font-weight: 600; font-size: 0.9rem;">Add to Home Screen</div>
+                <div style="font-size: 0.75rem; opacity: 0.7;">Quick access to ReadySetClass</div>
+            </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <button onclick="dismissInstallBanner()" style="background: none; border: none; color: rgba(255,255,255,0.6); cursor: pointer; padding: 6px; font-size: 0.8rem;">Later</button>
+            <button onclick="installPWA()" style="background: #B8945F; color: white; border: none; border-radius: 6px; padding: 8px 14px; font-weight: 600; cursor: pointer; font-size: 0.8rem;">Install</button>
+        </div>
+    `;
+    document.body.appendChild(banner);
+}
+
+function installPWA() {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    deferredInstallPrompt.userChoice.then((choice) => {
+        deferredInstallPrompt = null;
+        dismissInstallBanner();
+    });
+}
+
+function dismissInstallBanner() {
+    const banner = document.getElementById('install-banner');
+    if (banner) banner.remove();
+    localStorage.setItem('rsc_install_dismissed', Date.now().toString());
+}
+
+// Don't show if dismissed recently (7 days)
+window.addEventListener('beforeinstallprompt', (e) => {
+    const dismissed = localStorage.getItem('rsc_install_dismissed');
+    if (dismissed && Date.now() - parseInt(dismissed) < 7 * 24 * 60 * 60 * 1000) {
+        return;
+    }
+});
+
+// Register service worker
+if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
 }

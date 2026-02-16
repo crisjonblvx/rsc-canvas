@@ -16,6 +16,10 @@ Student Endpoints:
   PUT  /api/v1/student/grades/{id}     - Update a grade
   DELETE /api/v1/student/grades/{id}   - Delete a grade
   GET  /api/v1/student/grades/{id}/calculator - Grade calculator + scenarios
+  GET  /api/v1/student/calendar/export    - Export deadlines as .ics file
+  GET  /api/v1/student/calendar/subscribe - Calendar export instructions
+  GET  /api/v1/student/notifications/preferences - Get notification prefs
+  PUT  /api/v1/student/notifications/preferences/{id} - Update notification prefs
 
 Professor Endpoints (for Q-tip coordination):
   POST /api/v1/professor/courses       - Create a course
@@ -43,7 +47,7 @@ import psycopg2
 # ROUTER SETUP
 # ============================================================================
 
-STUDENT_APP_VERSION = "2.0.0"
+STUDENT_APP_VERSION = "2.1.0"
 
 router = APIRouter()
 security = HTTPBearer()
@@ -1271,6 +1275,186 @@ async def create_deadline(request: CreateDeadlineRequest, current_user=Depends(g
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail="Failed to create deadline")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================================
+# CALENDAR SYNC (.ics export)
+# ============================================================================
+
+@router.get("/api/v1/student/calendar/export")
+async def export_calendar(current_user=Depends(get_current_student)):
+    """Export all enrolled course deadlines as .ics file for Apple/Google Calendar"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT sd.title, sd.due_at, sd.description, sc.course_name, sc.course_code
+            FROM student_deadlines sd
+            JOIN student_courses sc ON sd.course_id = sc.id
+            JOIN student_enrollments se ON se.course_id = sc.id
+            WHERE se.student_id = %s AND se.status = 'active'
+            ORDER BY sd.due_at ASC
+        """, (current_user["user_id"],))
+
+        lines = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//ReadySetClass//Student//EN",
+            "CALSCALE:GREGORIAN",
+            "METHOD:PUBLISH",
+            f"X-WR-CALNAME:ReadySetClass - {current_user.get('full_name', 'Student')}",
+        ]
+
+        for row in cursor.fetchall():
+            title, due_at, description, course_name, course_code = row
+            if not due_at:
+                continue
+            uid = f"{due_at.strftime('%Y%m%dT%H%M%S')}-{hash(title) & 0xFFFFFFFF}@readysetclass.app"
+            dtstart = due_at.strftime("%Y%m%dT%H%M%S")
+            summary = f"[{course_code or course_name}] {title}"
+            lines.append("BEGIN:VEVENT")
+            lines.append(f"UID:{uid}")
+            lines.append(f"DTSTART:{dtstart}")
+            lines.append(f"DTEND:{dtstart}")
+            lines.append(f"SUMMARY:{summary}")
+            if description:
+                lines.append(f"DESCRIPTION:{description[:500]}")
+            lines.append(f"CATEGORIES:{course_name}")
+            lines.append("BEGIN:VALARM")
+            lines.append("TRIGGER:-P1D")
+            lines.append("ACTION:DISPLAY")
+            lines.append(f"DESCRIPTION:Due tomorrow: {title}")
+            lines.append("END:VALARM")
+            lines.append("BEGIN:VALARM")
+            lines.append("TRIGGER:-PT3H")
+            lines.append("ACTION:DISPLAY")
+            lines.append(f"DESCRIPTION:Due in 3 hours: {title}")
+            lines.append("END:VALARM")
+            lines.append("END:VEVENT")
+
+        lines.append("END:VCALENDAR")
+        ics_content = "\r\n".join(lines)
+
+        return Response(
+            content=ics_content,
+            media_type="text/calendar",
+            headers={
+                "Content-Disposition": "attachment; filename=readysetclass-deadlines.ics",
+                "Cache-Control": "no-cache"
+            }
+        )
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/api/v1/student/calendar/subscribe")
+async def calendar_subscribe_url(current_user=Depends(get_current_student)):
+    """Get calendar export info for this student"""
+    return {
+        "download_url": "https://facultyflow-production.up.railway.app/api/v1/student/calendar/export",
+        "instructions": {
+            "apple": "Download the .ics file, then open it — Calendar will prompt you to add the events",
+            "google": "Go to calendar.google.com > Settings > Import & export > Import, then upload the .ics file"
+        },
+        "note": "Download the .ics file and import into your calendar app. Re-download anytime for updated deadlines."
+    }
+
+
+# ============================================================================
+# NOTIFICATION PREFERENCES
+# ============================================================================
+
+@router.get("/api/v1/student/notifications/preferences")
+async def get_notification_preferences(current_user=Depends(get_current_student)):
+    """Get notification preferences for all enrolled courses"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Get all enrolled courses with their preferences (if set)
+        cursor.execute("""
+            SELECT se.id as enrollment_id, sc.course_name, sc.course_code,
+                   snp.announcements_enabled, snp.deadlines_enabled,
+                   snp.reminder_hours
+            FROM student_enrollments se
+            JOIN student_courses sc ON se.course_id = sc.id
+            LEFT JOIN student_notification_prefs snp ON snp.enrollment_id = se.id
+            WHERE se.student_id = %s AND se.status = 'active'
+            ORDER BY sc.course_name
+        """, (current_user["user_id"],))
+
+        prefs = []
+        for row in cursor.fetchall():
+            prefs.append({
+                "enrollment_id": row[0],
+                "course_name": row[1],
+                "course_code": row[2],
+                "announcements_enabled": row[3] if row[3] is not None else True,
+                "deadlines_enabled": row[4] if row[4] is not None else True,
+                "reminder_hours": row[5] if row[5] is not None else 24
+            })
+
+        return {"preferences": prefs}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+class UpdateNotificationPrefsRequest(BaseModel):
+    announcements_enabled: Optional[bool] = None
+    deadlines_enabled: Optional[bool] = None
+    reminder_hours: Optional[int] = None
+
+
+@router.put("/api/v1/student/notifications/preferences/{enrollment_id}")
+async def update_notification_preferences(
+    enrollment_id: int,
+    request: UpdateNotificationPrefsRequest,
+    current_user=Depends(get_current_student)
+):
+    """Update notification preferences for a specific course"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Verify enrollment
+        cursor.execute("""
+            SELECT id FROM student_enrollments
+            WHERE id = %s AND student_id = %s AND status = 'active'
+        """, (enrollment_id, current_user["user_id"]))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Enrollment not found")
+
+        # Upsert preferences
+        cursor.execute("""
+            INSERT INTO student_notification_prefs (enrollment_id, announcements_enabled,
+                deadlines_enabled, reminder_hours)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (enrollment_id)
+            DO UPDATE SET
+                announcements_enabled = COALESCE(%s, student_notification_prefs.announcements_enabled),
+                deadlines_enabled = COALESCE(%s, student_notification_prefs.deadlines_enabled),
+                reminder_hours = COALESCE(%s, student_notification_prefs.reminder_hours),
+                updated_at = NOW()
+        """, (
+            enrollment_id,
+            request.announcements_enabled if request.announcements_enabled is not None else True,
+            request.deadlines_enabled if request.deadlines_enabled is not None else True,
+            request.reminder_hours if request.reminder_hours is not None else 24,
+            request.announcements_enabled,
+            request.deadlines_enabled,
+            request.reminder_hours
+        ))
+        conn.commit()
+
+        return {"message": "Notification preferences updated"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update preferences")
     finally:
         cursor.close()
         conn.close()

@@ -67,6 +67,21 @@
             </div>
         </div>
 
+        <!-- QR Scanner -->
+        <div style="text-align: center; margin-top: 1rem;">
+            <button type="button" id="qr-btn" onclick="startQRScan()" class="btn btn-outline btn-sm" style="gap: 6px;">
+                📷 Scan QR Code
+            </button>
+        </div>
+
+        <div id="qr-scanner" style="display: none; margin-top: 1rem;">
+            <div style="position: relative; border-radius: 12px; overflow: hidden; background: #000;">
+                <video id="qr-video" style="width: 100%; display: block;" playsinline></video>
+                <div style="position: absolute; inset: 0; border: 2px solid rgba(184,148,95,0.6); border-radius: 12px; pointer-events: none;"></div>
+            </div>
+            <button type="button" onclick="stopQRScan()" class="btn btn-outline btn-sm btn-full" style="margin-top: 8px;">Stop Scanning</button>
+        </div>
+
         <div style="text-align: center; margin-top: 1.5rem;">
             <a href="/dashboard" style="color: #6B7280; font-size: 0.85rem; text-decoration: none;">Skip for now</a>
         </div>
@@ -77,6 +92,7 @@
         if (!requireAuth()) { /* redirected */ }
 
         const codeInput = document.getElementById('code');
+        let qrStream = null;
 
         // Auto-format: add RSC- prefix
         codeInput.addEventListener('input', () => {
@@ -121,6 +137,67 @@
             codeInput.value = '';
             codeInput.focus();
             setLoading('join-btn', false, 'Join Class');
+        }
+
+        // QR Code Scanning
+        async function startQRScan() {
+            const scannerDiv = document.getElementById('qr-scanner');
+            const video = document.getElementById('qr-video');
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showAlert('alert', 'Camera access is not available on this device');
+                return;
+            }
+
+            try {
+                qrStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }
+                });
+                video.srcObject = qrStream;
+                video.play();
+                scannerDiv.style.display = 'block';
+                document.getElementById('qr-btn').style.display = 'none';
+                scanQRFrame(video);
+            } catch (err) {
+                showAlert('alert', 'Could not access camera. Please enter the code manually.');
+            }
+        }
+
+        function stopQRScan() {
+            if (qrStream) {
+                qrStream.getTracks().forEach(t => t.stop());
+                qrStream = null;
+            }
+            document.getElementById('qr-scanner').style.display = 'none';
+            document.getElementById('qr-btn').style.display = 'inline-flex';
+        }
+
+        function scanQRFrame(video) {
+            if (!qrStream) return;
+
+            if ('BarcodeDetector' in window) {
+                const detector = new BarcodeDetector({ formats: ['qr_code'] });
+                (function tick() {
+                    if (!qrStream) return;
+                    detector.detect(video).then(codes => {
+                        for (const code of codes) {
+                            const val = code.rawValue || '';
+                            const match = val.match(/RSC-[A-Z0-9]{4}/i);
+                            if (match) {
+                                codeInput.value = match[0].toUpperCase();
+                                stopQRScan();
+                                document.getElementById('join-form').dispatchEvent(new Event('submit'));
+                                return;
+                            }
+                        }
+                        requestAnimationFrame(tick);
+                    }).catch(() => requestAnimationFrame(tick));
+                })();
+            } else {
+                // Fallback: BarcodeDetector not available
+                stopQRScan();
+                showAlert('alert', 'QR scanning requires Chrome 83+ or Safari 17+. Please enter the code manually.', 'warning');
+            }
         }
     </script>
 </body>

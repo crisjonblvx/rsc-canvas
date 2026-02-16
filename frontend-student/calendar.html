@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Calendar — ReadySetClass Student</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1B3A52">
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="https://facultyflow-production.up.railway.app/api/v1/student/boot.js"></script>
+    <style>
+        .export-card {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.25rem;
+            background: var(--white);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            cursor: pointer;
+            transition: all var(--transition);
+            text-decoration: none;
+            color: inherit;
+            margin-bottom: 0.75rem;
+        }
+        .export-card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-1px);
+        }
+        .export-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+        .export-apple { background: #F3F4F6; }
+        .export-google { background: #EFF6FF; }
+        .export-download { background: #F0FDF4; }
+        .export-info h3 { font-size: 0.95rem; color: var(--navy); margin-bottom: 2px; }
+        .export-info p { font-size: 0.8rem; color: var(--gray-500); }
+        .timeline-item {
+            display: flex;
+            gap: 1rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--gray-100);
+        }
+        .timeline-item:last-child { border-bottom: none; }
+        .timeline-date {
+            width: 50px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .timeline-date .day { font-size: 1.3rem; font-weight: 700; color: var(--navy); line-height: 1; }
+        .timeline-date .month { font-size: 0.7rem; color: var(--gray-400); text-transform: uppercase; }
+        .timeline-content { flex: 1; }
+        .timeline-title { font-weight: 600; font-size: 0.9rem; color: var(--gray-800); }
+        .timeline-course { font-size: 0.78rem; color: var(--gray-500); }
+    </style>
+</head>
+<body>
+    <nav class="nav" id="main-nav"></nav>
+
+    <main class="page">
+        <div class="page-header">
+            <h1>Calendar Sync</h1>
+            <p>Export deadlines to your calendar app</p>
+        </div>
+
+        <!-- Export Options -->
+        <div id="export-section">
+            <a class="export-card" id="download-ics" href="#">
+                <div class="export-icon export-download">📥</div>
+                <div class="export-info">
+                    <h3>Download .ics File</h3>
+                    <p>Import into any calendar app</p>
+                </div>
+            </a>
+            <div class="export-card" onclick="showInstructions('apple')">
+                <div class="export-icon export-apple">🍎</div>
+                <div class="export-info">
+                    <h3>Apple Calendar</h3>
+                    <p>Subscribe for auto-updates</p>
+                </div>
+            </div>
+            <div class="export-card" onclick="showInstructions('google')">
+                <div class="export-icon export-google">📅</div>
+                <div class="export-info">
+                    <h3>Google Calendar</h3>
+                    <p>Import deadlines to Google Calendar</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions Modal -->
+        <div class="modal-overlay" id="instructions-modal">
+            <div class="modal">
+                <h2 id="instructions-title">Calendar Setup</h2>
+                <div id="instructions-body" style="font-size: 0.9rem; color: #4B5563; line-height: 1.6;"></div>
+                <div class="modal-actions">
+                    <button class="btn btn-outline btn-sm" onclick="closeInstructions()">Got it</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upcoming Timeline -->
+        <div class="section-heading" style="margin-top: 2rem;">Upcoming Deadlines</div>
+        <div class="card" id="timeline-container">
+            <div class="loading"><div class="spinner"></div> Loading deadlines...</div>
+        </div>
+
+        <div class="page-footer">
+            <p>&copy; 2026 ContentCreators.life &middot; ReadySetClass&trade;</p>
+        </div>
+    </main>
+
+    <script src="/assets/app.js"></script>
+    <script>
+        if (!requireAuth()) { /* redirected */ }
+        renderNav('calendar');
+
+        // Download .ics
+        document.getElementById('download-ics').addEventListener('click', async (e) => {
+            e.preventDefault();
+            try {
+                const token = auth.getToken();
+                const res = await fetch(`${API_URL}/api/v1/student/calendar/export`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error('Failed to export');
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'readysetclass-deadlines.ics';
+                a.click();
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                alert('Failed to download calendar. Please try again.');
+            }
+        });
+
+        function showInstructions(type) {
+            const title = document.getElementById('instructions-title');
+            const body = document.getElementById('instructions-body');
+
+            if (type === 'apple') {
+                title.textContent = 'Apple Calendar';
+                body.innerHTML = `
+                    <ol style="padding-left: 1.2rem;">
+                        <li>First, download the .ics file using the button above</li>
+                        <li>Open the downloaded file — it will open in Calendar</li>
+                        <li>Tap <strong>Add All</strong> to import all deadlines</li>
+                    </ol>
+                    <p style="margin-top: 1rem; font-size: 0.8rem; color: #9CA3AF;">
+                        Tip: Re-download anytime to get the latest deadlines.
+                    </p>`;
+            } else {
+                title.textContent = 'Google Calendar';
+                body.innerHTML = `
+                    <ol style="padding-left: 1.2rem;">
+                        <li>First, download the .ics file using the button above</li>
+                        <li>Go to <strong>calendar.google.com</strong> on desktop</li>
+                        <li>Click the gear icon > <strong>Settings</strong></li>
+                        <li>Click <strong>Import & export</strong> in the left sidebar</li>
+                        <li>Click <strong>Select file from your computer</strong></li>
+                        <li>Choose the downloaded .ics file and click <strong>Import</strong></li>
+                    </ol>
+                    <p style="margin-top: 1rem; font-size: 0.8rem; color: #9CA3AF;">
+                        Note: Google Calendar import works best on desktop.
+                    </p>`;
+            }
+
+            document.getElementById('instructions-modal').classList.add('show');
+        }
+
+        function closeInstructions() {
+            document.getElementById('instructions-modal').classList.remove('show');
+        }
+
+        // Load deadline timeline
+        async function loadTimeline() {
+            try {
+                const data = await api.get('/api/v1/student/dashboard/deadlines');
+                const all = [
+                    ...(data.overdue || []),
+                    ...(data.this_week || []),
+                    ...(data.next_week || []),
+                    ...(data.later || [])
+                ];
+                renderTimeline(all);
+            } catch (err) {
+                document.getElementById('timeline-container').innerHTML =
+                    '<div class="empty-state"><p>Could not load deadlines</p></div>';
+            }
+        }
+
+        function renderTimeline(deadlines) {
+            const container = document.getElementById('timeline-container');
+            if (!deadlines.length) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📅</div>
+                        <h3>No deadlines to export</h3>
+                        <p>When your professors share deadlines, they'll appear here for export</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = deadlines.map(d => {
+                const date = new Date(d.due_at);
+                const day = date.getDate();
+                const month = date.toLocaleString('en-US', { month: 'short' });
+                return `
+                    <div class="timeline-item">
+                        <div class="timeline-date">
+                            <div class="day">${day}</div>
+                            <div class="month">${month}</div>
+                        </div>
+                        <div class="timeline-content">
+                            <div class="timeline-title">${escapeHtml(d.title)}</div>
+                            <div class="timeline-course">${escapeHtml(d.course_name)} &middot; ${dueDateLabel(d.due_at)}</div>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        loadTimeline();
+    </script>
+</body>
+</html>

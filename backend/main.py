@@ -991,9 +991,21 @@ async def create_checkout_session(
         cursor = conn.cursor()
 
         # Get or create Stripe customer
-        cursor.execute("SELECT stripe_customer_id, email FROM users WHERE id = %s", (current_user['user_id'],))
+        cursor.execute("SELECT email FROM users WHERE id = %s", (current_user['user_id'],))
         result = cursor.fetchone()
-        stripe_customer_id, email = result
+        if not result:
+            raise HTTPException(status_code=404, detail="User not found")
+        email = result[0]
+
+        # Try to get existing stripe_customer_id
+        stripe_customer_id = None
+        try:
+            cursor.execute("SELECT stripe_customer_id FROM users WHERE id = %s", (current_user['user_id'],))
+            sid_result = cursor.fetchone()
+            if sid_result:
+                stripe_customer_id = sid_result[0]
+        except Exception:
+            pass  # Column may not exist yet
 
         if not stripe_customer_id:
             # Create Stripe customer

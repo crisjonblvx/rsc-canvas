@@ -228,6 +228,9 @@ def init_db():
 
             cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by VARCHAR(50)")
             cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code VARCHAR(50)")
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)")
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(50)")
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan VARCHAR(50)")
 
             conn.commit()
             cursor.close()

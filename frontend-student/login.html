@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Log In — ReadySetClass Student</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1B3A52">
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="https://facultyflow-production.up.railway.app/api/v1/student/boot.js"></script>
+</head>
+<body class="auth-page">
+    <div class="auth-box">
+        <div class="logo">
+            <div style="font-size: 2rem;">📚</div>
+        </div>
+        <h1>Welcome Back</h1>
+        <p class="tagline">Less time stressing.<br>More time learning.</p>
+
+        <div id="alert" class="alert"></div>
+
+        <form id="login-form">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" required autofocus placeholder="you@university.edu" autocomplete="email">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" required placeholder="Enter your password" autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn btn-primary btn-full" id="login-btn">Log In</button>
+        </form>
+
+        <div class="footer-text">
+            Don't have an account? <a href="/register">Sign up</a>
+        </div>
+
+        <div class="page-footer" style="margin-top: 2rem;">
+            <p>&copy; 2026 ContentCreators.life. All rights reserved.</p>
+        </div>
+    </div>
+
+    <script src="/assets/app.js"></script>
+    <script>
+        requireNoAuth();
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideAlert('alert');
+            setLoading('login-btn', true, 'Logging in...');
+
+            try {
+                const data = await api.post('/api/auth/student/login', {
+                    email: document.getElementById('email').value,
+                    password: document.getElementById('password').value
+                });
+
+                auth.setToken(data.token);
+                auth.setUser(data.user);
+                window.location.href = '/dashboard';
+            } catch (err) {
+                showAlert('alert', err.message);
+                setLoading('login-btn', false, 'Log In');
+            }
+        });
+    </script>
+</body>
+</html>

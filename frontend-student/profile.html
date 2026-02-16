@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Profile — ReadySetClass Student</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1B3A52">
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="https://facultyflow-production.up.railway.app/api/v1/student/boot.js"></script>
+</head>
+<body>
+    <nav class="nav" id="main-nav"></nav>
+
+    <main class="page">
+        <div class="page-header">
+            <h1>Profile</h1>
+        </div>
+
+        <div class="card">
+            <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem;">
+                <div id="avatar" style="width: 56px; height: 56px; border-radius: 50%; background: var(--navy); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: 700;"></div>
+                <div>
+                    <div id="display-name" style="font-weight: 700; font-size: 1.1rem; color: var(--navy);"></div>
+                    <div id="display-email" style="font-size: 0.85rem; color: var(--gray-500);"></div>
+                </div>
+            </div>
+
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.25rem;">
+                <span class="badge badge-blue" id="role-badge"></span>
+                <span class="badge" id="edu-badge"></span>
+                <span class="badge badge-gray" id="institution-badge" style="display: none;"></span>
+            </div>
+
+            <div style="border-top: 1px solid var(--gray-100); padding-top: 1rem;">
+                <div style="font-size: 0.85rem; color: var(--gray-500); margin-bottom: 4px;">Account</div>
+                <div style="font-size: 0.9rem; color: var(--gray-700);" id="account-info"></div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="section-heading">Quick Actions</div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <a href="/join" class="card" style="text-decoration: none; display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.3rem;">🔑</span>
+                <div>
+                    <div class="card-title">Join a Class</div>
+                    <div class="card-subtitle">Enter a class code from your professor</div>
+                </div>
+            </a>
+            <a href="/courses" class="card" style="text-decoration: none; display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.3rem;">📖</span>
+                <div>
+                    <div class="card-title">My Courses</div>
+                    <div class="card-subtitle">View enrolled courses</div>
+                </div>
+            </a>
+            <a href="/grades" class="card" style="text-decoration: none; display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.3rem;">📊</span>
+                <div>
+                    <div class="card-title">Grade Calculator</div>
+                    <div class="card-subtitle">Calculate what you need on remaining work</div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Logout -->
+        <div style="margin-top: 2rem;">
+            <button class="btn btn-outline btn-full" onclick="auth.logout()">Log Out</button>
+        </div>
+
+        <!-- Cache Reset -->
+        <div style="text-align: center; margin-top: 1.5rem;">
+            <a href="https://facultyflow-production.up.railway.app/api/v1/student/nuclear-cache/html"
+               style="font-size: 0.75rem; color: #9CA3AF; text-decoration: none;">
+                Having issues? Reset cache
+            </a>
+        </div>
+
+        <div class="page-footer">
+            <p>&copy; 2026 ContentCreators.life &middot; ReadySetClass&trade;</p>
+        </div>
+    </main>
+
+    <script src="/assets/app.js"></script>
+    <script>
+        if (!requireAuth()) { /* redirected */ }
+        renderNav('profile');
+
+        const user = auth.getUser();
+        if (user) {
+            const initials = (user.full_name || user.email || '?')
+                .split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+            document.getElementById('avatar').textContent = initials;
+            document.getElementById('display-name').textContent = user.full_name || 'Student';
+            document.getElementById('display-email').textContent = user.email;
+            document.getElementById('role-badge').textContent = (user.role || 'student').toUpperCase();
+
+            const eduBadge = document.getElementById('edu-badge');
+            if (user.edu_verified) {
+                eduBadge.textContent = '.EDU VERIFIED';
+                eduBadge.className = 'badge badge-green';
+            } else {
+                eduBadge.textContent = 'UNVERIFIED';
+                eduBadge.className = 'badge badge-gray';
+            }
+
+            if (user.institution) {
+                const instBadge = document.getElementById('institution-badge');
+                instBadge.textContent = user.institution;
+                instBadge.style.display = 'inline-block';
+            }
+
+            document.getElementById('account-info').textContent =
+                user.is_demo ? 'Demo account (expires in 24h)' : 'Standard student account';
+        }
+    </script>
+</body>
+</html>

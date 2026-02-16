@@ -1,0 +1,19 @@
+{
+    "rewrites": [
+        { "source": "/dashboard", "destination": "/dashboard.html" },
+        { "source": "/login", "destination": "/login.html" },
+        { "source": "/register", "destination": "/register.html" },
+        { "source": "/join", "destination": "/join.html" },
+        { "source": "/courses", "destination": "/courses.html" },
+        { "source": "/grades", "destination": "/grades.html" },
+        { "source": "/profile", "destination": "/profile.html" }
+    ],
+    "headers": [
+        {
+            "source": "/(.*).html",
+            "headers": [
+                { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+            ]
+        }
+    ]
+}

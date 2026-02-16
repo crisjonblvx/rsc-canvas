@@ -1,22 +1,40 @@
 """
-ReadySetClass Student API Router
-Student-facing endpoints for the Phife agent
+ReadySetClass Student API Router (Phife)
+Class Code system — No Canvas for students
 
-Endpoints:
-  POST /api/auth/register          - Student registration
-  GET  /api/v1/student/courses     - Get enrolled courses
-  GET  /api/v1/student/courses/{course_id}/assignments - Get assignments for a course
-  POST /api/v1/student/assignments/sync - Sync assignments from Canvas
+Student Endpoints:
+  POST /api/auth/register              - Student registration (.edu)
+  POST /api/auth/student/login         - Student login
+  POST /api/class-codes/join           - Join class with RSC-XXXX code
+  GET  /api/v1/student/courses         - List enrolled courses
+  DELETE /api/v1/student/courses/{id}  - Drop a course
+  GET  /api/v1/student/courses/{id}/announcements - Get announcements
+  GET  /api/v1/student/dashboard       - Dashboard (deadlines + announcements)
+  GET  /api/v1/student/dashboard/deadlines - Deadline dashboard (urgency groups)
+  POST /api/v1/student/grades          - Save a grade entry
+  GET  /api/v1/student/grades/{id}     - Get grades for a course
+  PUT  /api/v1/student/grades/{id}     - Update a grade
+  DELETE /api/v1/student/grades/{id}   - Delete a grade
+  GET  /api/v1/student/grades/{id}/calculator - Grade calculator + scenarios
+
+Professor Endpoints (for Q-tip coordination):
+  POST /api/v1/professor/courses       - Create a course
+  POST /api/class-codes/generate       - Generate RSC-XXXX code
+  GET  /api/class-codes/{course_id}    - View codes for a course
+  PUT  /api/class-codes/{code_id}      - Update/deactivate code
+  POST /api/v1/professor/announcements - Create announcement
+  POST /api/v1/professor/deadlines     - Create deadline
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timedelta
 import secrets
 import bcrypt
+import random
 import os
 import psycopg2
 
@@ -25,10 +43,13 @@ import psycopg2
 # ROUTER SETUP
 # ============================================================================
 
-STUDENT_APP_VERSION = "1.0.0"
+STUDENT_APP_VERSION = "2.0.0"
 
 router = APIRouter()
 security = HTTPBearer()
+
+# Unambiguous character set for class codes (no O/0/I/1/L)
+CLASS_CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 
 
 # ============================================================================
@@ -44,104 +65,131 @@ def get_db_connection():
 
 
 # ============================================================================
-# HELPER FUNCTIONS
+# HELPERS
 # ============================================================================
 
-def _detect_institution_from_email(email: str) -> tuple[str, str]:
-    """
-    Auto-detect institution and Canvas URL from email domain
-
-    Returns:
-        tuple: (institution_name, canvas_url) or (None, None)
-    """
+def _detect_institution_from_email(email: str) -> str:
+    """Auto-detect institution name from .edu email domain"""
     domain = email.split('@')[-1].lower()
 
-    # Institution mapping with Canvas URLs
     institution_map = {
-        # Virginia
-        "vuu.edu": ("Virginia Union University", "https://vuu.instructure.com"),
-        "vsu.edu": ("Virginia State University", "https://vsu.instructure.com"),
-        "uva.edu": ("University of Virginia", "https://canvas.its.virginia.edu"),
-        "vt.edu": ("Virginia Tech", "https://canvas.vt.edu"),
-        "wm.edu": ("College of William & Mary", "https://canvas.wm.edu"),
-        "gmu.edu": ("George Mason University", "https://mymasonportal.gmu.edu"),
-        "odu.edu": ("Old Dominion University", "https://canvas.odu.edu"),
-        "jmu.edu": ("James Madison University", "https://canvas.jmu.edu"),
-        "liberty.edu": ("Liberty University", "https://liberty.instructure.com"),
-
-        # HBCUs
-        "howard.edu": ("Howard University", "https://howard.instructure.com"),
-        "morehouse.edu": ("Morehouse College", "https://morehouse.instructure.com"),
-        "spelman.edu": ("Spelman College", "https://spelman.instructure.com"),
-        "famu.edu": ("Florida A&M University", "https://famu.instructure.com"),
-        "ncat.edu": ("North Carolina A&T State University", "https://ncat.instructure.com"),
+        "vuu.edu": "Virginia Union University",
+        "vsu.edu": "Virginia State University",
+        "uva.edu": "University of Virginia",
+        "vt.edu": "Virginia Tech",
+        "wm.edu": "College of William & Mary",
+        "gmu.edu": "George Mason University",
+        "odu.edu": "Old Dominion University",
+        "jmu.edu": "James Madison University",
+        "liberty.edu": "Liberty University",
+        "howard.edu": "Howard University",
+        "morehouse.edu": "Morehouse College",
+        "spelman.edu": "Spelman College",
+        "famu.edu": "Florida A&M University",
+        "ncat.edu": "North Carolina A&T State University",
     }
 
-    # Try exact match first
     if domain in institution_map:
         return institution_map[domain]
 
-    # Try pattern matching for .edu domains
     if domain.endswith(".edu"):
-        # Extract institution name from domain
         name_part = domain.replace(".edu", "").replace(".", " ")
-
-        # Handle common acronyms (all caps)
         known_acronyms = ["mit", "usc", "ucla", "nyu", "ucf", "unt", "utd", "uci", "ucsd"]
         if name_part.lower() in known_acronyms:
-            institution_name = name_part.upper()
-        else:
-            institution_name = f"{name_part.title()} University"
+            return name_part.upper()
+        return f"{name_part.title()} University"
 
-        # Generate Canvas URL guess
-        canvas_subdomain = domain.replace(".edu", "")
-        canvas_url = f"https://{canvas_subdomain}.instructure.com"
+    return None
 
-        return (institution_name, canvas_url)
 
-    # Fallback for non-.edu domains
-    return (None, None)
+def _get_letter_grade(percentage: float) -> str:
+    """Convert percentage to letter grade"""
+    if percentage >= 90:
+        return "A"
+    elif percentage >= 80:
+        return "B"
+    elif percentage >= 70:
+        return "C"
+    elif percentage >= 60:
+        return "D"
+    else:
+        return "F"
+
+
+def _generate_class_code(cursor) -> str:
+    """Generate a unique RSC-XXXX class code. Retries on collision."""
+    for _ in range(10):
+        suffix = ''.join(random.choices(CLASS_CODE_CHARS, k=4))
+        code = f"RSC-{suffix}"
+        cursor.execute("SELECT id FROM class_codes WHERE code = %s", (code,))
+        if not cursor.fetchone():
+            return code
+    raise HTTPException(status_code=500, detail="Failed to generate unique class code")
 
 
 # ============================================================================
-# AUTH DEPENDENCY
+# AUTH DEPENDENCIES
 # ============================================================================
 
 async def get_current_student(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Validate session token and return student user"""
     token = credentials.credentials
-
     conn = get_db_connection()
     cursor = conn.cursor()
-
     try:
         cursor.execute("""
             SELECT s.user_id, s.expires_at, u.email, u.role, u.full_name,
-                   u.canvas_url, u.canvas_token_encrypted
+                   u.institution, u.edu_verified
             FROM sessions s
             JOIN users u ON s.user_id = u.id
             WHERE s.session_token = %s AND u.is_active = TRUE
         """, (token,))
-
         session = cursor.fetchone()
-
         if not session:
             raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-        user_id, expires_at, email, role, full_name, canvas_url, canvas_token = session
-
+        user_id, expires_at, email, role, full_name, institution, edu_verified = session
         if datetime.now() > expires_at:
             raise HTTPException(status_code=401, detail="Session expired")
-
         return {
             "user_id": user_id,
             "email": email,
             "role": role,
             "full_name": full_name,
-            "canvas_url": canvas_url,
-            "canvas_token": canvas_token
+            "institution": institution,
+            "edu_verified": edu_verified
         }
+    finally:
+        cursor.close()
+        conn.close()
 
+
+async def get_current_professor(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Validate session token and ensure user is a professor (customer/admin role)"""
+    token = credentials.credentials
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT s.user_id, s.expires_at, u.email, u.role, u.full_name, u.institution
+            FROM sessions s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.session_token = %s AND u.is_active = TRUE
+        """, (token,))
+        session = cursor.fetchone()
+        if not session:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        user_id, expires_at, email, role, full_name, institution = session
+        if datetime.now() > expires_at:
+            raise HTTPException(status_code=401, detail="Session expired")
+        if role not in ('customer', 'admin'):
+            raise HTTPException(status_code=403, detail="Professor access required")
+        return {
+            "user_id": user_id,
+            "email": email,
+            "role": role,
+            "full_name": full_name,
+            "institution": institution
+        }
     finally:
         cursor.close()
         conn.close()
@@ -161,9 +209,49 @@ class StudentLoginRequest(BaseModel):
     email: str
     password: str
 
-class CanvasConnectRequest(BaseModel):
-    canvas_url: str
-    access_token: str
+class JoinClassRequest(BaseModel):
+    code: str
+
+class CreateCourseRequest(BaseModel):
+    course_name: str
+    course_code: Optional[str] = None
+    section: Optional[str] = None
+    semester: Optional[str] = None
+
+class GenerateCodeRequest(BaseModel):
+    course_id: int
+    max_students: Optional[int] = 200
+    expires_in_days: Optional[int] = 120
+
+class UpdateCodeRequest(BaseModel):
+    status: Optional[str] = None
+    max_students: Optional[int] = None
+
+class SaveGradeRequest(BaseModel):
+    enrollment_id: int
+    category_name: str
+    assignment_name: str
+    score: float
+    points_possible: float
+    weight: Optional[float] = None
+
+class UpdateGradeRequest(BaseModel):
+    category_name: Optional[str] = None
+    assignment_name: Optional[str] = None
+    score: Optional[float] = None
+    points_possible: Optional[float] = None
+    weight: Optional[float] = None
+
+class CreateAnnouncementRequest(BaseModel):
+    course_id: int
+    title: str
+    content: str
+
+class CreateDeadlineRequest(BaseModel):
+    course_id: int
+    title: str
+    due_at: str
+    description: Optional[str] = None
 
 
 # ============================================================================
@@ -173,36 +261,25 @@ class CanvasConnectRequest(BaseModel):
 @router.post("/api/auth/student/login")
 async def student_login(request: StudentLoginRequest):
     """Login for student accounts"""
-
     conn = get_db_connection()
     cursor = conn.cursor()
-
     try:
-        # Get user
         cursor.execute("""
             SELECT id, email, password_hash, role, is_active, full_name,
-                   institution, canvas_url, canvas_token_encrypted
-            FROM users
-            WHERE email = %s
+                   institution, edu_verified
+            FROM users WHERE email = %s
         """, (request.email,))
-
         user = cursor.fetchone()
-
         if not user:
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        user_id, email, password_hash, role, is_active, full_name, institution, canvas_url, canvas_token = user
+        user_id, email, password_hash, role, is_active, full_name, institution, edu_verified = user
 
-        # Verify password
-        password_bytes = request.password.encode('utf-8')
-        stored_hash_bytes = password_hash.encode('utf-8')
-        if not bcrypt.checkpw(password_bytes, stored_hash_bytes):
+        if not bcrypt.checkpw(request.password.encode('utf-8'), password_hash.encode('utf-8')):
             raise HTTPException(status_code=401, detail="Invalid credentials")
-
         if not is_active:
             raise HTTPException(status_code=403, detail="Account disabled")
 
-        # Create session
         session_token = secrets.token_urlsafe(32)
         expires_at = datetime.now() + timedelta(hours=24)
 
@@ -210,22 +287,12 @@ async def student_login(request: StudentLoginRequest):
             INSERT INTO sessions (user_id, session_token, expires_at)
             VALUES (%s, %s, %s)
         """, (user_id, session_token, expires_at))
-
-        # Log activity
         cursor.execute("""
             INSERT INTO activity_log (user_id, action, details)
             VALUES (%s, 'login', '{"type": "student"}')
         """, (user_id,))
-
-        # Update last active
-        cursor.execute("""
-            UPDATE users SET last_active_at = NOW() WHERE id = %s
-        """, (user_id,))
-
+        cursor.execute("UPDATE users SET last_active_at = NOW() WHERE id = %s", (user_id,))
         conn.commit()
-
-        # Detect Canvas URL if not set
-        _, suggested_canvas_url = _detect_institution_from_email(email)
 
         return {
             "token": session_token,
@@ -235,12 +302,10 @@ async def student_login(request: StudentLoginRequest):
                 "full_name": full_name,
                 "role": role,
                 "institution": institution,
+                "edu_verified": edu_verified,
                 "is_demo": False
-            },
-            "canvas_connected": canvas_url is not None and canvas_token is not None,
-            "suggested_canvas_url": suggested_canvas_url if not canvas_url else canvas_url
+            }
         }
-
     except HTTPException:
         raise
     except Exception as e:
@@ -254,40 +319,32 @@ async def student_login(request: StudentLoginRequest):
 @router.post("/api/auth/register")
 async def register_student(request: StudentRegisterRequest):
     """Register a new student account"""
-
     conn = get_db_connection()
     cursor = conn.cursor()
-
     try:
-        # Check if email already exists
         cursor.execute("SELECT id FROM users WHERE email = %s", (request.email,))
         if cursor.fetchone():
             raise HTTPException(status_code=409, detail="Email already registered")
 
-        # Auto-detect institution and Canvas URL from email domain
         institution = request.institution
-        suggested_canvas_url = None
         if not institution:
-            institution, suggested_canvas_url = _detect_institution_from_email(request.email)
-        else:
-            # If institution provided manually, still try to detect Canvas URL
-            _, suggested_canvas_url = _detect_institution_from_email(request.email)
+            institution = _detect_institution_from_email(request.email)
 
-        # Hash password
+        is_edu = request.email.lower().endswith('.edu')
+
         password_bytes = request.password.encode('utf-8')
         salt = bcrypt.gensalt()
         password_hash = bcrypt.hashpw(password_bytes, salt).decode('utf-8')
 
-        # Create user with student role
         cursor.execute("""
-            INSERT INTO users (email, password_hash, full_name, role, institution, is_active)
-            VALUES (%s, %s, %s, 'student', %s, TRUE)
+            INSERT INTO users (email, password_hash, full_name, role, institution,
+                               is_active, edu_verified, edu_verified_at)
+            VALUES (%s, %s, %s, 'student', %s, TRUE, %s, %s)
             RETURNING id
-        """, (request.email, password_hash, request.full_name, institution))
-
+        """, (request.email, password_hash, request.full_name, institution,
+              is_edu, datetime.now() if is_edu else None))
         user_id = cursor.fetchone()[0]
 
-        # Create session
         session_token = secrets.token_urlsafe(32)
         expires_at = datetime.now() + timedelta(hours=24)
 
@@ -295,13 +352,10 @@ async def register_student(request: StudentRegisterRequest):
             INSERT INTO sessions (user_id, session_token, expires_at)
             VALUES (%s, %s, %s)
         """, (user_id, session_token, expires_at))
-
-        # Log activity
         cursor.execute("""
             INSERT INTO activity_log (user_id, action, details)
             VALUES (%s, 'register', '{"type": "student"}')
         """, (user_id,))
-
         conn.commit()
 
         return {
@@ -312,11 +366,10 @@ async def register_student(request: StudentRegisterRequest):
                 "full_name": request.full_name,
                 "role": "student",
                 "institution": institution,
+                "edu_verified": is_edu,
                 "is_demo": False
-            },
-            "suggested_canvas_url": suggested_canvas_url
+            }
         }
-
     except HTTPException:
         raise
     except Exception as e:
@@ -329,254 +382,283 @@ async def register_student(request: StudentRegisterRequest):
 
 
 # ============================================================================
-# CANVAS CONNECTION
+# CLASS CODE — STUDENT JOIN
 # ============================================================================
 
-@router.post("/api/v1/student/canvas/connect")
-async def connect_canvas(request: CanvasConnectRequest, current_user=Depends(get_current_student)):
-    """Connect student's Canvas account"""
-    from canvas_auth import CanvasAuth
-
-    # Validate Canvas credentials
-    auth = CanvasAuth(request.canvas_url, request.access_token)
-    success, user_data, error = auth.test_connection()
-
-    if not success:
-        raise HTTPException(status_code=400, detail=f"Canvas connection failed: {error}")
+@router.post("/api/class-codes/join")
+async def join_class(request: JoinClassRequest, current_user=Depends(get_current_student)):
+    """Student joins a class using RSC-XXXX code"""
+    code = request.code.strip().upper()
+    if not code.startswith("RSC-"):
+        code = f"RSC-{code}"
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
     try:
-        # Save Canvas credentials to user record
+        # Look up the code
         cursor.execute("""
-            UPDATE users
-            SET canvas_url = %s, canvas_token_encrypted = %s, updated_at = NOW()
+            SELECT cc.id, cc.course_id, cc.status, cc.expires_at, cc.max_students,
+                   cc.current_students, sc.course_name, sc.course_code, sc.section,
+                   sc.semester, sc.institution, u.full_name as professor_name
+            FROM class_codes cc
+            JOIN student_courses sc ON cc.course_id = sc.id
+            JOIN users u ON cc.professor_id = u.id
+            WHERE cc.code = %s
+        """, (code,))
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Invalid class code")
+
+        code_id, course_id, status, expires_at, max_students, current_students, \
+            course_name, course_code, section, semester, institution, professor_name = row
+
+        if status != 'active':
+            raise HTTPException(status_code=400, detail="This class code is no longer active")
+        if expires_at and datetime.now() > expires_at:
+            raise HTTPException(status_code=400, detail="This class code has expired")
+        if max_students and current_students >= max_students:
+            raise HTTPException(status_code=400, detail="This class is full")
+
+        # Check if already enrolled
+        cursor.execute("""
+            SELECT id FROM student_enrollments
+            WHERE student_id = %s AND course_id = %s AND status = 'active'
+        """, (current_user["user_id"], course_id))
+        if cursor.fetchone():
+            raise HTTPException(status_code=409, detail="You are already enrolled in this course")
+
+        # Enroll the student
+        cursor.execute("""
+            INSERT INTO student_enrollments (student_id, course_id, class_code_id)
+            VALUES (%s, %s, %s) RETURNING id
+        """, (current_user["user_id"], course_id, code_id))
+        enrollment_id = cursor.fetchone()[0]
+
+        # Increment student count (with safety check)
+        cursor.execute("""
+            UPDATE class_codes SET current_students = current_students + 1,
+                                   updated_at = NOW()
             WHERE id = %s
-        """, (request.canvas_url, request.access_token, current_user["user_id"]))
+        """, (code_id,))
+
+        cursor.execute("""
+            INSERT INTO activity_log (user_id, action, details)
+            VALUES (%s, 'join_class', %s)
+        """, (current_user["user_id"], f'{{"course": "{course_name}", "code": "{code}"}}'))
 
         conn.commit()
 
         return {
-            "status": "connected",
-            "canvas_url": request.canvas_url,
-            "user_name": user_data.get("name", "Unknown") if user_data else "Connected"
+            "enrollment_id": enrollment_id,
+            "course": {
+                "id": course_id,
+                "course_name": course_name,
+                "course_code": course_code,
+                "section": section,
+                "semester": semester,
+                "professor_name": professor_name,
+                "institution": institution
+            },
+            "message": f"Successfully joined {course_code or course_name}!"
         }
-
+    except HTTPException:
+        raise
     except Exception as e:
         conn.rollback()
-        print(f"Canvas connect error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save Canvas credentials")
+        print(f"Join class error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to join class")
     finally:
         cursor.close()
         conn.close()
 
 
 # ============================================================================
-# COURSE ENDPOINTS
+# STUDENT COURSE ENDPOINTS
 # ============================================================================
 
 @router.get("/api/v1/student/courses")
-async def get_student_courses(current_user=Depends(get_current_student)):
-    """Get all courses the student is enrolled in via Canvas"""
-    from canvas_client import CanvasClient
-
-    canvas_url = current_user.get("canvas_url")
-    canvas_token = current_user.get("canvas_token")
-
-    if not canvas_url or not canvas_token:
-        raise HTTPException(
-            status_code=400,
-            detail="Canvas not connected. Please connect your Canvas account first."
-        )
-
-    client = CanvasClient(canvas_url, canvas_token)
-    courses = client.get_student_courses()
-
-    return {
-        "courses": [
-            {
-                "id": c.get("id"),
-                "name": c.get("name"),
-                "course_code": c.get("course_code"),
-                "term": c.get("term", {}).get("name") if c.get("term") else None,
-                "enrollments": c.get("enrollments", [])
-            }
-            for c in courses
-        ],
-        "total": len(courses)
-    }
-
-
-@router.get("/api/v1/student/courses/{course_id}/assignments")
-async def get_course_assignments(course_id: int, current_user=Depends(get_current_student)):
-    """Get all assignments for a specific course"""
-    from canvas_client import CanvasClient
-
-    canvas_url = current_user.get("canvas_url")
-    canvas_token = current_user.get("canvas_token")
-
-    if not canvas_url or not canvas_token:
-        raise HTTPException(
-            status_code=400,
-            detail="Canvas not connected. Please connect your Canvas account first."
-        )
-
-    client = CanvasClient(canvas_url, canvas_token)
-    assignments = client.get_student_assignments(course_id)
-
-    return {
-        "assignments": [
-            {
-                "id": a.get("id"),
-                "name": a.get("name"),
-                "description": a.get("description"),
-                "due_at": a.get("due_at"),
-                "points_possible": a.get("points_possible"),
-                "submission_types": a.get("submission_types", []),
-                "has_submitted_submissions": a.get("has_submitted_submissions", False),
-                "submission": a.get("submission"),
-                "course_id": course_id
-            }
-            for a in assignments
-        ],
-        "total": len(assignments)
-    }
-
-
-# ============================================================================
-# ASSIGNMENT SYNC
-# ============================================================================
-
-@router.post("/api/v1/student/assignments/sync")
-async def sync_assignments(current_user=Depends(get_current_student)):
-    """Sync all assignments from Canvas into local database"""
-    from canvas_client import CanvasClient
-
-    canvas_url = current_user.get("canvas_url")
-    canvas_token = current_user.get("canvas_token")
-
-    if not canvas_url or not canvas_token:
-        raise HTTPException(
-            status_code=400,
-            detail="Canvas not connected. Please connect your Canvas account first."
-        )
-
-    client = CanvasClient(canvas_url, canvas_token)
-    user_id = current_user["user_id"]
-
-    # Get all courses
-    courses = client.get_student_courses()
-    synced_count = 0
-
+async def get_enrolled_courses(current_user=Depends(get_current_student)):
+    """List all courses the student is enrolled in"""
     conn = get_db_connection()
     cursor = conn.cursor()
-
     try:
-        for course in courses:
-            course_id = course.get("id")
-            course_name = course.get("name", "")
-            assignments = client.get_student_assignments(course_id)
+        cursor.execute("""
+            SELECT se.id as enrollment_id, sc.id as course_id, sc.course_name,
+                   sc.course_code, sc.section, sc.semester, sc.institution,
+                   u.full_name as professor_name, se.enrolled_at
+            FROM student_enrollments se
+            JOIN student_courses sc ON se.course_id = sc.id
+            JOIN users u ON sc.professor_id = u.id
+            WHERE se.student_id = %s AND se.status = 'active'
+            ORDER BY se.enrolled_at DESC
+        """, (current_user["user_id"],))
 
-            for a in assignments:
-                submission = a.get("submission", {}) or {}
+        courses = []
+        for row in cursor.fetchall():
+            courses.append({
+                "enrollment_id": row[0],
+                "course_id": row[1],
+                "course_name": row[2],
+                "course_code": row[3],
+                "section": row[4],
+                "semester": row[5],
+                "institution": row[6],
+                "professor_name": row[7],
+                "enrolled_at": row[8].isoformat() if row[8] else None
+            })
 
-                cursor.execute("""
-                    INSERT INTO student_assignments
-                        (user_id, course_id, assignment_id, title, description,
-                         due_at, points_possible, submission_types, score,
-                         submitted, submitted_at, workflow_state, course_name, synced_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                    ON CONFLICT (user_id, assignment_id)
-                    DO UPDATE SET
-                        title = EXCLUDED.title,
-                        due_at = EXCLUDED.due_at,
-                        points_possible = EXCLUDED.points_possible,
-                        score = EXCLUDED.score,
-                        submitted = EXCLUDED.submitted,
-                        submitted_at = EXCLUDED.submitted_at,
-                        workflow_state = EXCLUDED.workflow_state,
-                        course_name = EXCLUDED.course_name,
-                        synced_at = NOW()
-                """, (
-                    user_id,
-                    str(course_id),
-                    str(a.get("id")),
-                    a.get("name"),
-                    a.get("description"),
-                    a.get("due_at"),
-                    a.get("points_possible"),
-                    ",".join(a.get("submission_types", [])),
-                    submission.get("score"),
-                    submission.get("workflow_state") == "submitted" or submission.get("submitted_at") is not None,
-                    submission.get("submitted_at"),
-                    a.get("workflow_state"),
-                    course_name
-                ))
-                synced_count += 1
+        return {"courses": courses, "total": len(courses)}
+    finally:
+        cursor.close()
+        conn.close()
 
+
+@router.delete("/api/v1/student/courses/{enrollment_id}")
+async def drop_course(enrollment_id: int, current_user=Depends(get_current_student)):
+    """Drop an enrolled course"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT id, class_code_id FROM student_enrollments
+            WHERE id = %s AND student_id = %s AND status = 'active'
+        """, (enrollment_id, current_user["user_id"]))
+        enrollment = cursor.fetchone()
+        if not enrollment:
+            raise HTTPException(status_code=404, detail="Enrollment not found")
+
+        cursor.execute("""
+            UPDATE student_enrollments SET status = 'dropped' WHERE id = %s
+        """, (enrollment_id,))
+        cursor.execute("""
+            UPDATE class_codes SET current_students = GREATEST(current_students - 1, 0)
+            WHERE id = %s
+        """, (enrollment[1],))
         conn.commit()
 
-        return {
-            "status": "success",
-            "synced": synced_count,
-            "courses": len(courses)
-        }
-
+        return {"message": "Course dropped successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         conn.rollback()
-        print(f"Sync error: {e}")
-        raise HTTPException(status_code=500, detail="Assignment sync failed")
+        raise HTTPException(status_code=500, detail="Failed to drop course")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/api/v1/student/courses/{course_id}/announcements")
+async def get_course_announcements(course_id: int, current_user=Depends(get_current_student)):
+    """Get announcements for a specific course"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Verify enrollment
+        cursor.execute("""
+            SELECT id FROM student_enrollments
+            WHERE student_id = %s AND course_id = %s AND status = 'active'
+        """, (current_user["user_id"], course_id))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=403, detail="Not enrolled in this course")
+
+        cursor.execute("""
+            SELECT sa.id, sa.title, sa.content, u.full_name as professor_name,
+                   sa.created_at
+            FROM student_announcements sa
+            JOIN users u ON sa.professor_id = u.id
+            WHERE sa.course_id = %s
+            ORDER BY sa.created_at DESC
+        """, (course_id,))
+
+        announcements = []
+        for row in cursor.fetchall():
+            announcements.append({
+                "id": row[0],
+                "title": row[1],
+                "content": row[2],
+                "professor_name": row[3],
+                "created_at": row[4].isoformat() if row[4] else None
+            })
+
+        return {"announcements": announcements, "total": len(announcements)}
     finally:
         cursor.close()
         conn.close()
 
 
 # ============================================================================
-# DEADLINE DASHBOARD ENDPOINTS (Phase 2.1)
+# STUDENT DASHBOARD
 # ============================================================================
 
-@router.get("/api/v1/student/assignments/upcoming")
-async def get_upcoming_assignments(
-    days: int = 7,
-    current_user=Depends(get_current_student)
-):
-    """Get assignments due in the next N days"""
-
+@router.get("/api/v1/student/dashboard")
+async def get_dashboard(current_user=Depends(get_current_student)):
+    """Student home dashboard — upcoming deadlines + recent announcements"""
     conn = get_db_connection()
     cursor = conn.cursor()
-
     try:
-        cursor.execute("""
-            SELECT assignment_id, title, course_name, due_at, points_possible,
-                   score, submitted, workflow_state
-            FROM student_assignments
-            WHERE user_id = %s
-              AND due_at IS NOT NULL
-              AND due_at >= NOW()
-              AND due_at <= NOW() + INTERVAL '%s days'
-            ORDER BY due_at ASC
-        """, (current_user["user_id"], days))
+        student_id = current_user["user_id"]
 
-        assignments = []
+        # Upcoming deadlines (next 14 days)
+        cursor.execute("""
+            SELECT sd.id, sd.title, sc.course_name, sd.due_at, sd.description
+            FROM student_deadlines sd
+            JOIN student_courses sc ON sd.course_id = sc.id
+            JOIN student_enrollments se ON se.course_id = sc.id
+            WHERE se.student_id = %s AND se.status = 'active'
+              AND sd.due_at >= NOW()
+              AND sd.due_at <= NOW() + INTERVAL '14 days'
+            ORDER BY sd.due_at ASC
+        """, (student_id,))
+
+        deadlines = []
         for row in cursor.fetchall():
-            assignments.append({
-                "assignment_id": row[0],
+            due_at = row[3]
+            days_until = (due_at - datetime.now()).days if due_at else None
+            deadlines.append({
+                "id": row[0],
                 "title": row[1],
                 "course_name": row[2],
-                "due_at": row[3].isoformat() if row[3] else None,
-                "points_possible": row[4],
-                "score": row[5],
-                "submitted": row[6],
-                "workflow_state": row[7]
+                "due_at": due_at.isoformat() if due_at else None,
+                "description": row[4],
+                "days_until_due": days_until
             })
 
-        return {
-            "assignments": assignments,
-            "total": len(assignments),
-            "days": days
-        }
+        # Recent announcements (last 7 days)
+        cursor.execute("""
+            SELECT sa.id, sa.title, sc.course_name, sa.content, sa.created_at
+            FROM student_announcements sa
+            JOIN student_courses sc ON sa.course_id = sc.id
+            JOIN student_enrollments se ON se.course_id = sc.id
+            WHERE se.student_id = %s AND se.status = 'active'
+              AND sa.created_at >= NOW() - INTERVAL '7 days'
+            ORDER BY sa.created_at DESC
+            LIMIT 10
+        """, (student_id,))
 
+        announcements = []
+        for row in cursor.fetchall():
+            announcements.append({
+                "id": row[0],
+                "title": row[1],
+                "course_name": row[2],
+                "content": row[3],
+                "created_at": row[4].isoformat() if row[4] else None
+            })
+
+        # Course count
+        cursor.execute("""
+            SELECT COUNT(*) FROM student_enrollments
+            WHERE student_id = %s AND status = 'active'
+        """, (student_id,))
+        course_count = cursor.fetchone()[0]
+
+        return {
+            "upcoming_deadlines": deadlines,
+            "recent_announcements": announcements,
+            "enrolled_courses_count": course_count,
+            "student_name": current_user["full_name"]
+        }
     finally:
         cursor.close()
         conn.close()
@@ -584,363 +666,678 @@ async def get_upcoming_assignments(
 
 @router.get("/api/v1/student/dashboard/deadlines")
 async def get_deadline_dashboard(current_user=Depends(get_current_student)):
-    """Get deadline dashboard with assignments grouped by urgency"""
-    from datetime import datetime, timedelta
-
+    """Deadline dashboard grouped by urgency (overdue, this week, next week, later)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-
     try:
-        # Get all assignments
         cursor.execute("""
-            SELECT assignment_id, title, course_name, due_at, points_possible,
-                   score, submitted, workflow_state
-            FROM student_assignments
-            WHERE user_id = %s
-            ORDER BY due_at ASC NULLS LAST
+            SELECT sd.id, sd.title, sc.course_name, sd.due_at, sd.description
+            FROM student_deadlines sd
+            JOIN student_courses sc ON sd.course_id = sc.id
+            JOIN student_enrollments se ON se.course_id = sc.id
+            WHERE se.student_id = %s AND se.status = 'active'
+            ORDER BY sd.due_at ASC
         """, (current_user["user_id"],))
 
         now = datetime.now()
-        end_of_this_week = now + timedelta(days=7)
+        end_of_week = now + timedelta(days=7)
         end_of_next_week = now + timedelta(days=14)
 
+        overdue = []
         this_week = []
         next_week = []
-        overdue = []
-        no_due_date = []
+        later = []
 
         for row in cursor.fetchall():
-            assignment = {
-                "assignment_id": row[0],
+            deadline = {
+                "id": row[0],
                 "title": row[1],
                 "course_name": row[2],
                 "due_at": row[3].isoformat() if row[3] else None,
-                "points_possible": row[4],
-                "score": row[5],
-                "submitted": row[6],
-                "workflow_state": row[7]
+                "description": row[4]
             }
-
             due_at = row[3]
-
-            if due_at is None:
-                no_due_date.append(assignment)
-            elif due_at < now and not row[6]:  # Overdue and not submitted
-                assignment["urgency"] = "overdue"
-                overdue.append(assignment)
-            elif due_at <= end_of_this_week:
-                assignment["urgency"] = "this_week"
-                this_week.append(assignment)
+            if due_at < now:
+                deadline["urgency"] = "overdue"
+                overdue.append(deadline)
+            elif due_at <= end_of_week:
+                deadline["urgency"] = "this_week"
+                this_week.append(deadline)
             elif due_at <= end_of_next_week:
-                assignment["urgency"] = "next_week"
-                next_week.append(assignment)
+                deadline["urgency"] = "next_week"
+                next_week.append(deadline)
+            else:
+                deadline["urgency"] = "later"
+                later.append(deadline)
 
         return {
+            "overdue": overdue,
             "this_week": this_week,
             "next_week": next_week,
-            "overdue": overdue,
-            "no_due_date": no_due_date,
+            "later": later,
             "summary": {
-                "total": len(this_week) + len(next_week) + len(overdue) + len(no_due_date),
+                "overdue_count": len(overdue),
                 "this_week_count": len(this_week),
                 "next_week_count": len(next_week),
-                "overdue_count": len(overdue),
-                "no_due_date_count": len(no_due_date)
+                "later_count": len(later)
             }
         }
-
     finally:
         cursor.close()
         conn.close()
 
 
 # ============================================================================
-# GRADE CALCULATOR ENDPOINTS (Phase 2.2)
+# MANUAL GRADE CALCULATOR
 # ============================================================================
 
-@router.get("/api/v1/student/courses/{course_id}/grade-calculator")
-async def get_grade_calculator(course_id: int, current_user=Depends(get_current_student)):
-    """
-    Calculate current grade and "what you need" scenarios
+@router.post("/api/v1/student/grades")
+async def save_grade(request: SaveGradeRequest, current_user=Depends(get_current_student)):
+    """Save a manual grade entry"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Verify enrollment ownership
+        cursor.execute("""
+            SELECT id FROM student_enrollments
+            WHERE id = %s AND student_id = %s AND status = 'active'
+        """, (request.enrollment_id, current_user["user_id"]))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Enrollment not found")
 
-    Returns:
-        - Current grade (percentage and letter)
-        - Points earned vs possible
-        - Scenarios: what score needed on remaining work for target grade
-    """
-    from canvas_client import CanvasClient
+        cursor.execute("""
+            INSERT INTO student_grades
+                (student_id, enrollment_id, category_name, assignment_name,
+                 score, points_possible, weight)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (current_user["user_id"], request.enrollment_id, request.category_name,
+              request.assignment_name, request.score, request.points_possible, request.weight))
+        grade_id = cursor.fetchone()[0]
+        conn.commit()
 
-    canvas_url = current_user.get("canvas_url")
-    canvas_token = current_user.get("canvas_token")
+        pct = round((request.score / request.points_possible * 100), 2) if request.points_possible > 0 else 0
 
-    if not canvas_url or not canvas_token:
-        raise HTTPException(400, "Canvas not connected")
+        return {
+            "grade_id": grade_id,
+            "category_name": request.category_name,
+            "assignment_name": request.assignment_name,
+            "score": request.score,
+            "points_possible": request.points_possible,
+            "weight": request.weight,
+            "percentage": pct
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save grade")
+    finally:
+        cursor.close()
+        conn.close()
 
-    client = CanvasClient(canvas_url, canvas_token)
 
-    # Get student's enrollment/grades
-    enrollment = client.get_student_grades(course_id)
+@router.get("/api/v1/student/grades/{enrollment_id}")
+async def get_grades(enrollment_id: int, current_user=Depends(get_current_student)):
+    """Get all grade entries for a course"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Verify enrollment
+        cursor.execute("""
+            SELECT se.id, sc.course_name FROM student_enrollments se
+            JOIN student_courses sc ON se.course_id = sc.id
+            WHERE se.id = %s AND se.student_id = %s
+        """, (enrollment_id, current_user["user_id"]))
+        enrollment = cursor.fetchone()
+        if not enrollment:
+            raise HTTPException(status_code=404, detail="Enrollment not found")
 
-    # Get assignment groups for breakdown
-    assignment_groups = client.get_assignment_groups(course_id)
+        cursor.execute("""
+            SELECT id, category_name, assignment_name, score, points_possible,
+                   weight, created_at
+            FROM student_grades
+            WHERE enrollment_id = %s
+            ORDER BY category_name, created_at
+        """, (enrollment_id,))
 
-    # Get grading scheme (A/B/C cutoffs)
-    course_info = client.get_course_grading_scheme(course_id)
+        grades = []
+        for row in cursor.fetchall():
+            pct = round((row[3] / row[4] * 100), 2) if row[4] > 0 else 0
+            grades.append({
+                "id": row[0],
+                "category_name": row[1],
+                "assignment_name": row[2],
+                "score": row[3],
+                "points_possible": row[4],
+                "weight": row[5],
+                "percentage": pct,
+                "created_at": row[6].isoformat() if row[6] else None
+            })
 
-    # Calculate current grade
-    current_score = enrollment.get("grades", {}).get("current_score")
-    final_score = enrollment.get("grades", {}).get("final_score")
+        return {
+            "enrollment_id": enrollment_id,
+            "course_name": enrollment[1],
+            "grades": grades,
+            "total_entries": len(grades)
+        }
+    finally:
+        cursor.close()
+        conn.close()
 
-    # Calculate points earned and possible
-    total_earned = 0
-    total_possible = 0
-    remaining_points = 0
 
-    for group in assignment_groups:
-        for assignment in group.get("assignments", []):
-            points = assignment.get("points_possible", 0)
-            submission = assignment.get("submission", {})
-            score = submission.get("score")
+@router.put("/api/v1/student/grades/{grade_id}")
+async def update_grade(grade_id: int, request: UpdateGradeRequest, current_user=Depends(get_current_student)):
+    """Update a grade entry"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT id FROM student_grades WHERE id = %s AND student_id = %s
+        """, (grade_id, current_user["user_id"]))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Grade not found")
 
-            total_possible += points
-            if score is not None:
-                total_earned += score
+        updates = []
+        values = []
+        if request.category_name is not None:
+            updates.append("category_name = %s")
+            values.append(request.category_name)
+        if request.assignment_name is not None:
+            updates.append("assignment_name = %s")
+            values.append(request.assignment_name)
+        if request.score is not None:
+            updates.append("score = %s")
+            values.append(request.score)
+        if request.points_possible is not None:
+            updates.append("points_possible = %s")
+            values.append(request.points_possible)
+        if request.weight is not None:
+            updates.append("weight = %s")
+            values.append(request.weight)
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        updates.append("updated_at = NOW()")
+        values.append(grade_id)
+
+        cursor.execute(
+            f"UPDATE student_grades SET {', '.join(updates)} WHERE id = %s",
+            values
+        )
+        conn.commit()
+
+        # Return updated grade
+        cursor.execute("""
+            SELECT id, category_name, assignment_name, score, points_possible, weight
+            FROM student_grades WHERE id = %s
+        """, (grade_id,))
+        row = cursor.fetchone()
+        pct = round((row[3] / row[4] * 100), 2) if row[4] > 0 else 0
+
+        return {
+            "grade_id": row[0],
+            "category_name": row[1],
+            "assignment_name": row[2],
+            "score": row[3],
+            "points_possible": row[4],
+            "weight": row[5],
+            "percentage": pct
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update grade")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.delete("/api/v1/student/grades/{grade_id}")
+async def delete_grade(grade_id: int, current_user=Depends(get_current_student)):
+    """Delete a grade entry"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            DELETE FROM student_grades WHERE id = %s AND student_id = %s RETURNING id
+        """, (grade_id, current_user["user_id"]))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Grade not found")
+        conn.commit()
+        return {"message": "Grade deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete grade")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/api/v1/student/grades/{enrollment_id}/calculator")
+async def grade_calculator(enrollment_id: int, current_user=Depends(get_current_student)):
+    """Calculate current grade + what-you-need scenarios from manual grade entries"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Verify enrollment
+        cursor.execute("""
+            SELECT se.id, sc.course_name FROM student_enrollments se
+            JOIN student_courses sc ON se.course_id = sc.id
+            WHERE se.id = %s AND se.student_id = %s
+        """, (enrollment_id, current_user["user_id"]))
+        enrollment = cursor.fetchone()
+        if not enrollment:
+            raise HTTPException(status_code=404, detail="Enrollment not found")
+
+        cursor.execute("""
+            SELECT category_name, assignment_name, score, points_possible, weight
+            FROM student_grades WHERE enrollment_id = %s
+        """, (enrollment_id,))
+        rows = cursor.fetchall()
+
+        if not rows:
+            return {
+                "enrollment_id": enrollment_id,
+                "course_name": enrollment[1],
+                "current_grade": {"percentage": None, "letter": None},
+                "is_weighted": False,
+                "categories": [],
+                "totals": {"earned": 0, "possible": 0},
+                "scenarios": [],
+                "message": "No grades entered yet"
+            }
+
+        # Group by category
+        categories = {}
+        has_weights = False
+        for row in rows:
+            cat_name, _, score, possible, weight = row
+            if weight is not None:
+                has_weights = True
+            if cat_name not in categories:
+                categories[cat_name] = {"weight": weight, "earned": 0, "possible": 0, "count": 0}
+            categories[cat_name]["earned"] += score
+            categories[cat_name]["possible"] += possible
+            categories[cat_name]["count"] += 1
+
+        # Calculate grade
+        total_earned = sum(c["earned"] for c in categories.values())
+        total_possible = sum(c["possible"] for c in categories.values())
+
+        if has_weights:
+            # Weighted calculation
+            total_weighted = 0
+            total_weight_used = 0
+            for cat_data in categories.values():
+                if cat_data["possible"] > 0 and cat_data["weight"]:
+                    cat_pct = cat_data["earned"] / cat_data["possible"] * 100
+                    total_weighted += cat_pct * cat_data["weight"]
+                    total_weight_used += cat_data["weight"]
+            current_pct = total_weighted / total_weight_used if total_weight_used > 0 else 0
+        else:
+            current_pct = (total_earned / total_possible * 100) if total_possible > 0 else 0
+
+        # Build category breakdown
+        category_list = []
+        for cat_name, cat_data in categories.items():
+            cat_pct = round((cat_data["earned"] / cat_data["possible"] * 100), 2) if cat_data["possible"] > 0 else 0
+            weighted_contribution = round(cat_pct * (cat_data["weight"] or 0), 2) if has_weights else None
+            category_list.append({
+                "name": cat_name,
+                "weight": cat_data["weight"],
+                "earned": cat_data["earned"],
+                "possible": cat_data["possible"],
+                "percentage": cat_pct,
+                "weighted_contribution": weighted_contribution,
+                "entry_count": cat_data["count"]
+            })
+
+        # What-you-need scenarios
+        scenarios = []
+        for letter, target_pct in [("A", 90), ("B", 80), ("C", 70), ("D", 60)]:
+            if has_weights:
+                remaining_weight = max(1.0 - sum(c["weight"] or 0 for c in categories.values()), 0)
+                if remaining_weight > 0:
+                    needed = (target_pct - current_pct * (1 - remaining_weight)) / remaining_weight
+                else:
+                    needed = None
             else:
-                remaining_points += points
+                if total_possible > 0:
+                    needed = target_pct
+                else:
+                    needed = None
 
-    # "What you need" scenarios
-    scenarios = []
-    target_grades = [
-        ("A", 90),
-        ("B", 80),
-        ("C", 70),
-        ("D", 60)
-    ]
-
-    for letter, target_pct in target_grades:
-        target_points = (target_pct / 100) * total_possible
-        points_needed = target_points - total_earned
-
-        if remaining_points > 0:
-            pct_needed = (points_needed / remaining_points) * 100
             scenarios.append({
                 "target_grade": letter,
                 "target_percentage": target_pct,
-                "points_needed": round(points_needed, 2),
-                "percentage_needed_on_remaining": round(pct_needed, 2),
-                "is_achievable": pct_needed <= 100
+                "needed_on_remaining": round(needed, 2) if needed is not None else None,
+                "is_achievable": needed is not None and needed <= 100
             })
 
-    return {
-        "current_grade": {
-            "score": current_score,
-            "final_score": final_score,
-            "letter": _get_letter_grade(current_score) if current_score else None
-        },
-        "points": {
-            "earned": total_earned,
-            "possible": total_possible,
-            "remaining": remaining_points
-        },
-        "scenarios": scenarios,
-        "grading_scheme": course_info.get("grading_standard")
-    }
+        return {
+            "enrollment_id": enrollment_id,
+            "course_name": enrollment[1],
+            "current_grade": {
+                "percentage": round(current_pct, 2),
+                "letter": _get_letter_grade(current_pct)
+            },
+            "is_weighted": has_weights,
+            "categories": category_list,
+            "totals": {
+                "earned": total_earned,
+                "possible": total_possible
+            },
+            "scenarios": scenarios
+        }
+    finally:
+        cursor.close()
+        conn.close()
 
 
-@router.get("/api/v1/student/courses/{course_id}/grade-breakdown")
-async def get_grade_breakdown(course_id: int, current_user=Depends(get_current_student)):
-    """
-    Get grade breakdown by assignment category/group
+# ============================================================================
+# PROFESSOR ENDPOINTS (for Q-tip coordination)
+# ============================================================================
 
-    Returns:
-        - Grade per assignment group (Quizzes 85%, Homework 92%, etc.)
-        - Weighted vs total points
-    """
-    from canvas_client import CanvasClient
+@router.post("/api/v1/professor/courses")
+async def create_course(request: CreateCourseRequest, current_user=Depends(get_current_professor)):
+    """Professor creates a course that students can join via class code"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO student_courses (professor_id, course_name, course_code,
+                                         section, semester, institution)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (current_user["user_id"], request.course_name, request.course_code,
+              request.section, request.semester, current_user.get("institution")))
+        course_id = cursor.fetchone()[0]
+        conn.commit()
 
-    canvas_url = current_user.get("canvas_url")
-    canvas_token = current_user.get("canvas_token")
+        return {
+            "course_id": course_id,
+            "course_name": request.course_name,
+            "course_code": request.course_code,
+            "message": "Course created. Generate a class code to share with students."
+        }
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create course")
+    finally:
+        cursor.close()
+        conn.close()
 
-    if not canvas_url or not canvas_token:
-        raise HTTPException(400, "Canvas not connected")
 
-    client = CanvasClient(canvas_url, canvas_token)
-    assignment_groups = client.get_assignment_groups(course_id)
-    course_info = client.get_course_grading_scheme(course_id)
+@router.post("/api/class-codes/generate")
+async def generate_class_code(request: GenerateCodeRequest, current_user=Depends(get_current_professor)):
+    """Professor generates a RSC-XXXX class code for a course"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Verify professor owns the course
+        cursor.execute("""
+            SELECT course_name FROM student_courses
+            WHERE id = %s AND professor_id = %s
+        """, (request.course_id, current_user["user_id"]))
+        course = cursor.fetchone()
+        if not course:
+            raise HTTPException(status_code=404, detail="Course not found")
 
-    # Check if weighted grading
-    is_weighted = course_info.get("apply_assignment_group_weights", False)
+        code = _generate_class_code(cursor)
+        expires_at = datetime.now() + timedelta(days=request.expires_in_days) if request.expires_in_days else None
 
-    breakdown = []
-    for group in assignment_groups:
-        group_earned = 0
-        group_possible = 0
-        assignments_in_group = []
+        cursor.execute("""
+            INSERT INTO class_codes (course_id, professor_id, code, max_students, expires_at)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+        """, (request.course_id, current_user["user_id"], code, request.max_students, expires_at))
+        code_id = cursor.fetchone()[0]
+        conn.commit()
 
-        for assignment in group.get("assignments", []):
-            points = assignment.get("points_possible", 0)
-            submission = assignment.get("submission", {})
-            score = submission.get("score")
+        return {
+            "code_id": code_id,
+            "code": code,
+            "course_name": course[0],
+            "expires_at": expires_at.isoformat() if expires_at else None,
+            "max_students": request.max_students,
+            "share_instructions": f"Share this code with your students: {code}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to generate code")
+    finally:
+        cursor.close()
+        conn.close()
 
-            group_possible += points
-            if score is not None:
-                group_earned += score
 
-            assignments_in_group.append({
-                "name": assignment.get("name"),
-                "points_possible": points,
-                "score": score,
-                "percentage": round((score / points * 100), 2) if score and points else None
+@router.get("/api/class-codes/{course_id}")
+async def get_class_codes(course_id: int, current_user=Depends(get_current_professor)):
+    """Professor views class codes for a course"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT course_name FROM student_courses
+            WHERE id = %s AND professor_id = %s
+        """, (course_id, current_user["user_id"]))
+        course = cursor.fetchone()
+        if not course:
+            raise HTTPException(status_code=404, detail="Course not found")
+
+        cursor.execute("""
+            SELECT id, code, status, current_students, max_students,
+                   expires_at, created_at
+            FROM class_codes WHERE course_id = %s
+            ORDER BY created_at DESC
+        """, (course_id,))
+
+        codes = []
+        for row in cursor.fetchall():
+            codes.append({
+                "id": row[0],
+                "code": row[1],
+                "status": row[2],
+                "current_students": row[3],
+                "max_students": row[4],
+                "expires_at": row[5].isoformat() if row[5] else None,
+                "created_at": row[6].isoformat() if row[6] else None
             })
 
-        group_percentage = round((group_earned / group_possible * 100), 2) if group_possible > 0 else 0
-
-        breakdown.append({
-            "name": group.get("name"),
-            "weight": group.get("group_weight") if is_weighted else None,
-            "earned": group_earned,
-            "possible": group_possible,
-            "percentage": group_percentage,
-            "assignments": assignments_in_group
-        })
-
-    return {
-        "is_weighted": is_weighted,
-        "groups": breakdown
-    }
+        return {"course_name": course[0], "codes": codes}
+    finally:
+        cursor.close()
+        conn.close()
 
 
-def _get_letter_grade(percentage: float) -> str:
-    """Convert percentage to letter grade"""
-    if percentage >= 90:
-        return "A"
-    elif percentage >= 80:
-        return "B"
-    elif percentage >= 70:
-        return "C"
-    elif percentage >= 60:
-        return "D"
-    else:
-        return "F"
+@router.put("/api/class-codes/{code_id}")
+async def update_class_code(code_id: int, request: UpdateCodeRequest, current_user=Depends(get_current_professor)):
+    """Professor updates or deactivates a class code"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT cc.id FROM class_codes cc
+            JOIN student_courses sc ON cc.course_id = sc.id
+            WHERE cc.id = %s AND sc.professor_id = %s
+        """, (code_id, current_user["user_id"]))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Code not found")
+
+        updates = []
+        values = []
+        if request.status:
+            if request.status not in ('active', 'deactivated'):
+                raise HTTPException(status_code=400, detail="Status must be 'active' or 'deactivated'")
+            updates.append("status = %s")
+            values.append(request.status)
+        if request.max_students is not None:
+            updates.append("max_students = %s")
+            values.append(request.max_students)
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        updates.append("updated_at = NOW()")
+        values.append(code_id)
+
+        cursor.execute(
+            f"UPDATE class_codes SET {', '.join(updates)} WHERE id = %s",
+            values
+        )
+        conn.commit()
+        return {"message": "Class code updated"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update code")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/api/v1/professor/announcements")
+async def create_announcement(request: CreateAnnouncementRequest, current_user=Depends(get_current_professor)):
+    """Professor creates an announcement for enrolled students"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT id FROM student_courses
+            WHERE id = %s AND professor_id = %s
+        """, (request.course_id, current_user["user_id"]))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Course not found")
+
+        cursor.execute("""
+            INSERT INTO student_announcements (course_id, professor_id, title, content)
+            VALUES (%s, %s, %s, %s) RETURNING id, created_at
+        """, (request.course_id, current_user["user_id"], request.title, request.content))
+        row = cursor.fetchone()
+        conn.commit()
+
+        return {
+            "announcement_id": row[0],
+            "title": request.title,
+            "created_at": row[1].isoformat() if row[1] else None,
+            "message": "Announcement posted to enrolled students"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create announcement")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/api/v1/professor/deadlines")
+async def create_deadline(request: CreateDeadlineRequest, current_user=Depends(get_current_professor)):
+    """Professor shares a deadline with enrolled students"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT id FROM student_courses
+            WHERE id = %s AND professor_id = %s
+        """, (request.course_id, current_user["user_id"]))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Course not found")
+
+        cursor.execute("""
+            INSERT INTO student_deadlines (course_id, professor_id, title, due_at, description)
+            VALUES (%s, %s, %s, %s, %s) RETURNING id
+        """, (request.course_id, current_user["user_id"], request.title,
+              request.due_at, request.description))
+        deadline_id = cursor.fetchone()[0]
+        conn.commit()
+
+        return {
+            "deadline_id": deadline_id,
+            "title": request.title,
+            "due_at": request.due_at,
+            "message": "Deadline shared with enrolled students"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create deadline")
+    finally:
+        cursor.close()
+        conn.close()
 
 
 # ============================================================================
 # NUCLEAR CACHE SYSTEM
 # ============================================================================
-# Auto-clearing cache system for the student frontend.
-# - /api/v1/student/version    → Frontend checks this on every load
-# - /api/v1/student/boot.js    → Auto-clearing script (include in <head>)
-# - /api/v1/student/nuclear-cache      → JSON with clear script
-# - /api/v1/student/nuclear-cache/html → Self-contained clear page
 
 @router.get("/api/v1/student/version")
 async def get_version():
-    """
-    Version check endpoint. Frontend calls this on load to see if
-    cache needs to be cleared. No auth required.
-    """
-    return {
-        "version": STUDENT_APP_VERSION,
-        "action": "check",
-        "clear_cache": False
-    }
+    """Version check endpoint. No auth required."""
+    return {"version": STUDENT_APP_VERSION, "action": "check", "clear_cache": False}
 
 
 @router.get("/api/v1/student/boot.js")
 async def boot_script():
-    """
-    Auto-clearing boot script. Include this in the student frontend <head>:
-      <script src="https://facultyflow-production.up.railway.app/api/v1/student/boot.js"></script>
-
-    On every page load it:
-      1. Checks the server version against local version
-      2. If version changed → nukes all caches, service workers, storage
-      3. Stores the new version so it only clears once per update
-      4. Unregisters any rogue service workers on every load
-    """
-    from fastapi.responses import Response
-
+    """Auto-clearing boot script for student frontend <head>"""
     js = f"""// ReadySetClass Student Edition - Auto Cache Manager v{STUDENT_APP_VERSION}
 (function() {{
     var SERVER_VERSION = '{STUDENT_APP_VERSION}';
     var LOCAL_VERSION = localStorage.getItem('rsc_student_version');
-
-    // Always unregister stale service workers
     if ('serviceWorker' in navigator) {{
         navigator.serviceWorker.getRegistrations().then(function(regs) {{
             regs.forEach(function(r) {{ r.unregister(); }});
         }});
     }}
-
-    // Version mismatch → nuclear clear
     if (LOCAL_VERSION && LOCAL_VERSION !== SERVER_VERSION) {{
-        console.log('[RSC] Version changed: ' + LOCAL_VERSION + ' → ' + SERVER_VERSION + '. Clearing cache...');
-
-        // Clear all browser caches
+        console.log('[RSC] Version changed: ' + LOCAL_VERSION + ' -> ' + SERVER_VERSION);
         if ('caches' in window) {{
             caches.keys().then(function(names) {{
                 names.forEach(function(name) {{ caches.delete(name); }});
             }});
         }}
-
-        // Clear storage (but save version first)
-        var authToken = localStorage.getItem('auth_token');
+        var authToken = localStorage.getItem('student_auth_token');
         localStorage.clear();
         sessionStorage.clear();
-        if (authToken) localStorage.setItem('auth_token', authToken);
-
-        // Clear cookies
+        if (authToken) localStorage.setItem('student_auth_token', authToken);
         document.cookie.split(';').forEach(function(c) {{
             document.cookie = c.trim().split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/';
         }});
-
-        // Save new version and reload
         localStorage.setItem('rsc_student_version', SERVER_VERSION);
         window.location.reload(true);
         return;
     }}
-
-    // First visit or same version → just save it
     localStorage.setItem('rsc_student_version', SERVER_VERSION);
 }})();
 """
     return Response(
         content=js,
         media_type="application/javascript",
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0"
-        }
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
     )
 
 
 @router.get("/api/v1/student/nuclear-cache")
 async def nuclear_cache():
-    """
-    Returns JavaScript to nuke all caches, service workers, and local storage.
-    No-auth endpoint so it works even when auth is broken.
-    """
+    """Returns cache-clearing script. No auth required."""
     return {
         "version": STUDENT_APP_VERSION,
         "action": "nuclear_cache_clear",
-        "instructions": "Execute the 'script' field in your browser console, or visit /api/v1/student/nuclear-cache/html",
+        "instructions": "Visit /api/v1/student/nuclear-cache/html to clear everything",
         "script": """
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then(function(regs) {
-                    regs.forEach(function(r) { r.unregister(); });
-                });
-            }
-            if ('caches' in window) {
-                caches.keys().then(function(names) {
-                    names.forEach(function(name) { caches.delete(name); });
-                });
-            }
-            localStorage.clear();
-            sessionStorage.clear();
-            document.cookie.split(';').forEach(function(c) {
-                document.cookie = c.trim().split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/';
-            });
+            if ('serviceWorker' in navigator) { navigator.serviceWorker.getRegistrations().then(function(r) { r.forEach(function(sw) { sw.unregister(); }); }); }
+            if ('caches' in window) { caches.keys().then(function(n) { n.forEach(function(name) { caches.delete(name); }); }); }
+            localStorage.clear(); sessionStorage.clear();
+            document.cookie.split(';').forEach(function(c) { document.cookie = c.trim().split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/'; });
             setTimeout(function() { window.location.reload(true); }, 500);
         """
     }
@@ -948,36 +1345,16 @@ async def nuclear_cache():
 
 @router.get("/api/v1/student/nuclear-cache/html")
 async def nuclear_cache_html():
-    """
-    Self-contained HTML page that nukes everything and redirects to login.
-    Visit this URL directly in the browser to clear everything.
-    """
+    """Self-contained HTML page that nukes everything and redirects to login."""
     html = f"""<!DOCTYPE html>
 <html>
 <head>
     <title>ReadySetClass - Cache Reset</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
     <style>
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #1E3A5F 0%, #2C5F8A 100%);
-            color: white;
-        }}
-        .container {{
-            text-align: center;
-            padding: 2rem;
-            max-width: 400px;
-        }}
+        body {{ font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: linear-gradient(135deg, #1B3A52, #2A5478); color: white; }}
+        .container {{ text-align: center; padding: 2rem; }}
         h1 {{ font-size: 1.8rem; margin-bottom: 0.5rem; }}
-        p {{ font-size: 1rem; opacity: 0.85; }}
-        .status {{ margin-top: 1.5rem; font-size: 0.9rem; text-align: left; }}
         .check {{ color: #4ade80; padding: 4px 0; }}
         .version {{ opacity: 0.5; font-size: 0.75rem; margin-top: 2rem; }}
     </style>
@@ -986,53 +1363,26 @@ async def nuclear_cache_html():
     <div class="container">
         <h1>Resetting ReadySetClass</h1>
         <p>Clearing cached data...</p>
-        <div class="status" id="status"></div>
+        <div id="status"></div>
         <div class="version">v{STUDENT_APP_VERSION}</div>
     </div>
     <script>
-        var status = document.getElementById('status');
-        function log(msg) {{
-            status.innerHTML += '<div class="check">' + msg + '</div>';
-        }}
-
-        async function nuclearClear() {{
-            if ('serviceWorker' in navigator) {{
-                var regs = await navigator.serviceWorker.getRegistrations();
-                for (var i = 0; i < regs.length; i++) {{
-                    await regs[i].unregister();
-                }}
-            }}
+        var s = document.getElementById('status');
+        function log(m) {{ s.innerHTML += '<div class="check">' + m + '</div>'; }}
+        async function go() {{
+            if ('serviceWorker' in navigator) {{ var r = await navigator.serviceWorker.getRegistrations(); for (var i=0;i<r.length;i++) await r[i].unregister(); }}
             log('Service workers cleared');
-
-            if ('caches' in window) {{
-                var names = await caches.keys();
-                for (var i = 0; i < names.length; i++) {{
-                    await caches.delete(names[i]);
-                }}
-            }}
+            if ('caches' in window) {{ var n = await caches.keys(); for (var i=0;i<n.length;i++) await caches.delete(n[i]); }}
             log('Browser caches cleared');
-
-            localStorage.clear();
-            sessionStorage.clear();
-            log('Local storage cleared');
-
-            document.cookie.split(';').forEach(function(c) {{
-                document.cookie = c.trim().split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/';
-            }});
+            localStorage.clear(); sessionStorage.clear(); log('Storage cleared');
+            document.cookie.split(';').forEach(function(c) {{ document.cookie = c.trim().split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/'; }});
             log('Cookies cleared');
-
             localStorage.setItem('rsc_student_version', '{STUDENT_APP_VERSION}');
-            log('');
-            log('All clear! Redirecting...');
-
-            setTimeout(function() {{
-                window.location.href = '/login';
-            }}, 1200);
+            log(''); log('All clear! Redirecting...');
+            setTimeout(function() {{ window.location.href = '/login'; }}, 1200);
         }}
-
-        nuclearClear();
+        go();
     </script>
 </body>
 </html>"""
-
     return HTMLResponse(content=html)

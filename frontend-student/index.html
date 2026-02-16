@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>ReadySetClass — Student Edition</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1B3A52">
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="https://facultyflow-production.up.railway.app/api/v1/student/boot.js"></script>
+</head>
+<body class="auth-page">
+    <div class="auth-box" style="text-align: center;">
+        <div class="logo">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📚</div>
+        </div>
+        <h1>ReadySetClass</h1>
+        <p class="tagline" style="font-weight: 600; color: #1B3A52;">Student Edition</p>
+        <p class="tagline">Less time stressing.<br>More time learning.</p>
+
+        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 2rem;">
+            <a href="/register" class="btn btn-primary btn-full" style="text-decoration: none;">Create Account</a>
+            <a href="/login" class="btn btn-outline btn-full" style="text-decoration: none;">Log In</a>
+        </div>
+
+        <div class="footer-text" style="margin-top: 2rem;">
+            <p style="font-size: 0.78rem; color: #9CA3AF;">Use your .edu email for instant verification</p>
+        </div>
+
+        <div class="page-footer" style="margin-top: 2rem;">
+            <p>&copy; 2026 ContentCreators.life. All rights reserved.</p>
+            <p>ReadySetClass&trade; is a trademark of ContentCreators.life</p>
+        </div>
+    </div>
+
+    <script src="/assets/app.js"></script>
+    <script>
+        // If already logged in, go to dashboard
+        if (auth.isLoggedIn()) {
+            window.location.href = '/dashboard';
+        }
+    </script>
+</body>
+</html>

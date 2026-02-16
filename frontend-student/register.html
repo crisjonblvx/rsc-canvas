@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Sign Up — ReadySetClass Student</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1B3A52">
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="https://facultyflow-production.up.railway.app/api/v1/student/boot.js"></script>
+</head>
+<body class="auth-page">
+    <div class="auth-box">
+        <div class="logo">
+            <div style="font-size: 2rem;">📚</div>
+        </div>
+        <h1>Create Account</h1>
+        <p class="tagline">Use your .edu email for instant verification</p>
+
+        <div id="alert" class="alert"></div>
+
+        <form id="register-form">
+            <div class="form-group">
+                <label for="full_name">Full Name</label>
+                <input type="text" id="full_name" required placeholder="Your full name" autocomplete="name">
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" required placeholder="you@university.edu" autocomplete="email">
+                <div class="hint" id="institution-hint"></div>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" required placeholder="At least 8 characters" minlength="8" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label for="confirm_password">Confirm Password</label>
+                <input type="password" id="confirm_password" required placeholder="Confirm your password" autocomplete="new-password">
+            </div>
+            <button type="submit" class="btn btn-primary btn-full" id="register-btn">Create Account</button>
+        </form>
+
+        <div class="footer-text">
+            Already have an account? <a href="/login">Log in</a>
+        </div>
+    </div>
+
+    <script src="/assets/app.js"></script>
+    <script>
+        requireNoAuth();
+
+        const emailInput = document.getElementById('email');
+        const institutionHint = document.getElementById('institution-hint');
+
+        emailInput.addEventListener('input', () => {
+            const email = emailInput.value;
+            if (email.includes('@') && email.endsWith('.edu')) {
+                const domain = email.split('@')[1];
+                const name = domain.replace('.edu', '').replace(/\./g, ' ');
+                institutionHint.textContent = 'Institution detected from .edu email';
+                institutionHint.style.color = '#16A34A';
+            } else if (email.includes('@')) {
+                institutionHint.textContent = 'Use a .edu email for instant verification';
+                institutionHint.style.color = '#9CA3AF';
+            } else {
+                institutionHint.textContent = '';
+            }
+        });
+
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideAlert('alert');
+
+            const password = document.getElementById('password').value;
+            const confirm = document.getElementById('confirm_password').value;
+            if (password !== confirm) {
+                showAlert('alert', 'Passwords do not match');
+                return;
+            }
+            if (password.length < 8) {
+                showAlert('alert', 'Password must be at least 8 characters');
+                return;
+            }
+
+            setLoading('register-btn', true, 'Creating account...');
+
+            try {
+                const data = await api.post('/api/auth/register', {
+                    email: document.getElementById('email').value,
+                    password: password,
+                    full_name: document.getElementById('full_name').value
+                });
+
+                auth.setToken(data.token);
+                auth.setUser(data.user);
+                window.location.href = '/join';
+            } catch (err) {
+                showAlert('alert', err.message);
+                setLoading('register-btn', false, 'Create Account');
+            }
+        });
+    </script>
+</body>
+</html>

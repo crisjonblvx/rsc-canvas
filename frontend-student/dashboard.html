@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Dashboard — ReadySetClass Student</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1B3A52">
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="https://facultyflow-production.up.railway.app/api/v1/student/boot.js"></script>
+</head>
+<body>
+    <nav class="nav" id="main-nav"></nav>
+
+    <main class="page">
+        <div class="page-header">
+            <h1 id="greeting">Dashboard</h1>
+            <p id="subtitle">Here's what's happening across your courses</p>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <a href="/join" class="quick-action">
+                <span class="qa-icon">🔑</span>
+                <span>Join a Class</span>
+            </a>
+            <a href="/courses" class="quick-action">
+                <span class="qa-icon">📖</span>
+                <span>My Courses</span>
+            </a>
+            <a href="/grades" class="quick-action">
+                <span class="qa-icon">📊</span>
+                <span>Grade Calculator</span>
+            </a>
+        </div>
+
+        <!-- Upcoming Deadlines -->
+        <div class="section-heading">Upcoming Deadlines</div>
+        <div id="deadlines-container">
+            <div class="loading"><div class="spinner"></div> Loading...</div>
+        </div>
+
+        <!-- Recent Announcements -->
+        <div class="section-heading" style="margin-top: 2rem;">Recent Announcements</div>
+        <div id="announcements-container">
+            <div class="loading"><div class="spinner"></div> Loading...</div>
+        </div>
+
+        <div class="page-footer">
+            <p>&copy; 2026 ContentCreators.life &middot; ReadySetClass&trade;</p>
+        </div>
+    </main>
+
+    <script src="/assets/app.js"></script>
+    <script>
+        if (!requireAuth()) { /* redirected */ }
+        renderNav('dashboard');
+
+        const user = auth.getUser();
+        if (user) {
+            const firstName = (user.full_name || '').split(' ')[0];
+            document.getElementById('greeting').textContent = `Hey, ${firstName || 'there'}`;
+        }
+
+        async function loadDashboard() {
+            try {
+                const data = await api.get('/api/v1/student/dashboard');
+                renderDeadlines(data.upcoming_deadlines || []);
+                renderAnnouncements(data.recent_announcements || []);
+
+                if (data.enrolled_courses_count === 0) {
+                    document.getElementById('subtitle').textContent = 'Join a class to get started!';
+                }
+            } catch (err) {
+                document.getElementById('deadlines-container').innerHTML =
+                    '<div class="empty-state"><p>Could not load dashboard</p></div>';
+                document.getElementById('announcements-container').innerHTML = '';
+            }
+        }
+
+        function renderDeadlines(deadlines) {
+            const container = document.getElementById('deadlines-container');
+            if (!deadlines.length) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">🎉</div>
+                        <h3>No upcoming deadlines</h3>
+                        <p>Nothing due in the next 2 weeks. Enjoy the break!</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = deadlines.map(d => {
+                const days = d.days_until_due;
+                let urgencyClass = 'later';
+                let badgeClass = 'badge-green';
+                if (days !== null) {
+                    if (days < 0) { urgencyClass = 'overdue'; badgeClass = 'badge-red'; }
+                    else if (days <= 2) { urgencyClass = 'this_week'; badgeClass = 'badge-red'; }
+                    else if (days <= 7) { urgencyClass = 'next_week'; badgeClass = 'badge-gold'; }
+                }
+                return `
+                    <div class="card urgency-${urgencyClass}">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">${escapeHtml(d.title)}</div>
+                                <div class="card-subtitle">${escapeHtml(d.course_name)}</div>
+                            </div>
+                            <span class="badge ${badgeClass}">${dueDateLabel(d.due_at)}</span>
+                        </div>
+                        ${d.description ? `<p style="font-size: 0.85rem; color: #6B7280;">${escapeHtml(d.description)}</p>` : ''}
+                    </div>`;
+            }).join('');
+        }
+
+        function renderAnnouncements(announcements) {
+            const container = document.getElementById('announcements-container');
+            if (!announcements.length) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📢</div>
+                        <h3>No recent announcements</h3>
+                        <p>Check back later for updates from your professors</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = announcements.map(a => `
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">${escapeHtml(a.title)}</div>
+                            <div class="card-subtitle">${escapeHtml(a.course_name)}</div>
+                        </div>
+                        <span style="font-size: 0.75rem; color: #9CA3AF;">${timeAgo(a.created_at)}</span>
+                    </div>
+                    <p style="font-size: 0.9rem; color: #4B5563;">${escapeHtml(a.content)}</p>
+                </div>
+            `).join('');
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>

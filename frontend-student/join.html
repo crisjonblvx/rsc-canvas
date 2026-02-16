@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Join a Class — ReadySetClass Student</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1B3A52">
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="https://facultyflow-production.up.railway.app/api/v1/student/boot.js"></script>
+    <style>
+        .code-input {
+            font-size: 1.8rem;
+            text-align: center;
+            letter-spacing: 4px;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+        .code-input::placeholder {
+            letter-spacing: 2px;
+            font-size: 1rem;
+            font-weight: 400;
+        }
+        .success-card {
+            background: #DCFCE7;
+            border: 2px solid #16A34A;
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            margin-top: 1.5rem;
+            display: none;
+        }
+        .success-card.show { display: block; }
+        .success-card h3 { color: #16A34A; margin-bottom: 0.5rem; }
+        .course-info { color: #374151; font-size: 0.9rem; }
+        .course-info strong { display: block; font-size: 1.1rem; color: #1B3A52; margin-bottom: 4px; }
+    </style>
+</head>
+<body class="auth-page">
+    <div class="auth-box">
+        <div class="logo">
+            <div style="font-size: 2rem;">🔑</div>
+        </div>
+        <h1>Join a Class</h1>
+        <p class="tagline">Enter the class code your professor gave you</p>
+
+        <div id="alert" class="alert"></div>
+
+        <form id="join-form">
+            <div class="form-group">
+                <label for="code">Class Code</label>
+                <input type="text" id="code" class="code-input" required
+                       placeholder="RSC-XXXX" maxlength="8" autocomplete="off">
+                <div class="hint">Format: RSC-XXXX (4 characters after RSC-)</div>
+            </div>
+            <button type="submit" class="btn btn-gold btn-full" id="join-btn">Join Class</button>
+        </form>
+
+        <div class="success-card" id="success-card">
+            <h3>You're in!</h3>
+            <div class="course-info" id="course-info"></div>
+            <div style="margin-top: 1rem; display: flex; gap: 8px;">
+                <button onclick="joinAnother()" class="btn btn-outline" style="flex:1;">Join Another</button>
+                <a href="/dashboard" class="btn btn-primary" style="flex:1; text-decoration:none;">Go to Dashboard</a>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 1.5rem;">
+            <a href="/dashboard" style="color: #6B7280; font-size: 0.85rem; text-decoration: none;">Skip for now</a>
+        </div>
+    </div>
+
+    <script src="/assets/app.js"></script>
+    <script>
+        if (!requireAuth()) { /* redirected */ }
+
+        const codeInput = document.getElementById('code');
+
+        // Auto-format: add RSC- prefix
+        codeInput.addEventListener('input', () => {
+            let val = codeInput.value.toUpperCase().replace(/[^A-Z0-9\-]/g, '');
+            if (val.length > 0 && !val.startsWith('RSC-') && !val.startsWith('RSC')) {
+                val = 'RSC-' + val;
+            }
+            codeInput.value = val;
+        });
+
+        document.getElementById('join-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideAlert('alert');
+            setLoading('join-btn', true, 'Joining...');
+
+            try {
+                const data = await api.post('/api/class-codes/join', {
+                    code: codeInput.value
+                });
+
+                // Show success
+                document.getElementById('join-form').style.display = 'none';
+                const successCard = document.getElementById('success-card');
+                const courseInfo = document.getElementById('course-info');
+                const c = data.course;
+                courseInfo.innerHTML = `
+                    <strong>${escapeHtml(c.course_code || c.course_name)}</strong>
+                    ${escapeHtml(c.course_name)}<br>
+                    ${c.professor_name ? 'Prof. ' + escapeHtml(c.professor_name) : ''}
+                    ${c.section ? ' &middot; Section ' + escapeHtml(c.section) : ''}
+                `;
+                successCard.classList.add('show');
+            } catch (err) {
+                showAlert('alert', err.message);
+                setLoading('join-btn', false, 'Join Class');
+            }
+        });
+
+        function joinAnother() {
+            document.getElementById('join-form').style.display = 'block';
+            document.getElementById('success-card').classList.remove('show');
+            codeInput.value = '';
+            codeInput.focus();
+            setLoading('join-btn', false, 'Join Class');
+        }
+    </script>
+</body>
+</html>

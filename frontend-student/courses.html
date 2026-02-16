@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>My Courses — ReadySetClass Student</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1B3A52">
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="https://facultyflow-production.up.railway.app/api/v1/student/boot.js"></script>
+</head>
+<body>
+    <nav class="nav" id="main-nav"></nav>
+
+    <main class="page">
+        <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h1>My Courses</h1>
+                <p id="course-count"></p>
+            </div>
+            <a href="/join" class="btn btn-gold btn-sm" style="text-decoration: none;">+ Join Class</a>
+        </div>
+
+        <div id="courses-container">
+            <div class="loading"><div class="spinner"></div> Loading courses...</div>
+        </div>
+
+        <div class="page-footer">
+            <p>&copy; 2026 ContentCreators.life &middot; ReadySetClass&trade;</p>
+        </div>
+    </main>
+
+    <!-- Drop Course Confirm -->
+    <div class="modal-overlay" id="drop-modal">
+        <div class="modal">
+            <h2>Drop Course?</h2>
+            <p id="drop-course-name" style="color: #4B5563;"></p>
+            <p style="font-size: 0.85rem; color: #9CA3AF; margin-top: 8px;">You can re-join later with a new class code.</p>
+            <div class="modal-actions">
+                <button class="btn btn-outline btn-sm" onclick="closeDropModal()">Cancel</button>
+                <button class="btn btn-danger btn-sm" id="confirm-drop-btn" onclick="confirmDrop()">Drop Course</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/assets/app.js"></script>
+    <script>
+        if (!requireAuth()) { /* redirected */ }
+        renderNav('courses');
+
+        let courses = [];
+        let dropEnrollmentId = null;
+
+        async function loadCourses() {
+            try {
+                const data = await api.get('/api/v1/student/courses');
+                courses = data.courses || [];
+                document.getElementById('course-count').textContent =
+                    courses.length ? `${courses.length} course${courses.length !== 1 ? 's' : ''}` : '';
+                renderCourses();
+            } catch (err) {
+                document.getElementById('courses-container').innerHTML =
+                    '<div class="empty-state"><p>Could not load courses</p></div>';
+            }
+        }
+
+        function renderCourses() {
+            const container = document.getElementById('courses-container');
+            if (!courses.length) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📖</div>
+                        <h3>No courses yet</h3>
+                        <p>Join a class using the code your professor gave you</p>
+                        <a href="/join" class="btn btn-gold">Join a Class</a>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = courses.map(c => `
+                <div class="card" id="course-${c.enrollment_id}">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">${escapeHtml(c.course_code || c.course_name)}</div>
+                            <div class="card-subtitle">${escapeHtml(c.course_name)}</div>
+                        </div>
+                        <span class="badge badge-green">Active</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: #6B7280; display: flex; flex-wrap: wrap; gap: 12px;">
+                        ${c.professor_name ? `<span>Prof. ${escapeHtml(c.professor_name)}</span>` : ''}
+                        ${c.section ? `<span>Section ${escapeHtml(c.section)}</span>` : ''}
+                        ${c.semester ? `<span>${escapeHtml(c.semester)}</span>` : ''}
+                    </div>
+                    <div style="margin-top: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
+                        <a href="/grades?course=${c.enrollment_id}" class="btn btn-outline btn-sm" style="text-decoration: none;">📊 Grades</a>
+                        <button class="btn btn-sm" style="background: none; color: #9CA3AF; padding: 8px;"
+                                onclick="showDropModal(${c.enrollment_id}, '${escapeHtml(c.course_name).replace(/'/g, "\\'")}')">
+                            Drop
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showDropModal(enrollmentId, courseName) {
+            dropEnrollmentId = enrollmentId;
+            document.getElementById('drop-course-name').textContent = `Are you sure you want to drop "${courseName}"?`;
+            document.getElementById('drop-modal').classList.add('show');
+        }
+
+        function closeDropModal() {
+            document.getElementById('drop-modal').classList.remove('show');
+            dropEnrollmentId = null;
+        }
+
+        async function confirmDrop() {
+            if (!dropEnrollmentId) return;
+            setLoading('confirm-drop-btn', true, 'Dropping...');
+            try {
+                await api.del(`/api/v1/student/courses/${dropEnrollmentId}`);
+                closeDropModal();
+                loadCourses();
+            } catch (err) {
+                alert(err.message);
+            }
+            setLoading('confirm-drop-btn', false, 'Drop Course');
+        }
+
+        loadCourses();
+    </script>
+</body>
+</html>

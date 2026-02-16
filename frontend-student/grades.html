@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Grade Calculator — ReadySetClass Student</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1B3A52">
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="https://facultyflow-production.up.railway.app/api/v1/student/boot.js"></script>
+    <style>
+        .grade-summary {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            padding: 1.25rem;
+            background: var(--white);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 1.5rem;
+        }
+        .grade-details { flex: 1; }
+        .grade-details h2 { font-size: 1.1rem; color: var(--navy); }
+        .grade-details p { font-size: 0.85rem; color: var(--gray-500); }
+        .grade-entry {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: var(--gray-50);
+            border-radius: var(--radius-sm);
+            margin-bottom: 0.5rem;
+            position: relative;
+        }
+        .grade-entry .full { grid-column: 1 / -1; }
+        .grade-entry-header {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .grade-entry-name { font-weight: 600; font-size: 0.9rem; color: var(--navy); }
+        .grade-entry-pct { font-weight: 700; }
+        .delete-grade {
+            background: none;
+            border: none;
+            color: var(--gray-400);
+            cursor: pointer;
+            font-size: 1.1rem;
+            padding: 4px;
+        }
+        .delete-grade:hover { color: var(--red); }
+        .scenario-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            background: var(--gray-50);
+            border-radius: var(--radius-sm);
+            margin-bottom: 6px;
+        }
+        .scenario-target { font-weight: 600; font-size: 0.95rem; }
+        .scenario-needed { font-size: 0.85rem; color: var(--gray-500); }
+        .course-select {
+            padding: 10px 14px;
+            border: 2px solid var(--gray-200);
+            border-radius: var(--radius-sm);
+            font-size: 0.95rem;
+            font-family: inherit;
+            width: 100%;
+            background: var(--white);
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="nav" id="main-nav"></nav>
+
+    <main class="page">
+        <div class="page-header">
+            <h1>Grade Calculator</h1>
+            <p>Manually track your grades and see what you need</p>
+        </div>
+
+        <!-- Course Selector -->
+        <select id="course-select" class="course-select" onchange="selectCourse()">
+            <option value="">Select a course...</option>
+        </select>
+
+        <div id="content" style="display: none;">
+            <!-- Grade Summary -->
+            <div class="grade-summary" id="grade-summary">
+                <div class="grade-circle grade-B" id="grade-circle">
+                    <span class="letter" id="grade-letter">--</span>
+                    <span class="pct" id="grade-pct"></span>
+                </div>
+                <div class="grade-details">
+                    <h2 id="course-name-display">Current Grade</h2>
+                    <p id="grade-subtitle">Add grades to see your average</p>
+                </div>
+            </div>
+
+            <!-- Add Grade Form -->
+            <div class="card">
+                <div class="card-title" style="margin-bottom: 1rem;">Add a Grade</div>
+                <div id="add-alert" class="alert"></div>
+                <form id="add-grade-form">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <div class="form-group">
+                            <label for="category">Category</label>
+                            <input type="text" id="category" required placeholder="e.g. Homework, Exams">
+                        </div>
+                        <div class="form-group">
+                            <label for="assignment">Assignment</label>
+                            <input type="text" id="assignment" required placeholder="e.g. HW 1, Midterm">
+                        </div>
+                        <div class="form-group">
+                            <label for="score">Score</label>
+                            <input type="number" id="score" required step="any" min="0" placeholder="85">
+                        </div>
+                        <div class="form-group">
+                            <label for="possible">Out of</label>
+                            <input type="number" id="possible" required step="any" min="0.01" placeholder="100">
+                        </div>
+                        <div class="form-group full" style="grid-column: 1 / -1;">
+                            <label for="weight">Category Weight (optional)</label>
+                            <input type="number" id="weight" step="any" min="0" max="1" placeholder="e.g. 0.3 for 30%">
+                            <div class="hint">Enter as decimal: 0.3 = 30%, 0.2 = 20%. Leave blank for unweighted.</div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-gold btn-full" id="add-btn" style="margin-top: 0.5rem;">Add Grade</button>
+                </form>
+            </div>
+
+            <!-- Grade Entries -->
+            <div class="section-heading">Your Grades</div>
+            <div id="grades-container">
+                <div class="empty-state">
+                    <p>No grades yet. Add your first one above.</p>
+                </div>
+            </div>
+
+            <!-- Scenarios -->
+            <div class="section-heading" style="margin-top: 2rem;">What You Need</div>
+            <div id="scenarios-container">
+                <div class="empty-state">
+                    <p>Add grades to see scenarios</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="no-courses" style="display: none;">
+            <div class="empty-state">
+                <div class="icon">📊</div>
+                <h3>No courses to grade</h3>
+                <p>Join a class first, then come back to track your grades</p>
+                <a href="/join" class="btn btn-gold" style="text-decoration: none;">Join a Class</a>
+            </div>
+        </div>
+
+        <div class="page-footer">
+            <p>&copy; 2026 ContentCreators.life &middot; ReadySetClass&trade;</p>
+        </div>
+    </main>
+
+    <script src="/assets/app.js"></script>
+    <script>
+        if (!requireAuth()) { /* redirected */ }
+        renderNav('grades');
+
+        let courses = [];
+        let selectedEnrollment = null;
+
+        async function loadCourses() {
+            try {
+                const data = await api.get('/api/v1/student/courses');
+                courses = data.courses || [];
+
+                const select = document.getElementById('course-select');
+                if (!courses.length) {
+                    select.style.display = 'none';
+                    document.getElementById('no-courses').style.display = 'block';
+                    return;
+                }
+
+                courses.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.enrollment_id;
+                    opt.textContent = c.course_code ? `${c.course_code} — ${c.course_name}` : c.course_name;
+                    select.appendChild(opt);
+                });
+
+                // Auto-select from URL param
+                const params = new URLSearchParams(window.location.search);
+                const courseParam = params.get('course');
+                if (courseParam) {
+                    select.value = courseParam;
+                    selectCourse();
+                }
+            } catch (err) {
+                console.error('Failed to load courses:', err);
+            }
+        }
+
+        function selectCourse() {
+            const enrollmentId = document.getElementById('course-select').value;
+            if (!enrollmentId) {
+                document.getElementById('content').style.display = 'none';
+                return;
+            }
+            selectedEnrollment = parseInt(enrollmentId);
+            document.getElementById('content').style.display = 'block';
+            loadCalculator();
+        }
+
+        async function loadCalculator() {
+            if (!selectedEnrollment) return;
+            try {
+                const data = await api.get(`/api/v1/student/grades/${selectedEnrollment}/calculator`);
+                renderSummary(data);
+                await loadGrades();
+                renderScenarios(data.scenarios || []);
+            } catch (err) {
+                console.error('Calculator error:', err);
+            }
+        }
+
+        function renderSummary(data) {
+            const circle = document.getElementById('grade-circle');
+            const letter = document.getElementById('grade-letter');
+            const pct = document.getElementById('grade-pct');
+            const subtitle = document.getElementById('grade-subtitle');
+            const courseName = document.getElementById('course-name-display');
+
+            courseName.textContent = data.course_name || 'Current Grade';
+
+            if (data.current_grade.letter) {
+                letter.textContent = data.current_grade.letter;
+                pct.textContent = data.current_grade.percentage + '%';
+                circle.className = `grade-circle grade-${data.current_grade.letter}`;
+                subtitle.textContent = data.is_weighted ? 'Weighted average' : `${data.totals.earned} / ${data.totals.possible} points`;
+            } else {
+                letter.textContent = '--';
+                pct.textContent = '';
+                circle.className = 'grade-circle grade-B';
+                subtitle.textContent = 'Add grades to see your average';
+            }
+        }
+
+        async function loadGrades() {
+            if (!selectedEnrollment) return;
+            try {
+                const data = await api.get(`/api/v1/student/grades/${selectedEnrollment}`);
+                renderGrades(data.grades || []);
+            } catch (err) {
+                console.error('Grades error:', err);
+            }
+        }
+
+        function renderGrades(grades) {
+            const container = document.getElementById('grades-container');
+            if (!grades.length) {
+                container.innerHTML = '<div class="empty-state"><p>No grades yet. Add your first one above.</p></div>';
+                return;
+            }
+
+            container.innerHTML = grades.map(g => {
+                const pctColor = g.percentage >= 90 ? '#16A34A' : g.percentage >= 80 ? '#2563EB' : g.percentage >= 70 ? '#CA8A04' : '#DC2626';
+                return `
+                    <div class="grade-entry">
+                        <div class="grade-entry-header">
+                            <div>
+                                <div class="grade-entry-name">${escapeHtml(g.assignment_name)}</div>
+                                <div style="font-size: 0.78rem; color: #9CA3AF;">${escapeHtml(g.category_name)}${g.weight ? ' (' + (g.weight * 100) + '%)' : ''}</div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span class="grade-entry-pct" style="color: ${pctColor};">${g.percentage}%</span>
+                                <button class="delete-grade" onclick="deleteGrade(${g.id})" title="Delete">&times;</button>
+                            </div>
+                        </div>
+                        <div style="grid-column: 1 / -1; font-size: 0.85rem; color: #6B7280;">
+                            ${g.score} / ${g.points_possible}
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        function renderScenarios(scenarios) {
+            const container = document.getElementById('scenarios-container');
+            if (!scenarios.length) {
+                container.innerHTML = '<div class="empty-state"><p>Add grades to see scenarios</p></div>';
+                return;
+            }
+
+            container.innerHTML = scenarios.map(s => {
+                let needed = 'N/A';
+                let color = '#9CA3AF';
+                if (s.needed_on_remaining !== null) {
+                    if (s.is_achievable) {
+                        needed = `Need ${s.needed_on_remaining}% on remaining`;
+                        color = s.needed_on_remaining <= 70 ? '#16A34A' : s.needed_on_remaining <= 90 ? '#CA8A04' : '#DC2626';
+                    } else {
+                        needed = 'Not achievable';
+                        color = '#DC2626';
+                    }
+                }
+                return `
+                    <div class="scenario-card">
+                        <span class="scenario-target">To get an ${s.target_grade} (${s.target_percentage}%)</span>
+                        <span class="scenario-needed" style="color: ${color};">${needed}</span>
+                    </div>`;
+            }).join('');
+        }
+
+        // Add grade
+        document.getElementById('add-grade-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideAlert('add-alert');
+            setLoading('add-btn', true, 'Adding...');
+
+            try {
+                const body = {
+                    enrollment_id: selectedEnrollment,
+                    category_name: document.getElementById('category').value,
+                    assignment_name: document.getElementById('assignment').value,
+                    score: parseFloat(document.getElementById('score').value),
+                    points_possible: parseFloat(document.getElementById('possible').value)
+                };
+                const w = document.getElementById('weight').value;
+                if (w) body.weight = parseFloat(w);
+
+                await api.post('/api/v1/student/grades', body);
+
+                // Clear form
+                document.getElementById('assignment').value = '';
+                document.getElementById('score').value = '';
+                document.getElementById('possible').value = '';
+
+                // Reload
+                loadCalculator();
+            } catch (err) {
+                showAlert('add-alert', err.message);
+            }
+            setLoading('add-btn', false, 'Add Grade');
+        });
+
+        async function deleteGrade(gradeId) {
+            if (!confirm('Delete this grade entry?')) return;
+            try {
+                await api.del(`/api/v1/student/grades/${gradeId}`);
+                loadCalculator();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        loadCourses();
+    </script>
+</body>
+</html>

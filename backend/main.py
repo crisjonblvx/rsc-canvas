@@ -1174,10 +1174,10 @@ async def cancel_subscription(current_user = Depends(get_current_user_from_token
 # ============================================================================
 
 @app.get("/api/v2/canvas/status")
-async def canvas_status(db: Session = Depends(get_db)):
+async def canvas_status(current_user=Depends(get_current_user_from_token), db: Session = Depends(get_db)):
     """Check if user has saved Canvas credentials"""
     try:
-        user_id = 1  # TODO: Use real user ID from authentication
+        user_id = current_user['user_id']
 
         if not db:
             return {"connected": False}
@@ -1198,6 +1198,7 @@ async def canvas_status(db: Session = Depends(get_db)):
 @app.post("/api/v2/canvas/connect")
 async def connect_canvas_v2(
     request: CanvasConnectionRequest,
+    current_user=Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     """
@@ -1265,7 +1266,7 @@ async def connect_canvas_v2(
 
         # Encrypt and save to database
         encrypted_token = encrypt_token(access_token)
-        user_id = 1  # TODO: Use real user ID from authentication
+        user_id = current_user['user_id']
 
         if db:
             # Check if credentials already exist
@@ -1301,6 +1302,7 @@ async def connect_canvas_v2(
 
 @app.get("/api/v2/canvas/courses")
 async def get_courses_v2(
+    current_user=Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     """
@@ -1308,7 +1310,7 @@ async def get_courses_v2(
     Returns list of courses they teach
     """
     try:
-        user_id = 1  # TODO: Use real user ID from authentication
+        user_id = current_user['user_id']
 
         # Get Canvas credentials from database
         if not db:
@@ -1398,6 +1400,7 @@ async def generate_quiz_questions(request: QuizGenerateRequest):
 @app.post("/api/v2/canvas/quiz/upload")
 async def upload_quiz_to_canvas(
     request: QuizUploadRequest,
+    current_user=Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     """
@@ -1405,7 +1408,7 @@ async def upload_quiz_to_canvas(
     Takes questions from preview and creates quiz in Canvas
     """
     try:
-        user_id = 1  # TODO: Use real user ID from authentication
+        user_id = current_user['user_id']
 
         # Get Canvas credentials
         if not db:
@@ -1481,6 +1484,7 @@ async def upload_quiz_to_canvas(
 @app.post("/api/v2/canvas/quiz")
 async def create_quiz_v2(
     request: QuizRequest,
+    current_user=Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     """
@@ -1491,7 +1495,7 @@ async def create_quiz_v2(
     3. Return preview URL
     """
     try:
-        user_id = 1  # TODO: Use real user ID from authentication
+        user_id = current_user['user_id']
 
         # Get Canvas credentials
         if not db:
@@ -1651,12 +1655,12 @@ class GradingFixRequest(BaseModel):
 @app.post("/api/v2/canvas/announcement")
 async def create_announcement_v2(
     request: AnnouncementRequest,
-    # user=Depends(verify_token),  # TODO: Add auth back later
+    current_user=Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     """Create an announcement in Canvas course"""
     try:
-        user_id = 1  # TODO: Use real user ID from authentication
+        user_id = current_user['user_id']
 
         # Get Canvas credentials
         if not db:
@@ -1809,12 +1813,12 @@ Make it educational, engaging, and well-organized."""
 @app.post("/api/v2/canvas/page")
 async def create_page_v2(
     request: PageRequest,
-    # user=Depends(verify_token),  # TODO: Add auth back later
+    current_user=Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     """Create a course page in Canvas"""
     try:
-        user_id = 1  # TODO: Use real user ID from authentication
+        user_id = current_user['user_id']
 
         # Get Canvas credentials
         if not db:
@@ -1945,12 +1949,12 @@ Focus on creating content that helps students succeed."""
 @app.post("/api/v2/canvas/assignment")
 async def create_assignment_v2(
     request: AssignmentRequest,
-    # user=Depends(verify_token),  # TODO: Add auth back later
+    current_user=Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     """Create an assignment in Canvas course"""
     try:
-        user_id = 1  # TODO: Use real user ID from authentication
+        user_id = current_user['user_id']
 
         # Get Canvas credentials
         if not db:
@@ -2017,12 +2021,12 @@ Format in HTML for Canvas."""
 @app.get("/api/v2/canvas/modules/{course_id}")
 async def get_modules_v2(
     course_id: int,
-    # user=Depends(verify_token),  # TODO: Add auth back later
+    current_user=Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     """Get all modules in a course"""
     try:
-        user_id = 1  # TODO: Use real user ID from authentication
+        user_id = current_user['user_id']
 
         # Get Canvas credentials
         if not db:
@@ -2051,12 +2055,12 @@ async def get_modules_v2(
 @app.post("/api/v2/canvas/module")
 async def create_module_v2(
     request: ModuleRequest,
-    # user=Depends(verify_token),  # TODO: Add auth back later
+    current_user=Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     """Create a module in Canvas course"""
     try:
-        user_id = 1  # TODO: Use real user ID from authentication
+        user_id = current_user['user_id']
 
         # Get Canvas credentials
         if not db:
@@ -2099,12 +2103,12 @@ async def create_module_v2(
 @app.post("/api/v2/canvas/discussion")
 async def create_discussion_v2(
     request: DiscussionRequest,
-    # user=Depends(verify_token),  # TODO: Add auth back later
+    current_user=Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     """Create a discussion topic in Canvas course"""
     try:
-        user_id = 1  # TODO: Use real user ID from authentication
+        user_id = current_user['user_id']
 
         # Get Canvas credentials
         if not db:
@@ -2178,6 +2182,7 @@ import io
 async def upload_reference_material(
     file: UploadFile = File(...),
     course_name: str = None,
+    current_user=Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     """
@@ -2185,7 +2190,7 @@ async def upload_reference_material(
     Accepts: PDF, DOCX, TXT
     """
     try:
-        user_id = 1  # TODO: Use real user ID from authentication
+        user_id = current_user['user_id']
 
         # Validate file type
         file_ext = file.filename.split('.')[-1].lower()
@@ -2279,12 +2284,12 @@ async def upload_reference_material(
 
 
 @app.get("/api/v2/reference-materials")
-async def get_reference_materials(db: Session = Depends(get_db)):
+async def get_reference_materials(current_user=Depends(get_current_user_from_token), db: Session = Depends(get_db)):
     """
     Get all reference materials for the current user
     """
     try:
-        user_id = 1  # TODO: Use real user ID from authentication
+        user_id = current_user['user_id']
 
         if not db:
             raise HTTPException(status_code=500, detail="Database not available")
@@ -2317,12 +2322,12 @@ async def get_reference_materials(db: Session = Depends(get_db)):
 
 
 @app.delete("/api/v2/reference-materials/{material_id}")
-async def delete_reference_material(material_id: int, db: Session = Depends(get_db)):
+async def delete_reference_material(material_id: int, current_user=Depends(get_current_user_from_token), db: Session = Depends(get_db)):
     """
     Delete a reference material
     """
     try:
-        user_id = 1  # TODO: Use real user ID from authentication
+        user_id = current_user['user_id']
 
         if not db:
             raise HTTPException(status_code=500, detail="Database not available")
@@ -2482,11 +2487,12 @@ Make it comprehensive, professional, and student-friendly."""
 @app.put("/api/v2/canvas/syllabus")
 async def upload_syllabus(
     request: SyllabusRequest,
+    current_user=Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     """Upload syllabus to Canvas course"""
     try:
-        user_id = 1  # TODO: Use real user ID from authentication
+        user_id = current_user['user_id']
 
         # Get Canvas credentials
         if not db:

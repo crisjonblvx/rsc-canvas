@@ -986,41 +986,52 @@ async def create_checkout_session(
     current_user = Depends(get_current_user_from_token)
 ):
     """Create Stripe checkout session"""
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Get or create Stripe customer
+        # Get user email
         cursor.execute("SELECT email FROM users WHERE id = %s", (current_user['user_id'],))
         result = cursor.fetchone()
         if not result:
             raise HTTPException(status_code=404, detail="User not found")
         email = result[0]
 
+        # Ensure stripe_customer_id column exists
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
         # Try to get existing stripe_customer_id
         stripe_customer_id = None
         try:
             cursor.execute("SELECT stripe_customer_id FROM users WHERE id = %s", (current_user['user_id'],))
             sid_result = cursor.fetchone()
-            if sid_result:
+            if sid_result and sid_result[0]:
                 stripe_customer_id = sid_result[0]
         except Exception:
-            pass  # Column may not exist yet
+            conn.rollback()
 
         if not stripe_customer_id:
             # Create Stripe customer
             customer = stripe.Customer.create(
                 email=email,
-                metadata={"user_id": current_user['user_id']}
+                metadata={"user_id": str(current_user['user_id'])}
             )
             stripe_customer_id = customer.id
 
             # Save customer ID
-            cursor.execute(
-                "UPDATE users SET stripe_customer_id = %s WHERE id = %s",
-                (stripe_customer_id, current_user['user_id'])
-            )
-            conn.commit()
+            try:
+                cursor.execute(
+                    "UPDATE users SET stripe_customer_id = %s WHERE id = %s",
+                    (stripe_customer_id, current_user['user_id'])
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
 
         # Create checkout session
         checkout_session = stripe.checkout.Session.create(
@@ -1034,7 +1045,7 @@ async def create_checkout_session(
             success_url=request.success_url,
             cancel_url=request.cancel_url,
             metadata={
-                'user_id': current_user['user_id']
+                'user_id': str(current_user['user_id'])
             }
         )
 
@@ -1043,9 +1054,16 @@ async def create_checkout_session(
 
         return {"checkout_url": checkout_session.url}
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Checkout error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        raise HTTPException(status_code=500, detail=f"Error creating checkout session. Please try again.")
 
 
 @app.post("/api/stripe/webhook")

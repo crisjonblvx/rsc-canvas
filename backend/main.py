@@ -1064,26 +1064,20 @@ async def create_checkout_session(
 
     except HTTPException:
         raise
-    except stripe.error.InvalidRequestError as e:
-        print(f"Stripe invalid request error: {e}")
-        if conn:
-            try: conn.close()
-            except Exception: pass
-        raise HTTPException(status_code=400, detail=f"Invalid payment request: {str(e)}")
-    except stripe.error.AuthenticationError as e:
-        print(f"Stripe authentication error: {e}")
-        if conn:
-            try: conn.close()
-            except Exception: pass
-        raise HTTPException(status_code=500, detail="Payment system authentication failed. Please contact support.")
     except Exception as e:
-        print(f"Checkout error: {type(e).__name__}: {e}")
+        error_type = type(e).__name__
+        print(f"Checkout error: {error_type}: {e}")
         import traceback
         traceback.print_exc()
         if conn:
             try: conn.close()
             except Exception: pass
-        raise HTTPException(status_code=500, detail=f"Error creating checkout session: {str(e)}")
+        # Surface the actual error for debugging
+        if 'InvalidRequestError' in error_type:
+            raise HTTPException(status_code=400, detail=f"Invalid payment request: {str(e)}")
+        elif 'AuthenticationError' in error_type:
+            raise HTTPException(status_code=500, detail="Payment system authentication failed. Please contact support.")
+        raise HTTPException(status_code=500, detail=f"Checkout error: {str(e)}")
 
 
 @app.post("/api/stripe/webhook")
@@ -3209,10 +3203,8 @@ async def create_customer_portal_session(current_user=Depends(get_current_user_f
 
         return {"url": session.url}
 
-    except stripe.error.StripeError as e:
-        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
 
 
 # ============================================================================

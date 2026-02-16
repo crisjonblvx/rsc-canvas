@@ -65,6 +65,18 @@
             </a>
         </div>
 
+        <!-- Premium Status -->
+        <div class="section-heading">Subscription</div>
+        <div class="card" id="premium-card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div id="premium-status" style="font-weight: 600; color: var(--navy);"></div>
+                    <div id="premium-detail" style="font-size: 0.8rem; color: var(--gray-500); margin-top: 2px;"></div>
+                </div>
+                <div id="premium-action"></div>
+            </div>
+        </div>
+
         <!-- Logout -->
         <div style="margin-top: 2rem;">
             <button class="btn btn-outline btn-full" onclick="auth.logout()">Log Out</button>
@@ -115,6 +127,53 @@
             document.getElementById('account-info').textContent =
                 user.is_demo ? 'Demo account (expires in 24h)' : 'Standard student account';
         }
+
+        // Check premium
+        async function loadPremium() {
+            try {
+                const status = await api.get('/api/v1/student/premium/status');
+                const statusEl = document.getElementById('premium-status');
+                const detailEl = document.getElementById('premium-detail');
+                const actionEl = document.getElementById('premium-action');
+
+                if (status.is_premium) {
+                    statusEl.textContent = 'Premium Active';
+                    statusEl.style.color = '#16A34A';
+                    detailEl.textContent = status.subscription_ends_at
+                        ? `Renews ${formatDate(status.subscription_ends_at)}`
+                        : 'All AI features unlocked';
+                    actionEl.innerHTML = '<span class="badge badge-gold">PREMIUM</span>';
+                } else {
+                    statusEl.textContent = 'Free Plan';
+                    detailEl.textContent = 'Unlock AI Study Buddy, The Lab, and Grade Predictor';
+                    actionEl.innerHTML = `
+                        <button class="btn btn-gold btn-sm" onclick="upgradePremium()">
+                            Upgrade — $3.99/mo
+                        </button>`;
+                }
+
+                // Check for upgrade success
+                if (new URLSearchParams(window.location.search).get('upgraded') === '1') {
+                    statusEl.textContent = 'Welcome to Premium!';
+                    statusEl.style.color = '#16A34A';
+                    detailEl.textContent = 'All AI features are now unlocked';
+                    actionEl.innerHTML = '<span class="badge badge-gold">PREMIUM</span>';
+                }
+            } catch {}
+        }
+
+        async function upgradePremium() {
+            try {
+                const data = await api.post('/api/v1/student/premium/checkout', { plan: 'monthly' });
+                if (data.checkout_url) {
+                    window.location.href = data.checkout_url;
+                }
+            } catch (err) {
+                alert(err.message || 'Checkout is not yet configured. Contact support.');
+            }
+        }
+
+        loadPremium();
     </script>
 </body>
 </html>

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>The Lab — ReadySetClass Student</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1B3A52">
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="https://facultyflow-production.up.railway.app/api/v1/student/boot.js"></script>
+    <style>
+        .review-textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 14px;
+            border: 2px solid var(--gray-200);
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            resize: vertical;
+        }
+        .review-textarea:focus {
+            outline: none;
+            border-color: var(--navy);
+            box-shadow: 0 0 0 3px rgba(27, 58, 82, 0.1);
+        }
+        .readiness-meter {
+            height: 8px;
+            background: var(--gray-200);
+            border-radius: 100px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+        .readiness-fill {
+            height: 100%;
+            border-radius: 100px;
+            transition: width 0.8s ease;
+        }
+        .score-ring {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 5px solid;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+        }
+        .score-ring .score-num { font-size: 1.8rem; font-weight: 800; line-height: 1; }
+        .score-ring .score-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7; }
+        .score-high { border-color: #16A34A; color: #16A34A; background: #F0FDF4; }
+        .score-mid { border-color: #CA8A04; color: #CA8A04; background: #FEFCE8; }
+        .score-low { border-color: #DC2626; color: #DC2626; background: #FEF2F2; }
+        .sub-score {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--gray-100);
+        }
+        .sub-score:last-child { border-bottom: none; }
+        .sub-score-label { font-size: 0.9rem; font-weight: 500; }
+        .sub-score-value { font-weight: 700; font-size: 0.9rem; }
+        .improvement-item {
+            padding: 12px;
+            background: var(--cream);
+            border-radius: var(--radius-sm);
+            margin-bottom: 8px;
+            border-left: 3px solid var(--gold);
+        }
+        .improvement-item .area { font-weight: 600; color: var(--navy); font-size: 0.9rem; }
+        .improvement-item .issue { color: var(--gray-600); font-size: 0.85rem; margin: 4px 0; }
+        .improvement-item .suggestion { color: var(--green); font-size: 0.85rem; font-style: italic; }
+        .char-count { font-size: 0.75rem; color: var(--gray-400); text-align: right; margin-top: 4px; }
+    </style>
+</head>
+<body>
+    <nav class="nav" id="main-nav"></nav>
+
+    <main class="page" id="main-page">
+        <div class="page-header">
+            <h1>The Lab</h1>
+            <p>AI-powered assignment review — get feedback before you submit</p>
+        </div>
+
+        <!-- Premium Gate -->
+        <div id="premium-gate" style="display: none;">
+            <div class="card" style="text-align: center; padding: 2rem;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">🔬</div>
+                <h2 style="color: var(--navy); margin-bottom: 0.5rem;">The Lab is a Premium Feature</h2>
+                <p style="color: var(--gray-500); margin-bottom: 1.5rem;">Get AI-powered feedback on your assignments before submitting. See your Readiness Score and specific areas to improve.</p>
+                <p style="color: var(--gold); font-weight: 600; margin-bottom: 1rem;">$3.99/month or $29.99/year</p>
+                <a href="/profile" class="btn btn-gold" style="text-decoration: none;">Upgrade to Premium</a>
+            </div>
+        </div>
+
+        <!-- Submit Form -->
+        <div id="submit-section">
+            <div class="card">
+                <div id="review-alert" class="alert"></div>
+                <div class="form-group">
+                    <label>Assignment Type (optional)</label>
+                    <select id="assignment-type" style="padding: 10px; border: 2px solid var(--gray-200); border-radius: 8px; width: 100%; font-family: inherit;">
+                        <option value="">Auto-detect</option>
+                        <option value="essay">Essay</option>
+                        <option value="research paper">Research Paper</option>
+                        <option value="report">Report</option>
+                        <option value="response paper">Response Paper</option>
+                        <option value="discussion post">Discussion Post</option>
+                        <option value="lab report">Lab Report</option>
+                        <option value="case study">Case Study</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Paste Your Draft</label>
+                    <textarea id="draft-text" class="review-textarea" placeholder="Paste your assignment text here. The AI will review it for structure, grammar, argument strength, and give you a Readiness Score..."></textarea>
+                    <div class="char-count"><span id="char-count">0</span> characters (minimum 50)</div>
+                </div>
+                <button class="btn btn-gold btn-full" id="review-btn" onclick="submitReview()">
+                    Review My Work
+                </button>
+            </div>
+
+            <div class="card" style="background: var(--cream);">
+                <div style="display: flex; align-items: flex-start; gap: 12px;">
+                    <span style="font-size: 1.2rem;">💡</span>
+                    <div style="font-size: 0.85rem; color: var(--gray-600);">
+                        <strong>The Lab reviews your work — it doesn't write it.</strong><br>
+                        You'll get honest feedback on structure, grammar, argument strength, and a Readiness Score (0-100). Use the suggestions to make your work stronger before submitting.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div id="results-section" style="display: none;">
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--gray-400); margin-bottom: 12px;">Readiness Score</div>
+                <div class="score-ring" id="score-ring">
+                    <span class="score-num" id="score-num">—</span>
+                    <span class="score-label">/ 100</span>
+                </div>
+                <p id="overall-assessment" style="color: var(--gray-600); font-size: 0.9rem;"></p>
+            </div>
+
+            <!-- Sub-scores -->
+            <div class="card">
+                <div class="card-title" style="margin-bottom: 0.75rem;">Breakdown</div>
+                <div class="sub-score">
+                    <span class="sub-score-label">Structure</span>
+                    <span class="sub-score-value" id="structure-score">—</span>
+                </div>
+                <div class="sub-score">
+                    <span class="sub-score-label">Argument Strength</span>
+                    <span class="sub-score-value" id="argument-score">—</span>
+                </div>
+                <div class="sub-score">
+                    <span class="sub-score-label">Clarity</span>
+                    <span class="sub-score-value" id="clarity-score">—</span>
+                </div>
+                <div class="sub-score">
+                    <span class="sub-score-label">Grammar Issues</span>
+                    <span class="sub-score-value" id="grammar-count">—</span>
+                </div>
+            </div>
+
+            <!-- Strengths -->
+            <div class="card" id="strengths-card" style="display: none;">
+                <div class="card-title" style="color: var(--green); margin-bottom: 0.75rem;">Strengths</div>
+                <div id="strengths-list"></div>
+            </div>
+
+            <!-- Improvements -->
+            <div class="card" id="improvements-card" style="display: none;">
+                <div class="card-title" style="color: var(--gold); margin-bottom: 0.75rem;">Areas to Improve</div>
+                <div id="improvements-list"></div>
+            </div>
+
+            <!-- Next Steps -->
+            <div class="card" id="nextsteps-card" style="display: none;">
+                <div class="card-title" style="margin-bottom: 0.75rem;">Next Steps</div>
+                <div id="nextsteps-list"></div>
+            </div>
+
+            <button class="btn btn-outline btn-full" onclick="resetLab()">Review Another Draft</button>
+        </div>
+
+        <div class="page-footer">
+            <p>&copy; 2026 ContentCreators.life &middot; ReadySetClass&trade;</p>
+        </div>
+    </main>
+
+    <script src="/assets/app.js"></script>
+    <script>
+        if (!requireAuth()) { /* redirected */ }
+        renderNav('lab');
+
+        const textarea = document.getElementById('draft-text');
+        textarea.addEventListener('input', () => {
+            document.getElementById('char-count').textContent = textarea.value.length;
+        });
+
+        // Check premium
+        async function checkPremium() {
+            try {
+                const status = await api.get('/api/v1/student/premium/status');
+                if (!status.is_premium) {
+                    document.getElementById('submit-section').style.display = 'none';
+                    document.getElementById('premium-gate').style.display = 'block';
+                }
+            } catch {
+                document.getElementById('submit-section').style.display = 'none';
+                document.getElementById('premium-gate').style.display = 'block';
+            }
+        }
+
+        async function submitReview() {
+            const text = textarea.value.trim();
+            if (text.length < 50) {
+                showAlert('review-alert', 'Please provide at least 50 characters to review');
+                return;
+            }
+
+            hideAlert('review-alert');
+            setLoading('review-btn', true, 'Analyzing your work...');
+
+            try {
+                const body = { text: text };
+                const type = document.getElementById('assignment-type').value;
+                if (type) body.assignment_type = type;
+
+                const data = await api.post('/api/v1/student/ai/lab/review', body);
+                showResults(data.review);
+            } catch (err) {
+                showAlert('review-alert', err.message);
+            }
+            setLoading('review-btn', false, 'Review My Work');
+        }
+
+        function showResults(review) {
+            document.getElementById('submit-section').style.display = 'none';
+            document.getElementById('results-section').style.display = 'block';
+
+            // Score ring
+            const score = review.readiness_score || 0;
+            const scoreRing = document.getElementById('score-ring');
+            scoreRing.className = 'score-ring ' + (score >= 70 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low');
+            document.getElementById('score-num').textContent = score;
+            document.getElementById('overall-assessment').textContent = review.overall_assessment || '';
+
+            // Sub-scores
+            setSubScore('structure-score', review.structure_score);
+            setSubScore('argument-score', review.argument_score);
+            setSubScore('clarity-score', review.clarity_score);
+            document.getElementById('grammar-count').textContent = review.grammar_issues != null ? review.grammar_issues + ' found' : '—';
+
+            // Strengths
+            if (review.strengths && review.strengths.length) {
+                document.getElementById('strengths-card').style.display = 'block';
+                document.getElementById('strengths-list').innerHTML = review.strengths.map(s =>
+                    `<div style="padding: 6px 0; font-size: 0.9rem; color: var(--gray-700);">✅ ${escapeHtml(s)}</div>`
+                ).join('');
+            }
+
+            // Improvements
+            if (review.improvements && review.improvements.length) {
+                document.getElementById('improvements-card').style.display = 'block';
+                document.getElementById('improvements-list').innerHTML = review.improvements.map(i => `
+                    <div class="improvement-item">
+                        <div class="area">${escapeHtml(i.area || '')}</div>
+                        <div class="issue">${escapeHtml(i.issue || '')}</div>
+                        <div class="suggestion">💡 ${escapeHtml(i.suggestion || '')}</div>
+                    </div>
+                `).join('');
+            }
+
+            // Next steps
+            if (review.next_steps && review.next_steps.length) {
+                document.getElementById('nextsteps-card').style.display = 'block';
+                document.getElementById('nextsteps-list').innerHTML = review.next_steps.map((s, i) =>
+                    `<div style="padding: 8px 0; font-size: 0.9rem; border-bottom: 1px solid var(--gray-100);">${i+1}. ${escapeHtml(s)}</div>`
+                ).join('');
+            }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function setSubScore(id, value) {
+            const el = document.getElementById(id);
+            if (value != null) {
+                el.textContent = value + '/100';
+                el.style.color = value >= 70 ? '#16A34A' : value >= 50 ? '#CA8A04' : '#DC2626';
+            } else {
+                el.textContent = '—';
+            }
+        }
+
+        function resetLab() {
+            document.getElementById('results-section').style.display = 'none';
+            document.getElementById('submit-section').style.display = 'block';
+            textarea.value = '';
+            document.getElementById('char-count').textContent = '0';
+            // Reset result cards
+            ['strengths-card', 'improvements-card', 'nextsteps-card'].forEach(id => {
+                document.getElementById(id).style.display = 'none';
+            });
+        }
+
+        checkPremium();
+    </script>
+</body>
+</html>

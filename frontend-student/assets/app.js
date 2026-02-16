@@ -160,16 +160,18 @@ function renderNav(activePage) {
     const user = auth.getUser();
     const nav = document.getElementById('main-nav');
     if (!nav) return;
+    const aiActive = ['study-buddy', 'lab'].includes(activePage);
     nav.innerHTML = `
         <a href="/dashboard" class="nav-brand">
-            <span>ReadySetClass</span>
+            <span>RSC</span>
         </a>
         <div class="nav-links">
             <a href="/dashboard" class="${activePage === 'dashboard' ? 'active' : ''}">Home</a>
             <a href="/courses" class="${activePage === 'courses' ? 'active' : ''}">Courses</a>
-            <a href="/calendar" class="${activePage === 'calendar' ? 'active' : ''}">Calendar</a>
             <a href="/grades" class="${activePage === 'grades' ? 'active' : ''}">Grades</a>
-            <a href="/profile" class="${activePage === 'profile' ? 'active' : ''}">Profile</a>
+            <a href="/study-buddy" class="${activePage === 'study-buddy' ? 'active' : ''}">AI Tutor</a>
+            <a href="/lab" class="${activePage === 'lab' ? 'active' : ''}">Lab</a>
+            <a href="/profile" class="${activePage === 'profile' ? 'active' : ''}">Me</a>
         </div>
     `;
 }

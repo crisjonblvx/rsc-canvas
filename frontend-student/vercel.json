@@ -10,6 +10,8 @@
         { "source": "/courses", "destination": "/courses.html" },
         { "source": "/grades", "destination": "/grades.html" },
         { "source": "/calendar", "destination": "/calendar.html" },
+        { "source": "/study-buddy", "destination": "/study-buddy.html" },
+        { "source": "/lab", "destination": "/lab.html" },
         { "source": "/profile", "destination": "/profile.html" }
     ],
     "headers": [

@@ -148,6 +148,14 @@
                     <p>Add grades to see scenarios</p>
                 </div>
             </div>
+
+            <!-- AI Grade Predictor -->
+            <div style="margin-top: 1.5rem;">
+                <button class="btn btn-primary btn-full" id="predict-btn" onclick="runPredictor()" style="gap: 8px;">
+                    🤖 AI Grade Predictor
+                </button>
+            </div>
+            <div id="prediction-container" style="display: none; margin-top: 1rem;"></div>
         </div>
 
         <div id="no-courses" style="display: none;">
@@ -353,6 +361,69 @@
             } catch (err) {
                 alert(err.message);
             }
+        }
+
+        // AI Grade Predictor
+        async function runPredictor() {
+            if (!selectedEnrollment) return;
+            setLoading('predict-btn', true, 'AI is analyzing...');
+            const container = document.getElementById('prediction-container');
+
+            try {
+                const data = await api.get(`/api/v1/student/ai/grade-predictor/${selectedEnrollment}`);
+                if (!data.prediction) {
+                    container.innerHTML = '<div class="card" style="text-align: center; color: #9CA3AF;">Add some grades first so the AI can predict your final grade.</div>';
+                    container.style.display = 'block';
+                    return;
+                }
+
+                const p = data.prediction;
+                const pf = p.predicted_final || {};
+                let html = `<div class="card">
+                    <div class="card-title" style="margin-bottom: 0.75rem;">🤖 AI Prediction</div>`;
+
+                if (pf.letter) {
+                    const color = pf.percentage >= 90 ? '#16A34A' : pf.percentage >= 80 ? '#2563EB' : pf.percentage >= 70 ? '#CA8A04' : '#DC2626';
+                    html += `<div style="text-align: center; margin-bottom: 1rem;">
+                        <div style="font-size: 2rem; font-weight: 800; color: ${color};">${pf.letter}</div>
+                        <div style="color: #6B7280; font-size: 0.85rem;">${pf.percentage}% predicted &middot; ${pf.confidence || 'medium'} confidence</div>
+                    </div>`;
+                }
+
+                if (p.analysis) {
+                    html += `<p style="font-size: 0.9rem; color: #4B5563; margin-bottom: 1rem;">${escapeHtml(p.analysis)}</p>`;
+                }
+
+                if (p.scenarios && p.scenarios.length) {
+                    html += '<div style="font-weight: 600; font-size: 0.85rem; margin-bottom: 0.5rem;">Scenarios</div>';
+                    p.scenarios.forEach(s => {
+                        html += `<div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #F3F4F6; font-size: 0.85rem;">
+                            <div><strong>${escapeHtml(s.name)}</strong><div style="color: #9CA3AF; font-size: 0.78rem;">${escapeHtml(s.description || '')}</div></div>
+                            <div style="font-weight: 700;">${s.predicted_grade} (${s.predicted_percentage}%)</div>
+                        </div>`;
+                    });
+                }
+
+                if (p.recommendation) {
+                    html += `<div style="margin-top: 1rem; padding: 10px; background: #F0FDF4; border-radius: 8px; font-size: 0.85rem; color: #16A34A;">💡 ${escapeHtml(p.recommendation)}</div>`;
+                }
+
+                html += '</div>';
+                container.innerHTML = html;
+                container.style.display = 'block';
+            } catch (err) {
+                if (err.message.includes('Premium')) {
+                    container.innerHTML = `<div class="card" style="text-align: center;">
+                        <p style="color: #B8945F; font-weight: 600;">🤖 Grade Predictor is a Premium feature</p>
+                        <p style="font-size: 0.85rem; color: #9CA3AF; margin: 8px 0;">$3.99/month — Predict your final grade with AI</p>
+                        <a href="/profile" class="btn btn-gold btn-sm" style="text-decoration: none;">Upgrade</a>
+                    </div>`;
+                    container.style.display = 'block';
+                } else {
+                    alert(err.message);
+                }
+            }
+            setLoading('predict-btn', false, '🤖 AI Grade Predictor');
         }
 
         loadCourses();

@@ -38,6 +38,8 @@ from typing import Optional, List
 from datetime import datetime, timedelta
 import secrets
 import bcrypt
+import json
+import stripe
 import random
 import os
 import psycopg2
@@ -47,7 +49,7 @@ import psycopg2
 # ROUTER SETUP
 # ============================================================================
 
-STUDENT_APP_VERSION = "2.1.0"
+STUDENT_APP_VERSION = "3.0.0"
 
 router = APIRouter()
 security = HTTPBearer()
@@ -66,6 +68,26 @@ def get_db_connection():
     if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
     return psycopg2.connect(DATABASE_URL)
+
+
+# ============================================================================
+# AI CLIENT (GROQ)
+# ============================================================================
+
+groq_student_client = None
+try:
+    from groq import Groq
+    if os.getenv("GROQ_API_KEY"):
+        groq_student_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+except Exception:
+    pass
+
+GROQ_MODEL = "llama-3.3-70b-versatile"
+
+# Stripe config
+stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+STUDENT_PRICE_MONTHLY = os.getenv('STUDENT_STRIPE_PRICE_MONTHLY', '')
+STUDENT_PRICE_YEARLY = os.getenv('STUDENT_STRIPE_PRICE_YEARLY', '')
 
 
 # ============================================================================
@@ -256,6 +278,77 @@ class CreateDeadlineRequest(BaseModel):
     title: str
     due_at: str
     description: Optional[str] = None
+
+class StudyBuddyRequest(BaseModel):
+    message: str
+    course_id: Optional[int] = None
+    conversation_id: Optional[int] = None
+
+class LabReviewRequest(BaseModel):
+    text: str
+    course_id: Optional[int] = None
+    assignment_type: Optional[str] = None
+
+class StudentCheckoutRequest(BaseModel):
+    plan: str  # "monthly" or "yearly"
+    success_url: Optional[str] = "https://student.readysetclass.app/profile?upgraded=1"
+    cancel_url: Optional[str] = "https://student.readysetclass.app/profile"
+
+
+# ============================================================================
+# PREMIUM HELPERS
+# ============================================================================
+
+def _check_premium(current_user: dict) -> bool:
+    """Check if student has active premium subscription"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT subscription_tier, subscription_status, subscription_ends_at
+            FROM users WHERE id = %s
+        """, (current_user["user_id"],))
+        row = cursor.fetchone()
+        if not row:
+            return False
+        tier, status, ends_at = row
+        if tier in ('pro', 'student_premium') and status == 'active':
+            if ends_at and datetime.now() > ends_at:
+                return False
+            return True
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _require_premium(current_user: dict):
+    """Raise 403 if user does not have premium"""
+    if not _check_premium(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Premium subscription required. Upgrade at student.readysetclass.app/profile"
+        )
+
+
+def _call_groq(system_prompt: str, user_prompt: str, temperature: float = 0.7, max_tokens: int = 1024) -> str:
+    """Call GROQ API with given prompts. Raises HTTPException on failure."""
+    if not groq_student_client:
+        raise HTTPException(status_code=503, detail="AI service temporarily unavailable")
+    try:
+        response = groq_student_client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"GROQ API error: {e}")
+        raise HTTPException(status_code=503, detail="AI service error. Please try again.")
 
 
 # ============================================================================
@@ -1455,6 +1548,468 @@ async def update_notification_preferences(
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail="Failed to update preferences")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================================
+# AI STUDY BUDDY (Premium)
+# ============================================================================
+
+STUDY_BUDDY_SYSTEM = """You are the ReadySetClass Study Buddy — a friendly, knowledgeable AI tutor for college students.
+
+Rules:
+- You help students UNDERSTAND concepts, you do NOT do their work for them
+- Explain clearly, use analogies, break complex ideas into steps
+- If a student asks you to write their paper or solve their homework, redirect: "I can help you understand the concepts, but the work should be yours"
+- Be encouraging but honest. If something is wrong, explain why
+- Keep responses concise (2-4 paragraphs max unless the student asks for more detail)
+- You can use examples, bullet points, and simple formatting
+- Match the energy: warm, clear, never condescending. Think "cool TA" not "robot professor"
+- If you don't know something, say so honestly
+
+Context: You're helping a college student. Be aware of academic integrity — guide, don't solve."""
+
+
+@router.post("/api/v1/student/ai/study-buddy")
+async def study_buddy(request: StudyBuddyRequest, current_user=Depends(get_current_student)):
+    """AI Study Buddy — conversational tutor. Premium feature."""
+    _require_premium(current_user)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Build context
+        context_parts = [STUDY_BUDDY_SYSTEM]
+        context_parts.append(f"\nStudent name: {current_user.get('full_name', 'Student')}")
+
+        if current_user.get("institution"):
+            context_parts.append(f"Institution: {current_user['institution']}")
+
+        # Add course context if provided
+        if request.course_id:
+            cursor.execute("""
+                SELECT sc.course_name, sc.course_code, u.full_name
+                FROM student_enrollments se
+                JOIN student_courses sc ON se.course_id = sc.id
+                JOIN users u ON sc.professor_id = u.id
+                WHERE se.student_id = %s AND sc.id = %s AND se.status = 'active'
+            """, (current_user["user_id"], request.course_id))
+            course = cursor.fetchone()
+            if course:
+                context_parts.append(f"\nCurrent course context: {course[1] or course[0]} ({course[0]}) with Prof. {course[2]}")
+
+        # Load conversation history if continuing
+        history = []
+        conversation_id = request.conversation_id
+        if conversation_id:
+            cursor.execute("""
+                SELECT role, content FROM student_ai_messages
+                WHERE conversation_id = %s ORDER BY created_at ASC
+                LIMIT 20
+            """, (conversation_id,))
+            for row in cursor.fetchall():
+                history.append({"role": row[0], "content": row[1]})
+
+        # Build messages
+        system_prompt = "\n".join(context_parts)
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(history)
+        messages.append({"role": "user", "content": request.message})
+
+        # Call GROQ
+        if not groq_student_client:
+            raise HTTPException(status_code=503, detail="AI service temporarily unavailable")
+
+        response = groq_student_client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1024
+        )
+        reply = response.choices[0].message.content
+
+        # Save conversation
+        if not conversation_id:
+            cursor.execute("""
+                INSERT INTO student_ai_conversations (student_id, course_id, title)
+                VALUES (%s, %s, %s) RETURNING id
+            """, (current_user["user_id"], request.course_id,
+                  request.message[:80]))
+            conversation_id = cursor.fetchone()[0]
+
+        # Save messages
+        cursor.execute("""
+            INSERT INTO student_ai_messages (conversation_id, role, content)
+            VALUES (%s, 'user', %s)
+        """, (conversation_id, request.message))
+        cursor.execute("""
+            INSERT INTO student_ai_messages (conversation_id, role, content)
+            VALUES (%s, 'assistant', %s)
+        """, (conversation_id, reply))
+
+        # Track usage
+        cursor.execute("""
+            UPDATE users SET ai_generations_this_month = COALESCE(ai_generations_this_month, 0) + 1
+            WHERE id = %s
+        """, (current_user["user_id"],))
+
+        conn.commit()
+
+        return {
+            "reply": reply,
+            "conversation_id": conversation_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        print(f"Study buddy error: {e}")
+        raise HTTPException(status_code=503, detail="AI service error. Please try again.")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/api/v1/student/ai/conversations")
+async def list_conversations(current_user=Depends(get_current_student)):
+    """List recent Study Buddy conversations"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT c.id, c.title, c.course_id, sc.course_name, c.created_at
+            FROM student_ai_conversations c
+            LEFT JOIN student_courses sc ON c.course_id = sc.id
+            WHERE c.student_id = %s
+            ORDER BY c.created_at DESC LIMIT 20
+        """, (current_user["user_id"],))
+
+        convos = []
+        for row in cursor.fetchall():
+            convos.append({
+                "id": row[0], "title": row[1], "course_id": row[2],
+                "course_name": row[3],
+                "created_at": row[4].isoformat() if row[4] else None
+            })
+        return {"conversations": convos}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/api/v1/student/ai/conversations/{conversation_id}")
+async def get_conversation(conversation_id: int, current_user=Depends(get_current_student)):
+    """Get full message history for a conversation"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT id FROM student_ai_conversations
+            WHERE id = %s AND student_id = %s
+        """, (conversation_id, current_user["user_id"]))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Conversation not found")
+
+        cursor.execute("""
+            SELECT role, content, created_at FROM student_ai_messages
+            WHERE conversation_id = %s ORDER BY created_at ASC
+        """, (conversation_id,))
+
+        messages = []
+        for row in cursor.fetchall():
+            messages.append({
+                "role": row[0], "content": row[1],
+                "created_at": row[2].isoformat() if row[2] else None
+            })
+        return {"conversation_id": conversation_id, "messages": messages}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================================
+# THE LAB — AI ASSIGNMENT REVIEWER (Premium)
+# ============================================================================
+
+LAB_SYSTEM = """You are The Lab — ReadySetClass's AI Assignment Reviewer. You help students improve their work BEFORE they submit it.
+
+You REVIEW and COACH. You do NOT rewrite their work.
+
+Your output must be valid JSON with this exact structure:
+{
+  "readiness_score": <integer 0-100>,
+  "overall_assessment": "<1-2 sentence summary>",
+  "strengths": ["<strength 1>", "<strength 2>"],
+  "improvements": [
+    {"area": "<area name>", "issue": "<what's wrong>", "suggestion": "<how to fix>"},
+  ],
+  "grammar_issues": <integer count of grammar/spelling issues spotted>,
+  "structure_score": <integer 0-100>,
+  "argument_score": <integer 0-100>,
+  "clarity_score": <integer 0-100>,
+  "next_steps": ["<actionable step 1>", "<actionable step 2>"]
+}
+
+Scoring guide:
+- 90-100: Ready to submit. Minor polish only.
+- 70-89: Good foundation. A few areas need work.
+- 50-69: Needs significant revision. Key gaps identified.
+- Below 50: Early draft. Major rework needed.
+
+Be encouraging but honest. Students want real feedback, not participation trophies."""
+
+
+@router.post("/api/v1/student/ai/lab/review")
+async def lab_review(request: LabReviewRequest, current_user=Depends(get_current_student)):
+    """The Lab — AI reviews student's draft and returns readiness score + feedback. Premium feature."""
+    _require_premium(current_user)
+
+    if len(request.text.strip()) < 50:
+        raise HTTPException(status_code=400, detail="Please provide at least 50 characters of text to review")
+
+    # Build prompt
+    user_prompt = f"Review this student submission:\n\n{request.text[:5000]}"
+    if request.assignment_type:
+        user_prompt = f"Assignment type: {request.assignment_type}\n\n{user_prompt}"
+
+    raw_response = _call_groq(LAB_SYSTEM, user_prompt, temperature=0.3, max_tokens=1500)
+
+    # Parse JSON from response
+    try:
+        # Try to extract JSON from the response
+        json_start = raw_response.find('{')
+        json_end = raw_response.rfind('}') + 1
+        if json_start >= 0 and json_end > json_start:
+            review = json.loads(raw_response[json_start:json_end])
+        else:
+            review = json.loads(raw_response)
+    except (json.JSONDecodeError, ValueError):
+        # Fallback if AI didn't return clean JSON
+        review = {
+            "readiness_score": 50,
+            "overall_assessment": raw_response[:300],
+            "strengths": [],
+            "improvements": [],
+            "grammar_issues": 0,
+            "structure_score": 50,
+            "argument_score": 50,
+            "clarity_score": 50,
+            "next_steps": ["Review the AI feedback above and revise your draft"]
+        }
+
+    # Track usage
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE users SET ai_generations_this_month = COALESCE(ai_generations_this_month, 0) + 1
+            WHERE id = %s
+        """, (current_user["user_id"],))
+        cursor.execute("""
+            INSERT INTO activity_log (user_id, action, details)
+            VALUES (%s, 'lab_review', %s)
+        """, (current_user["user_id"],
+              json.dumps({"readiness_score": review.get("readiness_score", 0),
+                          "text_length": len(request.text)})))
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
+
+    return {"review": review}
+
+
+# ============================================================================
+# GRADE PREDICTOR AI (Premium)
+# ============================================================================
+
+@router.get("/api/v1/student/ai/grade-predictor/{enrollment_id}")
+async def grade_predictor(enrollment_id: int, current_user=Depends(get_current_student)):
+    """AI-powered grade prediction with scenarios. Premium feature."""
+    _require_premium(current_user)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Get current grades
+        cursor.execute("""
+            SELECT se.id, sc.course_name FROM student_enrollments se
+            JOIN student_courses sc ON se.course_id = sc.id
+            WHERE se.id = %s AND se.student_id = %s
+        """, (enrollment_id, current_user["user_id"]))
+        enrollment = cursor.fetchone()
+        if not enrollment:
+            raise HTTPException(status_code=404, detail="Enrollment not found")
+
+        cursor.execute("""
+            SELECT category_name, assignment_name, score, points_possible, weight
+            FROM student_grades WHERE enrollment_id = %s
+            ORDER BY category_name, created_at
+        """, (enrollment_id,))
+        grades = cursor.fetchall()
+
+        if not grades:
+            return {
+                "enrollment_id": enrollment_id,
+                "course_name": enrollment[1],
+                "prediction": None,
+                "message": "Add some grades first so the AI can predict your final grade"
+            }
+
+        # Build grade summary for AI
+        grade_summary = []
+        for g in grades:
+            pct = round(g[2] / g[3] * 100, 1) if g[3] > 0 else 0
+            grade_summary.append(f"- {g[0]}: {g[1]} — {g[2]}/{g[3]} ({pct}%)" +
+                                (f" [weight: {g[4]*100}%]" if g[4] else ""))
+
+        system_prompt = """You are a grade prediction AI. Given a student's current grades, predict their final grade and provide scenarios.
+
+Return valid JSON:
+{
+  "predicted_final": {"percentage": <float>, "letter": "<A/B/C/D/F>", "confidence": "<high/medium/low>"},
+  "analysis": "<2-3 sentence analysis of current standing>",
+  "scenarios": [
+    {"name": "<scenario name>", "description": "<what happens>", "predicted_grade": "<letter>", "predicted_percentage": <float>},
+  ],
+  "recommendation": "<1-2 sentence personalized recommendation>"
+}
+
+Provide 3-4 scenarios: "Keep current pace", "Strong finish", "Minimum effort", and optionally "Perfect from here"."""
+
+        user_prompt = f"Course: {enrollment[1]}\n\nCurrent grades:\n" + "\n".join(grade_summary)
+
+        raw = _call_groq(system_prompt, user_prompt, temperature=0.3, max_tokens=1200)
+
+        try:
+            json_start = raw.find('{')
+            json_end = raw.rfind('}') + 1
+            prediction = json.loads(raw[json_start:json_end]) if json_start >= 0 else json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            prediction = {
+                "predicted_final": {"percentage": None, "letter": None, "confidence": "low"},
+                "analysis": raw[:300],
+                "scenarios": [],
+                "recommendation": "Add more grades for a more accurate prediction."
+            }
+
+        # Track usage
+        cursor.execute("""
+            UPDATE users SET ai_generations_this_month = COALESCE(ai_generations_this_month, 0) + 1
+            WHERE id = %s
+        """, (current_user["user_id"],))
+        conn.commit()
+
+        return {
+            "enrollment_id": enrollment_id,
+            "course_name": enrollment[1],
+            "prediction": prediction,
+            "grades_analyzed": len(grades)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Grade predictor error: {e}")
+        raise HTTPException(status_code=503, detail="AI prediction service error")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================================
+# STUDENT PREMIUM (Stripe)
+# ============================================================================
+
+@router.get("/api/v1/student/premium/status")
+async def premium_status(current_user=Depends(get_current_student)):
+    """Check student's premium subscription status"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT subscription_tier, subscription_status, subscription_ends_at,
+                   ai_generations_this_month, stripe_customer_id
+            FROM users WHERE id = %s
+        """, (current_user["user_id"],))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        tier, status, ends_at, ai_gens, stripe_id = row
+        is_premium = tier in ('pro', 'student_premium') and status == 'active'
+        if is_premium and ends_at and datetime.now() > ends_at:
+            is_premium = False
+
+        return {
+            "is_premium": is_premium,
+            "tier": tier or "free",
+            "status": status or "none",
+            "subscription_ends_at": ends_at.isoformat() if ends_at else None,
+            "ai_generations_this_month": ai_gens or 0,
+            "features": {
+                "study_buddy": is_premium,
+                "the_lab": is_premium,
+                "grade_predictor": is_premium,
+                "advanced_calculator": is_premium
+            },
+            "pricing": {
+                "monthly": "$3.99/month",
+                "yearly": "$29.99/year (save 37%)"
+            }
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/api/v1/student/premium/checkout")
+async def premium_checkout(request: StudentCheckoutRequest, current_user=Depends(get_current_student)):
+    """Create Stripe checkout session for student premium"""
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Payment system not configured")
+
+    price_id = STUDENT_PRICE_MONTHLY if request.plan == "monthly" else STUDENT_PRICE_YEARLY
+    if not price_id:
+        raise HTTPException(status_code=503,
+                            detail="Student pricing not configured. Contact support.")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Get or create Stripe customer
+        cursor.execute("SELECT stripe_customer_id FROM users WHERE id = %s",
+                       (current_user["user_id"],))
+        row = cursor.fetchone()
+        stripe_customer_id = row[0] if row and row[0] else None
+
+        if not stripe_customer_id:
+            customer = stripe.Customer.create(
+                email=current_user["email"],
+                name=current_user.get("full_name"),
+                metadata={"user_id": str(current_user["user_id"]), "role": "student"}
+            )
+            stripe_customer_id = customer.id
+            cursor.execute("UPDATE users SET stripe_customer_id = %s WHERE id = %s",
+                           (stripe_customer_id, current_user["user_id"]))
+            conn.commit()
+
+        session = stripe.checkout.Session.create(
+            customer=stripe_customer_id,
+            mode="subscription",
+            line_items=[{"price": price_id, "quantity": 1}],
+            success_url=request.success_url,
+            cancel_url=request.cancel_url,
+            metadata={"user_id": str(current_user["user_id"]), "tier": "student_premium"}
+        )
+
+        return {"checkout_url": session.url}
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=500, detail=f"Payment error: {str(e)}")
+    except Exception as e:
+        print(f"Checkout error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create checkout session")
     finally:
         cursor.close()
         conn.close()

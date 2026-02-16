@@ -4,6 +4,13 @@
 -- Date: 2026-02-15
 
 -- ============================================================================
+-- 0. RENAME OLD CANVAS-DEPENDENT TABLES (safe rename, keep data for reference)
+-- ============================================================================
+
+ALTER TABLE IF EXISTS student_courses RENAME TO student_courses_canvas_legacy;
+ALTER TABLE IF EXISTS student_announcements RENAME TO student_announcements_canvas_legacy;
+
+-- ============================================================================
 -- 1. MODIFY USERS TABLE - Add .edu verification columns
 -- ============================================================================
 

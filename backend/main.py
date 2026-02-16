@@ -975,6 +975,19 @@ async def get_current_user_info(current_user = Depends(get_current_user_from_tok
 stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
 
+if stripe.api_key:
+    print(f"Stripe configured with key ending in ...{stripe.api_key[-4:]}")
+else:
+    print("WARNING: STRIPE_SECRET_KEY is not set! Payment features will not work.")
+
+@app.get("/api/stripe/status")
+async def stripe_status():
+    """Check if Stripe is configured (no auth required for diagnostics)"""
+    return {
+        "configured": bool(stripe.api_key),
+        "webhook_configured": bool(STRIPE_WEBHOOK_SECRET)
+    }
+
 class CheckoutRequest(BaseModel):
     price_id: str
     success_url: str
@@ -986,37 +999,33 @@ async def create_checkout_session(
     current_user = Depends(get_current_user_from_token)
 ):
     """Create Stripe checkout session"""
+    # Check if Stripe is configured
+    if not stripe.api_key:
+        print("ERROR: STRIPE_SECRET_KEY environment variable is not set!")
+        raise HTTPException(status_code=500, detail="Payment system is not configured. Please contact support.")
+
+    print(f"Stripe checkout request: price_id={request.price_id}, user_id={current_user['user_id']}")
+
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Get user email
-        cursor.execute("SELECT email FROM users WHERE id = %s", (current_user['user_id'],))
+        # Ensure stripe columns exist
+        cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)")
+        conn.commit()
+
+        # Get user email and stripe_customer_id in one query
+        cursor.execute("SELECT email, stripe_customer_id FROM users WHERE id = %s", (current_user['user_id'],))
         result = cursor.fetchone()
         if not result:
             raise HTTPException(status_code=404, detail="User not found")
         email = result[0]
-
-        # Ensure stripe_customer_id column exists
-        try:
-            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)")
-            conn.commit()
-        except Exception:
-            conn.rollback()
-
-        # Try to get existing stripe_customer_id
-        stripe_customer_id = None
-        try:
-            cursor.execute("SELECT stripe_customer_id FROM users WHERE id = %s", (current_user['user_id'],))
-            sid_result = cursor.fetchone()
-            if sid_result and sid_result[0]:
-                stripe_customer_id = sid_result[0]
-        except Exception:
-            conn.rollback()
+        stripe_customer_id = result[1]
 
         if not stripe_customer_id:
             # Create Stripe customer
+            print(f"Creating Stripe customer for {email}")
             customer = stripe.Customer.create(
                 email=email,
                 metadata={"user_id": str(current_user['user_id'])}
@@ -1024,16 +1033,14 @@ async def create_checkout_session(
             stripe_customer_id = customer.id
 
             # Save customer ID
-            try:
-                cursor.execute(
-                    "UPDATE users SET stripe_customer_id = %s WHERE id = %s",
-                    (stripe_customer_id, current_user['user_id'])
-                )
-                conn.commit()
-            except Exception:
-                conn.rollback()
+            cursor.execute(
+                "UPDATE users SET stripe_customer_id = %s WHERE id = %s",
+                (stripe_customer_id, current_user['user_id'])
+            )
+            conn.commit()
 
         # Create checkout session
+        print(f"Creating Stripe checkout session for customer {stripe_customer_id}, price {request.price_id}")
         checkout_session = stripe.checkout.Session.create(
             customer=stripe_customer_id,
             payment_method_types=['card'],
@@ -1052,18 +1059,31 @@ async def create_checkout_session(
         cursor.close()
         conn.close()
 
+        print(f"Checkout session created successfully: {checkout_session.id}")
         return {"checkout_url": checkout_session.url}
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"Checkout error: {e}")
+    except stripe.error.InvalidRequestError as e:
+        print(f"Stripe invalid request error: {e}")
         if conn:
-            try:
-                conn.close()
-            except Exception:
-                pass
-        raise HTTPException(status_code=500, detail=f"Error creating checkout session. Please try again.")
+            try: conn.close()
+            except Exception: pass
+        raise HTTPException(status_code=400, detail=f"Invalid payment request: {str(e)}")
+    except stripe.error.AuthenticationError as e:
+        print(f"Stripe authentication error: {e}")
+        if conn:
+            try: conn.close()
+            except Exception: pass
+        raise HTTPException(status_code=500, detail="Payment system authentication failed. Please contact support.")
+    except Exception as e:
+        print(f"Checkout error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        if conn:
+            try: conn.close()
+            except Exception: pass
+        raise HTTPException(status_code=500, detail=f"Error creating checkout session: {str(e)}")
 
 
 @app.post("/api/stripe/webhook")

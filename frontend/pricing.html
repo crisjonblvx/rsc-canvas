@@ -395,11 +395,11 @@
                 <li><span class="checkmark">✓</span> <span data-i18n="features.email_support">Email support</span></li>
             </ul>
 
-            <button class="cta-button monthly-button" onclick="subscribe('educator-monthly')" data-i18n="cta.start_trial">
-                Start Free Trial
+            <button class="cta-button monthly-button" onclick="subscribe('educator-monthly')" data-i18n="cta.sign_up">
+                Sign Up Today
             </button>
-            <button class="cta-button yearly-button" style="display: none;" onclick="subscribe('educator-yearly')" data-i18n="cta.start_trial">
-                Start Free Trial
+            <button class="cta-button yearly-button" style="display: none;" onclick="subscribe('educator-yearly')" data-i18n="cta.sign_up">
+                Sign Up Today
             </button>
         </div>
 
@@ -430,11 +430,11 @@
                 <li><span class="checkmark">✓</span> <span data-i18n="features.library">Content library</span></li>
             </ul>
 
-            <button class="cta-button monthly-button" onclick="subscribe('pro-monthly')" data-i18n="cta.start_trial">
-                Start Free Trial
+            <button class="cta-button monthly-button" onclick="subscribe('pro-monthly')" data-i18n="cta.sign_up">
+                Sign Up Today
             </button>
-            <button class="cta-button yearly-button" style="display: none;" onclick="subscribe('pro-yearly')" data-i18n="cta.start_trial">
-                Start Free Trial
+            <button class="cta-button yearly-button" style="display: none;" onclick="subscribe('pro-yearly')" data-i18n="cta.sign_up">
+                Sign Up Today
             </button>
         </div>
 
@@ -566,11 +566,12 @@
                     // Redirect to Stripe checkout
                     window.location.href = data.checkout_url;
                 } else {
-                    alert('Error creating checkout session. Please try again.');
+                    console.error('Checkout error response:', data);
+                    alert(data.detail || 'Error creating checkout session. Please try again.');
                 }
             } catch (error) {
                 console.error('Checkout error:', error);
-                alert('Error processing payment. Please try again.');
+                alert('Error connecting to payment system. Please try again.');
             }
         }
     </script>

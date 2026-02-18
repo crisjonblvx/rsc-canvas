@@ -764,11 +764,23 @@ async def build_course(course: CourseRequest, user=Depends(verify_token)):
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint with DB diagnostics"""
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "bonita": "online"
+    }
+
+@app.get("/api/diagnostics")
+async def diagnostics():
+    """Check DB and Stripe configuration"""
     db_ok = False
     db_error = None
     try:
-        conn = get_db_connection()
+        DATABASE_URL = os.getenv('DATABASE_URL')
+        if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+            DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        conn = psycopg2.connect(DATABASE_URL)
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
         cursor.close()
@@ -777,12 +789,9 @@ async def health_check():
     except Exception as e:
         db_error = f"{type(e).__name__}: {str(e)}"
     return {
-        "status": "healthy" if db_ok else "degraded",
-        "timestamp": datetime.utcnow().isoformat(),
-        "bonita": "online",
-        "database": db_ok,
-        "db_error": db_error,
-        "database_url_set": bool(os.getenv('DATABASE_URL'))
+        "database": {"connected": db_ok, "error": db_error},
+        "database_url_set": bool(os.getenv('DATABASE_URL')),
+        "stripe_configured": bool(os.getenv('STRIPE_SECRET_KEY'))
     }
 
 # ============================================================================

@@ -1431,7 +1431,11 @@ async def get_courses_v2(
 
 
 @app.post("/api/v2/canvas/quiz/generate")
-async def generate_quiz_questions(request: QuizGenerateRequest):
+async def generate_quiz_questions(
+    request: QuizGenerateRequest,
+    current_user=Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
     """
     Generate quiz questions with AI (preview only, no Canvas upload)
     Returns questions for user to review before uploading
@@ -1439,10 +1443,16 @@ async def generate_quiz_questions(request: QuizGenerateRequest):
     try:
         print(f"🧠 Generating {request.grade_level} quiz questions: {request.topic}")
 
+        # Enrich description with user's reference materials
+        reference_context = get_user_reference_context(current_user['user_id'], db)
+        enriched_description = request.description
+        if reference_context:
+            enriched_description += f"\n\nCourse reference materials (use specific topics and concepts from here):\n{reference_context}"
+
         quiz_data = bonita.generate_quiz(
             week=1,
             topic=request.topic,
-            description=request.description,
+            description=enriched_description,
             num_questions=request.num_questions,
             difficulty=request.difficulty,
             grade_level=request.grade_level,
@@ -1664,6 +1674,23 @@ AI_TONE_MAP = {
 # Keep ANNOUNCEMENT_TONE_MAP as alias for backwards compatibility
 ANNOUNCEMENT_TONE_MAP = AI_TONE_MAP
 
+
+def get_user_reference_context(user_id: int, db: Session, max_materials: int = 3, max_chars: int = 3000) -> str:
+    """Fetch a user's uploaded reference materials and return as a formatted context string."""
+    try:
+        materials = db.query(ReferenceMaterial).filter_by(user_id=user_id).order_by(
+            ReferenceMaterial.upload_date.desc()
+        ).limit(max_materials).all()
+        if not materials:
+            return ""
+        parts = []
+        for m in materials:
+            label = f"{m.file_name}" + (f" (Course: {m.course_name})" if m.course_name else "")
+            parts.append(f"[{label}]\n{m.extracted_text[:max_chars]}")
+        return "\n\n".join(parts)
+    except Exception:
+        return ""
+
 class AnnouncementRequest(BaseModel):
     course_id: int
     topic: str
@@ -1836,6 +1863,7 @@ Return just the HTML content, no markdown code blocks."""
 @app.post("/api/v2/canvas/generate-page")
 async def generate_ai_page(
     request: AIPageRequest,
+    current_user=Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     """
@@ -1862,47 +1890,30 @@ async def generate_ai_page(
         language_name = LANGUAGE_MAP.get(request.language, "English")
         tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
+        # Fetch reference materials for context
+        reference_context = get_user_reference_context(current_user['user_id'], db)
+        ref_section = f"\n\nCOURSE REFERENCE MATERIALS (use specific topics and terminology from here):\n{reference_context}" if reference_context else ""
+
         system = """You are Bonita, an AI assistant helping college professors create course pages.
-Your output should be well-formatted HTML suitable for Canvas LMS.
-Use clear structure, headers, lists, and proper formatting."""
+Your output should be well-formatted HTML suitable for Canvas LMS."""
 
-        prompt = f"""Create a professional course page titled: {request.title}
+        prompt = f"""Create a course page titled: {request.title}
 
-IMPORTANT: Generate ALL content in {language_name}.
-The entire page must be in {language_name}, including all sections, headings, and content.
-
+Language: {language_name} — ALL content must be in {language_name}.
 Tone: {tone_desc}
 Page Type: {page_type_desc}
 Description: {request.description}
-{f'Learning Objectives: {request.objectives}' if request.objectives else ''}
+{f'Learning Objectives: {request.objectives}' if request.objectives else ''}{ref_section}
 
-Generate comprehensive page content with:
+Write content that is specific to this course — use actual topics, concepts, and terminology from the reference materials above. Avoid generic filler.
 
-1. **Introduction** (2-3 paragraphs explaining the topic and its importance)
+Structure the page logically for the page type. Include an introduction, well-organized main content with clear headings, and key takeaways. Length should match the complexity of the topic — don't pad.
 
-2. **Main Content Sections** (organized with clear headings)
-   - Break down the content logically
-   - Use bullet points and numbered lists where appropriate
-   - Include examples or explanations
+Format in HTML for Canvas:
+- <h3> for section headings, <h4> for subsections
+- <p> for paragraphs, <ul>/<li> for lists, <strong> for emphasis
 
-3. **Key Takeaways** (3-5 bullet points summarizing main points)
-
-4. **Resources** (optional but recommended)
-   - Suggested readings
-   - Helpful links
-   - Additional materials
-
-Format the output in clean HTML suitable for Canvas LMS. Use:
-- <h3> for section headings
-- <h4> for subsection headings
-- <p> for paragraphs
-- <ul> and <li> for bullet lists
-- <ol> and <li> for numbered lists
-- <strong> for emphasis
-- <a href="..."> for links (if suggesting real resources)
-
-Do NOT include the page title as an <h1> or <h2> (Canvas will add that).
-Make it educational, engaging, and well-organized."""
+Do NOT include the page title as a heading (Canvas adds it automatically)."""
 
         # Generate with AI
         generated_content, cost = bonita.call_ai(prompt, system)
@@ -1974,6 +1985,7 @@ async def create_page_v2(
 @app.post("/api/v2/canvas/generate-assignment")
 async def generate_ai_assignment(
     request: AIAssignmentRequest,
+    current_user=Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     """
@@ -2002,45 +2014,36 @@ async def generate_ai_assignment(
         language_name = LANGUAGE_MAP.get(request.language, "English")
         tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
-        system = """You are Bonita, an AI assistant helping college professors create high-quality assignments.
-Your output should be professional, clear, and properly formatted for Canvas LMS.
-Use HTML formatting with headers, lists, and proper structure."""
+        # Fetch reference materials for course-specific context
+        reference_context = get_user_reference_context(current_user['user_id'], db)
+        ref_section = f"\n\nCOURSE REFERENCE MATERIALS (syllabus/documents the professor uploaded — be specific to the actual topics, concepts, and terminology found here):\n{reference_context}" if reference_context else ""
 
-        prompt = f"""Create a professional college assignment on: {request.topic}
+        system = """You are Bonita, an AI assistant helping college professors create assignments.
+Write in HTML formatted for Canvas LMS."""
 
-IMPORTANT: Generate ALL content in {language_name}.
-The entire response must be in {language_name}, including title, description, objectives, instructions, deliverables, and rubric.
+        prompt = f"""Help a professor create a {assignment_type_desc} for their course.
 
 Tone: {tone_desc}
-Assignment Type: {assignment_type_desc}
+Assignment Title: {request.topic}
 Points: {request.points}
-Professor's Requirements:
-{request.requirements}
+Language: {language_name} — ALL content must be in {language_name}.
 
-Generate a complete assignment description with the following sections:
+Professor's instructions:
+{request.requirements}{ref_section}
 
-1. **Assignment Overview** (2-3 paragraphs explaining what students will do and why it's important)
+Write a focused, course-specific assignment. Use the actual topics, concepts, and terminology from this course — do NOT write generic academic boilerplate.
 
-2. **Learning Objectives** (3-5 specific, measurable objectives students will achieve)
+Include:
+1. **Overview** — what students will do and why (1-2 direct paragraphs, no filler)
+2. **Instructions** — clear numbered steps
+3. **Deliverables** — exact list of what to submit
+4. **Grading Rubric** — HTML table with criteria, point values, and clear expectations
 
-3. **Instructions** (Step-by-step directions for completing the assignment)
+Format in HTML for Canvas:
+- <h3> for section headings, <p> for paragraphs, <ul>/<li> for lists
+- <table><thead><tbody> for the rubric
 
-4. **Deliverables** (Specific list of what students must submit)
-
-5. **Grading Rubric** (Clear criteria for how the assignment will be evaluated)
-
-6. **Resources** (Suggested materials, readings, or tools students can use)
-
-Format the output in clean HTML suitable for Canvas LMS. Use:
-- <h3> for section headings
-- <p> for paragraphs
-- <ul> and <li> for lists
-- <strong> for emphasis
-- <table> for rubric (if applicable)
-
-Keep it professional but engaging. Make instructions clear and actionable.
-Do NOT include the assignment title as a heading (it will be added separately).
-Focus on creating content that helps students succeed."""
+Do NOT include the assignment title as a heading. Be practical, specific, and actionable."""
 
         # Generate with Bonita AI
         generated_content, cost = bonita.call_claude(prompt, system)
@@ -2504,36 +2507,38 @@ class SyllabusRequest(BaseModel):
 
 
 @app.post("/api/v2/canvas/generate-discussion")
-async def generate_ai_discussion(request: AIDiscussionRequest):
+async def generate_ai_discussion(
+    request: AIDiscussionRequest,
+    current_user=Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
     """Generate AI-enhanced discussion topic"""
     try:
         print(f"🤖 Generating AI discussion: {request.topic}")
 
-        # Get language name and tone description
         language_name = LANGUAGE_MAP.get(request.language, "English")
         tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
-        system = "You are Bonita, helping professors create engaging class discussions."
-        prompt = f"""Create a discussion topic on: {request.topic}
+        reference_context = get_user_reference_context(current_user['user_id'], db)
+        ref_section = f"\n\nCOURSE REFERENCE MATERIALS (use specific topics and concepts from here):\n{reference_context}" if reference_context else ""
 
-IMPORTANT: Generate ALL content in {language_name}.
-The entire discussion topic must be in {language_name}, including the prompt, questions, guidelines, and outcomes.
+        system = "You are Bonita, helping professors create engaging class discussions."
+        prompt = f"""Create a discussion topic for a college course.
 
 Tone: {tone_desc}
+Topic: {request.topic}
 Discussion Type: {request.discussion_type}
 Learning Goals: {request.goals}
+Language: {language_name} — ALL content must be in {language_name}.{ref_section}
 
-Generate an engaging discussion post that includes:
+Write a discussion post that is specific to this course — reference actual concepts and readings from the course materials. Avoid generic prompts.
 
-1. **Opening Prompt** (2-3 paragraphs that provide context and spark interest)
+Include:
+1. **Opening Prompt** — context and a compelling hook (1-2 focused paragraphs)
+2. **Discussion Questions** — 3-4 specific, thought-provoking questions tied to this course
+3. **Participation Guidelines** — what's expected (length, peer responses, citations if relevant)
 
-2. **Discussion Questions** (3-5 thought-provoking questions that encourage critical thinking)
-
-3. **Participation Guidelines** (How students should engage - length, citations, peer responses)
-
-4. **Expected Outcomes** (What students should gain from this discussion)
-
-Format in HTML for Canvas. Make it engaging and encourage meaningful dialogue."""
+Format in HTML for Canvas. Be direct and engaging — students should know exactly what to discuss."""
 
         content, cost = bonita.call_ai(prompt, system)
         print(f"✅ Discussion generated (cost: ${cost:.4f})")
@@ -2544,55 +2549,40 @@ Format in HTML for Canvas. Make it engaging and encourage meaningful dialogue.""
 
 
 @app.post("/api/v2/canvas/generate-syllabus")
-async def generate_ai_syllabus(request: AISyllabusRequest):
+async def generate_ai_syllabus(
+    request: AISyllabusRequest,
+    current_user=Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
     """Generate AI-enhanced course syllabus"""
     try:
         print(f"🤖 Generating AI syllabus: {request.course_name}")
 
-        # Get language name and tone description
         language_name = LANGUAGE_MAP.get(request.language, "English")
         tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
-        system = "You are Bonita, helping professors create comprehensive course syllabi."
-        prompt = f"""Create a professional course syllabus for: {request.course_name}
+        reference_context = get_user_reference_context(current_user['user_id'], db)
+        ref_section = f"\n\nEXISTING COURSE MATERIALS (use these to match actual course topics, readings, and structure):\n{reference_context}" if reference_context else ""
 
-IMPORTANT: Generate ALL content in {language_name}.
-The entire syllabus must be in {language_name}, including all sections, policies, and schedule.
+        system = "You are Bonita, helping professors create course syllabi."
+        prompt = f"""Create a course syllabus for: {request.course_name}
 
+Language: {language_name} — ALL content must be in {language_name}.
 Tone: {tone_desc}
 Course Description: {request.description}
 Learning Objectives: {request.objectives}
-Grading Policy: {request.grading}
+Grading Policy: {request.grading}{ref_section}
 
-Generate a complete syllabus with:
+Write a complete syllabus that is specific to this course. If existing materials are provided above, reflect the actual topics, readings, and structure from them.
 
-1. **Course Overview** (2-3 engaging paragraphs about the course and its value)
+Include: Course Overview, Learning Objectives, Grading Breakdown (table), Course Policies (attendance, late work, academic integrity), and Weekly Schedule.
 
-2. **Learning Objectives** (Clear, measurable objectives formatted as a list)
+Format in HTML for Canvas:
+- <h3> for major sections, <h4> for subsections
+- <ul>/<li> for lists, <table> for grading
+- <p> for paragraphs, <strong> for emphasis
 
-3. **Course Structure** (How the course is organized - weeks, units, topics)
-
-4. **Grading Breakdown** (Based on the professor's grading policy, formatted as a table)
-
-5. **Attendance & Participation Policy** (Professional but fair expectations)
-
-6. **Academic Integrity Statement** (Clear guidelines on plagiarism and cheating)
-
-7. **Course Materials** (Required textbooks, software, or resources if applicable)
-
-8. **Important Policies** (Late work, extensions, communication expectations)
-
-9. **Weekly Schedule Overview** (High-level breakdown of topics by week)
-
-Format in clean HTML suitable for Canvas. Use:
-- <h3> for major sections
-- <h4> for subsections
-- <ul> and <li> for lists
-- <table> for grading breakdown
-- <p> for paragraphs
-- <strong> for emphasis
-
-Make it comprehensive, professional, and student-friendly."""
+Be specific, practical, and student-friendly. No filler."""
 
         content, cost = bonita.call_ai(prompt, system)
         print(f"✅ Syllabus generated (cost: ${cost:.4f})")

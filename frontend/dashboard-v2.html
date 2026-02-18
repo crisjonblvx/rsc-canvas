@@ -1189,6 +1189,18 @@ Students should demonstrate understanding of how technology challenges tradition
                         <label>Due Date (Optional)</label>
                         <input type="datetime-local" id="aiQuizDueDate">
                     </div>
+                    <div class="form-group">
+                        <label style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Tone</span>
+                            <span id="quizToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                        </label>
+                        <input type="range" id="quizTone" min="1" max="5" value="3"
+                            oninput="updateToneLabel('quizToneLabel', this.value)"
+                            style="width: 100%; accent-color: var(--purple);">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                            <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        </div>
+                    </div>
                     <button class="btn btn-primary" onclick="generateAIQuiz()">✨ Generate Quiz with AI</button>
                 </div>
 
@@ -1214,17 +1226,59 @@ Students should demonstrate understanding of how technology challenges tradition
                 <div class="selected-course-info" id="announcementCourseInfo"></div>
                 <div id="announcementAlert"></div>
 
-                <div class="form-group">
-                    <label>Announcement Topic</label>
-                    <input type="text" id="announcementTopic" placeholder="e.g., Upcoming Assignment Reminder">
+                <!-- Mode Selection -->
+                <div style="background: #f8f9fa; padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                    <div style="font-weight: 600; margin-bottom: 1rem; color: var(--dark);">Choose Mode:</div>
+                    <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
+                            <input type="radio" name="announcementMode" value="quick" checked onchange="toggleAnnouncementMode()">
+                            <span style="margin-left: 0.5rem;"><strong>Quick Input</strong> — Write it yourself</span>
+                        </label>
+                        <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
+                            <input type="radio" name="announcementMode" value="ai" onchange="toggleAnnouncementMode()">
+                            <span style="margin-left: 0.5rem;"><strong>✨ AI Generate</strong> — AI writes it for you</span>
+                        </label>
+                    </div>
                 </div>
 
+                <!-- Tone Slider (always visible) -->
                 <div class="form-group">
-                    <label>Additional Details (Optional)</label>
-                    <textarea id="announcementDetails" placeholder="Any specific details to include..."></textarea>
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Tone</span>
+                        <span id="announcementToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                    </label>
+                    <input type="range" id="announcementTone" min="1" max="5" value="3"
+                        oninput="updateToneLabel('announcementToneLabel', this.value)"
+                        style="width: 100%; accent-color: var(--purple);">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                        <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                    </div>
                 </div>
 
-                <button class="btn btn-primary" onclick="createAnnouncement()">Generate & Post Announcement</button>
+                <!-- Quick Input Form -->
+                <div id="quickAnnouncementForm">
+                    <div class="form-group">
+                        <label>Your Announcement</label>
+                        <textarea id="announcementCustomMessage" rows="6" placeholder="Write your announcement here. Separate paragraphs with a blank line."></textarea>
+                    </div>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <button class="btn" style="background: #f0f0f0; color: var(--dark);" onclick="postAnnouncementDirect()">Post As-Is</button>
+                        <button class="btn btn-primary" onclick="postAnnouncementPolished()">✨ AI Polish & Post</button>
+                    </div>
+                </div>
+
+                <!-- AI Generate Form -->
+                <div id="aiAnnouncementForm" style="display: none;">
+                    <div class="form-group">
+                        <label>Announcement Topic</label>
+                        <input type="text" id="announcementTopic" placeholder="e.g., Upcoming Assignment Reminder">
+                    </div>
+                    <div class="form-group">
+                        <label>Additional Details (Optional)</label>
+                        <textarea id="announcementDetails" placeholder="Any specific details to include..."></textarea>
+                    </div>
+                    <button class="btn btn-primary" onclick="createAnnouncement()">Generate & Post Announcement</button>
+                </div>
             </div>
 
             <!-- Assignment Creator -->
@@ -1312,6 +1366,19 @@ Students should demonstrate understanding of how technology challenges tradition
                     <div class="form-group">
                         <label>Due Date (Optional)</label>
                         <input type="datetime-local" id="aiAssignmentDueDate">
+                    </div>
+
+                    <div class="form-group">
+                        <label style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Tone</span>
+                            <span id="assignmentToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                        </label>
+                        <input type="range" id="assignmentTone" min="1" max="5" value="3"
+                            oninput="updateToneLabel('assignmentToneLabel', this.value)"
+                            style="width: 100%; accent-color: var(--purple);">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                            <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        </div>
                     </div>
 
                     <button class="btn btn-primary" onclick="generateAIAssignment()">✨ Generate with AI</button>
@@ -1407,6 +1474,19 @@ Students should demonstrate understanding of how technology challenges tradition
                         <textarea id="aiPageObjectives" placeholder="What should students learn from this page?" style="min-height: 80px;"></textarea>
                     </div>
 
+                    <div class="form-group">
+                        <label style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Tone</span>
+                            <span id="pageToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                        </label>
+                        <input type="range" id="pageTone" min="1" max="5" value="3"
+                            oninput="updateToneLabel('pageToneLabel', this.value)"
+                            style="width: 100%; accent-color: var(--purple);">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                            <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        </div>
+                    </div>
+
                     <button class="btn btn-primary" onclick="generateAIPage()">✨ Generate with AI</button>
                 </div>
 
@@ -1493,6 +1573,19 @@ Students should demonstrate understanding of how technology challenges tradition
                     <div class="form-group">
                         <label>What should students discuss? (Brief description)</label>
                         <textarea id="aiDiscussionGoals" placeholder="Example: 'Students will debate the ethical implications of targeted advertising, considering privacy, manipulation, and consumer protection.'" style="min-height: 100px;"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Tone</span>
+                            <span id="discussionToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                        </label>
+                        <input type="range" id="discussionTone" min="1" max="5" value="3"
+                            oninput="updateToneLabel('discussionToneLabel', this.value)"
+                            style="width: 100%; accent-color: var(--purple);">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                            <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        </div>
                     </div>
 
                     <button class="btn btn-primary" onclick="generateAIDiscussion()">✨ Generate with AI</button>
@@ -1598,6 +1691,18 @@ Students should demonstrate understanding of how technology challenges tradition
 Assignments: 30%
 Quizzes: 20%
 Participation: 10%" style="min-height: 80px;"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Tone</span>
+                            <span id="syllabusToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                        </label>
+                        <input type="range" id="syllabusTone" min="1" max="5" value="3"
+                            oninput="updateToneLabel('syllabusToneLabel', this.value)"
+                            style="width: 100%; accent-color: var(--purple);">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                            <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        </div>
                     </div>
                     <button class="btn btn-primary" onclick="generateAISyllabus()">✨ Generate with AI</button>
                 </div>
@@ -1974,10 +2079,11 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             showAlert('syllabusAlert', 'info', '✨ AI is generating syllabus...');
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
+                const tone = parseInt(document.getElementById('syllabusTone').value) || 3;
                 const response = await fetch(`${API_URL}/api/v2/canvas/generate-syllabus`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ course_name: courseName, description, objectives, grading, language: currentLang })
+                    body: JSON.stringify({ course_name: courseName, description, objectives, grading, language: currentLang, tone })
                 });
                 const result = await response.json();
                 if (response.ok) {
@@ -2330,6 +2436,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             const numQuestions = parseInt(document.getElementById('aiNumQuestions').value);
             const difficulty = document.getElementById('aiDifficulty').value;
             const gradeLevel = document.getElementById('aiQuizGradeLevel').value;
+            const tone = parseInt(document.getElementById('quizTone').value) || 3;
 
             showAlert('quizAlert', 'info', '✨ AI is generating quiz questions...');
 
@@ -2346,7 +2453,8 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         num_questions: numQuestions,
                         difficulty: difficulty,
                         grade_level: gradeLevel,
-                        language: currentLang
+                        language: currentLang,
+                        tone: tone
                     })
                 });
 
@@ -2482,43 +2590,68 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             generatedQuizData = null;
         }
 
-        // Create Announcement
-        async function createAnnouncement() {
+        // Announcement: mode toggle + tone label
+        function toggleAnnouncementMode() {
+            const mode = document.querySelector('input[name="announcementMode"]:checked').value;
+            document.getElementById('quickAnnouncementForm').style.display = mode === 'quick' ? 'block' : 'none';
+            document.getElementById('aiAnnouncementForm').style.display = mode === 'ai' ? 'block' : 'none';
+        }
+
+        const _toneLabelMap = { 1: 'Formal', 2: 'Professional', 3: 'Balanced', 4: 'Friendly', 5: 'Casual' };
+        function updateToneLabel(labelId, val) {
+            const el = document.getElementById(labelId);
+            if (el) el.textContent = _toneLabelMap[val] || 'Balanced';
+        }
+
+        function _getAnnouncementTone() {
+            return parseInt(document.getElementById('announcementTone').value) || 3;
+        }
+
+        async function _submitAnnouncement(body) {
             if (!selectedCourse) { alert('Select a course first'); return; }
-
-            const topic = document.getElementById('announcementTopic').value;
-            if (!topic) { alert('Enter announcement topic'); return; }
-
-            showAlert('announcementAlert', 'info', '📢 Creating announcement...');
-
+            showAlert('announcementAlert', 'info', '📢 Posting announcement...');
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
                 const response = await fetch(`${API_URL}/api/v2/canvas/announcement`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify({
-                        course_id: selectedCourse.id,
-                        topic: topic,
-                        details: document.getElementById('announcementDetails').value || null,
-                        language: currentLang
-                    })
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                    body: JSON.stringify({ course_id: selectedCourse.id, language: currentLang, tone: _getAnnouncementTone(), ...body })
                 });
-
                 const result = await response.json();
-
                 if (response.ok) {
                     showAlert('announcementAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank" style="color: var(--purple);">View in Canvas →</a>`);
-                    document.getElementById('announcementTopic').value = '';
-                    document.getElementById('announcementDetails').value = '';
                 } else {
                     showAlert('announcementAlert', 'error', '❌ ' + result.detail);
                 }
             } catch (error) {
                 showAlert('announcementAlert', 'error', '❌ Error: ' + error.message);
             }
+        }
+
+        async function postAnnouncementDirect() {
+            const msg = document.getElementById('announcementCustomMessage').value.trim();
+            if (!msg) { alert('Write your announcement first'); return; }
+            showAlert('announcementAlert', 'info', '📢 Posting announcement...');
+            await _submitAnnouncement({ topic: msg.split('\n')[0].substring(0, 80), custom_message: msg, enhance: false });
+            document.getElementById('announcementCustomMessage').value = '';
+        }
+
+        async function postAnnouncementPolished() {
+            const msg = document.getElementById('announcementCustomMessage').value.trim();
+            if (!msg) { alert('Write your announcement first'); return; }
+            showAlert('announcementAlert', 'info', '✨ Polishing with AI...');
+            await _submitAnnouncement({ topic: msg.split('\n')[0].substring(0, 80), custom_message: msg, enhance: true });
+            document.getElementById('announcementCustomMessage').value = '';
+        }
+
+        // AI Generate Announcement
+        async function createAnnouncement() {
+            const topic = document.getElementById('announcementTopic').value;
+            if (!topic) { alert('Enter announcement topic'); return; }
+            showAlert('announcementAlert', 'info', '✨ Generating announcement...');
+            await _submitAnnouncement({ topic, details: document.getElementById('announcementDetails').value || null });
+            document.getElementById('announcementTopic').value = '';
+            document.getElementById('announcementDetails').value = '';
         }
 
         // Create Assignment
@@ -2554,6 +2687,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
 
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
+                const tone = parseInt(document.getElementById('assignmentTone').value) || 3;
                 const response = await fetch(`${API_URL}/api/v2/canvas/generate-assignment`, {
                     method: 'POST',
                     headers: {
@@ -2565,7 +2699,8 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         assignment_type: type,
                         requirements: requirements,
                         points: parseInt(document.getElementById('aiAssignmentPoints').value),
-                        language: currentLang
+                        language: currentLang,
+                        tone: tone
                     })
                 });
 
@@ -2731,6 +2866,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
 
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
+                const tone = parseInt(document.getElementById('pageTone').value) || 3;
                 const response = await fetch(`${API_URL}/api/v2/canvas/generate-page`, {
                     method: 'POST',
                     headers: {
@@ -2742,7 +2878,8 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         page_type: pageType,
                         description: description,
                         objectives: objectives,
-                        language: currentLang
+                        language: currentLang,
+                        tone: tone
                     })
                 });
 
@@ -2879,10 +3016,11 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             showAlert('discussionAlert', 'info', '✨ AI is generating discussion...');
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
+                const tone = parseInt(document.getElementById('discussionTone').value) || 3;
                 const response = await fetch(`${API_URL}/api/v2/canvas/generate-discussion`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ topic, discussion_type: type, goals, language: currentLang })
+                    body: JSON.stringify({ topic, discussion_type: type, goals, language: currentLang, tone })
                 });
                 const result = await response.json();
                 if (response.ok) {

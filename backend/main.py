@@ -91,23 +91,22 @@ openai_client = None
 groq_client = None
 anthropic_client = None
 
-# Initialize OpenAI (preferred - cheap and high quality)
-if os.getenv("OPENAI_API_KEY"):
-    try:
-        openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        print("✅ OpenAI client initialized (GPT-4o-mini - $0.002/assignment)")
-    except Exception as e:
-        print(f"⚠️  OpenAI initialization failed: {e}")
-
-# Initialize Groq (second choice - FREE!)
+# Initialize Groq (primary - FREE!)
 if os.getenv("GROQ_API_KEY"):
     try:
         groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        print("✅ Groq client initialized (Llama 3.3 70B - FREE!)")
+        print("✅ Groq client initialized (Llama 3.3 70B - FREE! - PRIMARY)")
     except Exception as e:
         print(f"⚠️  Groq initialization failed: {e}")
-        print("   This is a known compatibility issue with Python 3.13")
         print("   Using OpenAI or Anthropic instead")
+
+# Initialize OpenAI (fallback - paid)
+if os.getenv("OPENAI_API_KEY"):
+    try:
+        openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        print("✅ OpenAI client initialized (GPT-4o-mini - fallback)")
+    except Exception as e:
+        print(f"⚠️  OpenAI initialization failed: {e}")
 
 # Initialize Anthropic (fallback - expensive but highest quality)
 if os.getenv("ANTHROPIC_API_KEY"):
@@ -274,8 +273,8 @@ def get_reading_level_instructions(grade_level: str) -> Dict[str, str]:
 class BonitaEngine:
     """
     Smart AI routing for ReadySetClass
-    Supports: OpenAI (cheap), Groq (FREE!), Anthropic (premium)
-    Provider priority: OpenAI > Groq > Anthropic
+    Supports: Groq (FREE!), OpenAI (fallback), Anthropic (last resort)
+    Provider priority: Groq > OpenAI > Anthropic
     """
 
     def __init__(self):
@@ -293,10 +292,31 @@ class BonitaEngine:
     def call_ai(self, prompt: str, system: str = "") -> tuple[str, float]:
         """
         Call AI provider with automatic fallback
-        Priority: OpenAI > Groq (FREE!) > Anthropic
+        Priority: Groq (FREE!) > OpenAI > Anthropic
         Returns: (response_text, cost)
         """
-        # Try OpenAI first (cheapest paid option - $0.002/assignment)
+        # Try Groq first (FREE! - primary for all course building)
+        if self.groq_client:
+            try:
+                response = self.groq_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",  # Fast, high quality, FREE!
+                    messages=[
+                        {"role": "system", "content": system} if system else {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=2048,
+                    temperature=0.7
+                )
+
+                # Groq is FREE!
+                cost = 0.0
+
+                print(f"✅ Groq response (cost: FREE!)")
+                return response.choices[0].message.content, cost
+            except Exception as e:
+                print(f"⚠️  Groq failed: {e}, trying OpenAI...")
+
+        # Try OpenAI second (paid fallback)
         if self.openai_client:
             try:
                 response = self.openai_client.chat.completions.create(
@@ -317,30 +337,9 @@ class BonitaEngine:
                 print(f"✅ OpenAI response (cost: ${cost:.4f})")
                 return response.choices[0].message.content, cost
             except Exception as e:
-                print(f"⚠️  OpenAI failed: {e}, trying Groq...")
+                print(f"⚠️  OpenAI failed: {e}, falling back to Claude...")
 
-        # Try Groq second (FREE! 🎉)
-        if self.groq_client:
-            try:
-                response = self.groq_client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",  # Fast, high quality, FREE!
-                    messages=[
-                        {"role": "system", "content": system} if system else {"role": "system", "content": "You are a helpful assistant."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=2048,
-                    temperature=0.7
-                )
-
-                # Groq is FREE!
-                cost = 0.0
-
-                print(f"✅ Groq response (cost: FREE!)")
-                return response.choices[0].message.content, cost
-            except Exception as e:
-                print(f"⚠️  Groq failed: {e}, falling back to Claude...")
-
-        # Fallback to Claude (most expensive but highest quality)
+        # Last resort: Claude (most expensive)
         if self.anthropic_client:
             response = self.anthropic_client.messages.create(
                 model="claude-sonnet-4-20250514",
@@ -447,7 +446,8 @@ Format in clean HTML for Canvas. Keep it practical and actionable."""
         num_questions: int = 10,
         difficulty: str = "medium",
         grade_level: str = "college",
-        language: str = "en"
+        language: str = "en",
+        tone: int = 3
     ) -> Dict:
         """Generate quiz questions with detailed context and grade-appropriate language (Groq - FREE!)"""
 
@@ -456,6 +456,9 @@ Format in clean HTML for Canvas. Keep it practical and actionable."""
 
         # Get language name
         language_name = LANGUAGE_MAP.get(language, "English")
+
+        # Get tone description
+        tone_desc = AI_TONE_MAP.get(tone, AI_TONE_MAP[3])
 
         system = f"You are Bonita, an AI assistant helping educators create {grade_level} quiz questions that assess student understanding at the appropriate reading level."
 
@@ -487,6 +490,8 @@ CRITICAL READING LEVEL REQUIREMENTS:
 {level_info['instructions']}
 
 {level_info['example_words']}
+
+Tone: {tone_desc}
 
 Requirements:
 - {num_questions} questions total
@@ -790,6 +795,7 @@ class QuizGenerateRequest(BaseModel):
     difficulty: str = "medium"
     grade_level: str = "college"  # NEW: elementary-k2, elementary-35, middle-68, high-912, college
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
+    tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
 
 class QuizUploadRequest(BaseModel):
     """Request to upload generated quiz to Canvas"""
@@ -1440,7 +1446,8 @@ async def generate_quiz_questions(request: QuizGenerateRequest):
             num_questions=request.num_questions,
             difficulty=request.difficulty,
             grade_level=request.grade_level,
-            language=request.language
+            language=request.language,
+            tone=request.tone
         )
 
         return {
@@ -1643,13 +1650,28 @@ class AIAssignmentRequest(BaseModel):
     requirements: str
     points: int = 100
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
+    tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
 
+
+AI_TONE_MAP = {
+    1: "very formal and academic — use professional language, avoid contractions, maintain scholarly distance",
+    2: "professional and clear — well-organized, polished, approachable",
+    3: "balanced — professional yet warm, friendly tone",
+    4: "friendly and conversational — warm, encouraging, use contractions naturally",
+    5: "casual and personable — like a colleague talking to students, relaxed and approachable"
+}
+
+# Keep ANNOUNCEMENT_TONE_MAP as alias for backwards compatibility
+ANNOUNCEMENT_TONE_MAP = AI_TONE_MAP
 
 class AnnouncementRequest(BaseModel):
     course_id: int
     topic: str
     details: Optional[str] = None
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
+    tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
+    custom_message: Optional[str] = None  # If set, use this text instead of generating
+    enhance: bool = False  # If True + custom_message, AI polishes the custom message
 
 
 class AIPageRequest(BaseModel):
@@ -1658,6 +1680,7 @@ class AIPageRequest(BaseModel):
     description: str
     objectives: Optional[str] = None
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
+    tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
 
 
 class PageRequest(BaseModel):
@@ -1729,29 +1752,55 @@ async def create_announcement_v2(
         if not credentials:
             raise HTTPException(status_code=404, detail="Canvas not connected")
 
-        # Generate announcement with AI
-        print(f"📢 Generating announcement on: {request.topic}")
-
-        # Get language name
+        # Get language name and tone description
         language_name = LANGUAGE_MAP.get(request.language, "English")
+        tone_desc = ANNOUNCEMENT_TONE_MAP.get(request.tone, ANNOUNCEMENT_TONE_MAP[3])
 
-        system = "You are Bonita, helping professors create course announcements."
-        prompt = f"""Create a professional course announcement about: {request.topic}
+        if request.custom_message and not request.enhance:
+            # Quick Input: Post as-is, just wrap in HTML paragraphs
+            print(f"📢 Posting announcement as-is (no AI)")
+            paragraphs = [f"<p>{p.strip()}</p>" for p in request.custom_message.strip().split('\n\n') if p.strip()]
+            announcement_html = '\n'.join(paragraphs) if paragraphs else f"<p>{request.custom_message}</p>"
+        elif request.custom_message and request.enhance:
+            # Quick Input + AI Polish: lightly improve what they wrote
+            print(f"📢 Polishing announcement with AI (tone={request.tone})")
+            system = "You are Bonita, helping professors refine course announcements."
+            prompt = f"""Polish and lightly improve this course announcement while keeping the author's voice and intent.
 
-IMPORTANT: Generate ALL content in {language_name}.
-The entire announcement must be in {language_name}.
+Tone: {tone_desc}
+Language: {language_name} — ALL content must be in {language_name}.
+
+Original announcement:
+{request.custom_message}
+
+Instructions:
+- Keep the same meaning and key points
+- Improve clarity, flow, and grammar
+- Apply the requested tone — do not over-formalize or over-casualize
+- Keep it concise (2-3 paragraphs max)
+- Format in HTML for Canvas
+
+Return just the HTML content, no markdown code blocks."""
+            announcement_html, _ = bonita.call_claude(prompt, system)
+        else:
+            # AI Generate: write the full announcement from topic
+            print(f"📢 Generating announcement on: {request.topic}")
+            system = "You are Bonita, helping professors create course announcements."
+            prompt = f"""Create a course announcement about: {request.topic}
+
+Tone: {tone_desc}
+IMPORTANT: Generate ALL content in {language_name}. The entire announcement must be in {language_name}.
 
 {f'Additional details: {request.details}' if request.details else ''}
 
 Make it:
-- Professional but friendly
+- {tone_desc}
 - Clear and concise (2-3 paragraphs max)
 - Action-oriented if needed
 - Formatted in HTML for Canvas
 
 Return just the HTML content, no markdown code blocks."""
-
-        announcement_html, _ = bonita.call_claude(prompt, system)
+            announcement_html, _ = bonita.call_claude(prompt, system)
 
         # Upload to Canvas
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
@@ -1809,8 +1858,9 @@ async def generate_ai_page(
 
         page_type_desc = type_descriptions.get(request.page_type, "course page")
 
-        # Get language name
+        # Get language name and tone description
         language_name = LANGUAGE_MAP.get(request.language, "English")
+        tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
         system = """You are Bonita, an AI assistant helping college professors create course pages.
 Your output should be well-formatted HTML suitable for Canvas LMS.
@@ -1821,6 +1871,7 @@ Use clear structure, headers, lists, and proper formatting."""
 IMPORTANT: Generate ALL content in {language_name}.
 The entire page must be in {language_name}, including all sections, headings, and content.
 
+Tone: {tone_desc}
 Page Type: {page_type_desc}
 Description: {request.description}
 {f'Learning Objectives: {request.objectives}' if request.objectives else ''}
@@ -1947,8 +1998,9 @@ async def generate_ai_assignment(
 
         assignment_type_desc = type_descriptions.get(request.assignment_type, "assignment")
 
-        # Get language name
+        # Get language name and tone description
         language_name = LANGUAGE_MAP.get(request.language, "English")
+        tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
         system = """You are Bonita, an AI assistant helping college professors create high-quality assignments.
 Your output should be professional, clear, and properly formatted for Canvas LMS.
@@ -1959,6 +2011,7 @@ Use HTML formatting with headers, lists, and proper structure."""
 IMPORTANT: Generate ALL content in {language_name}.
 The entire response must be in {language_name}, including title, description, objectives, instructions, deliverables, and rubric.
 
+Tone: {tone_desc}
 Assignment Type: {assignment_type_desc}
 Points: {request.points}
 Professor's Requirements:
@@ -2433,6 +2486,7 @@ class AIDiscussionRequest(BaseModel):
     discussion_type: str
     goals: str
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
+    tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
 
 
 class AISyllabusRequest(BaseModel):
@@ -2441,6 +2495,7 @@ class AISyllabusRequest(BaseModel):
     objectives: str
     grading: str
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
+    tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
 
 
 class SyllabusRequest(BaseModel):
@@ -2454,8 +2509,9 @@ async def generate_ai_discussion(request: AIDiscussionRequest):
     try:
         print(f"🤖 Generating AI discussion: {request.topic}")
 
-        # Get language name
+        # Get language name and tone description
         language_name = LANGUAGE_MAP.get(request.language, "English")
+        tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
         system = "You are Bonita, helping professors create engaging class discussions."
         prompt = f"""Create a discussion topic on: {request.topic}
@@ -2463,6 +2519,7 @@ async def generate_ai_discussion(request: AIDiscussionRequest):
 IMPORTANT: Generate ALL content in {language_name}.
 The entire discussion topic must be in {language_name}, including the prompt, questions, guidelines, and outcomes.
 
+Tone: {tone_desc}
 Discussion Type: {request.discussion_type}
 Learning Goals: {request.goals}
 
@@ -2492,8 +2549,9 @@ async def generate_ai_syllabus(request: AISyllabusRequest):
     try:
         print(f"🤖 Generating AI syllabus: {request.course_name}")
 
-        # Get language name
+        # Get language name and tone description
         language_name = LANGUAGE_MAP.get(request.language, "English")
+        tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
         system = "You are Bonita, helping professors create comprehensive course syllabi."
         prompt = f"""Create a professional course syllabus for: {request.course_name}
@@ -2501,6 +2559,7 @@ async def generate_ai_syllabus(request: AISyllabusRequest):
 IMPORTANT: Generate ALL content in {language_name}.
 The entire syllabus must be in {language_name}, including all sections, policies, and schedule.
 
+Tone: {tone_desc}
 Course Description: {request.description}
 Learning Objectives: {request.objectives}
 Grading Policy: {request.grading}

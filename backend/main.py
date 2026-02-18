@@ -3123,6 +3123,50 @@ async def update_user_status(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.patch("/api/admin/users/{user_id}/extend-demo")
+async def extend_demo_account(
+    user_id: int,
+    request: dict,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Extend a demo account's expiration (admin only)"""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    hours = request.get('hours', 24)  # Default: extend by 24 hours
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE users
+            SET demo_expires_at = GREATEST(demo_expires_at, NOW()) + INTERVAL '%s hours',
+                is_active = TRUE
+            WHERE id = %s AND is_demo = TRUE
+            RETURNING email, demo_expires_at
+        """, (hours, user_id))
+
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="Demo user not found")
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return {
+            "message": f"Demo extended by {hours} hours",
+            "email": result[0],
+            "new_expiry": result[1].isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/admin/stats")
 async def get_system_stats(current_user=Depends(get_current_user_from_token)):
     """Get system statistics (admin only)"""

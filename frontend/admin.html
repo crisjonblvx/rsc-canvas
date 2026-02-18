@@ -95,6 +95,14 @@
             color: white;
         }
 
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+        .btn-warning:hover {
+            background: #d97706;
+        }
+
         .btn-small {
             padding: 0.5rem 1rem;
             font-size: 0.875rem;
@@ -506,6 +514,7 @@
                                                 onclick="toggleUserStatus(${user.id}, ${!user.is_active})">
                                             ${user.is_active ? 'Disable' : 'Enable'}
                                         </button>
+                                        ${user.is_demo ? `<button class="btn btn-small btn-warning" onclick="extendDemo(${user.id}, '${user.email}')">+24h</button>` : ''}
                                     </td>
                                 </tr>
                             `).join('')}
@@ -565,6 +574,30 @@
             } catch (error) {
                 showAlert('error', 'Failed to update status');
             }
+        }
+
+        // Extend demo account by 24 hours
+        async function extendDemo(userId, email) {
+            try {
+                const response = await fetch(`${API_URL}/api/admin/users/${userId}/extend-demo`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ hours: 24 })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    const expiry = new Date(data.new_expiry).toLocaleString();
+                    showAlert('success', `Demo for ${email} extended. New expiry: ${expiry}`);
+                    loadUsers();
+                } else {
+                    showAlert('error', data.detail || 'Failed to extend demo');
+                }
+            } catch (error) {
+                showAlert('error', 'Failed to extend demo');
         }
 
         // Load analytics

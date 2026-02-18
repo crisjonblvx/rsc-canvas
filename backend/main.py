@@ -3133,15 +3133,16 @@ async def extend_demo_account(
     if current_user.get('role') != 'admin':
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    hours = request.get('hours', 24)  # Default: extend by 24 hours
+    hours = request.get('hours', 24)
 
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # Always reset to exactly N hours from NOW (not stacked on top of current expiry)
         cursor.execute("""
             UPDATE users
-            SET demo_expires_at = GREATEST(demo_expires_at, NOW()) + INTERVAL '%s hours',
+            SET demo_expires_at = NOW() + INTERVAL '%s hours',
                 is_active = TRUE
             WHERE id = %s AND is_demo = TRUE
             RETURNING email, demo_expires_at

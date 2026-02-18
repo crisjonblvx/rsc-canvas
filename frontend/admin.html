@@ -525,7 +525,7 @@
                                                 onclick="toggleUserStatus(${user.id}, ${!user.is_active})">
                                             ${user.is_active ? 'Disable' : 'Enable'}
                                         </button>
-                                        ${user.is_demo ? `<button class="btn btn-small btn-warning" onclick="extendDemo(${user.id}, '${user.email}')">+24h</button>` : ''}
+                                        ${user.is_demo ? `<button class="btn btn-small btn-warning" onclick="extendDemo(${user.id}, '${user.email}')" title="Reset to 24h from now">↺ Reset 24h</button>` : ''}
                                     </td>
                                 </tr>
                             `).join('')}
@@ -602,7 +602,7 @@
                 const data = await response.json();
                 if (response.ok) {
                     const expiry = new Date(data.new_expiry).toLocaleString();
-                    showAlert('success', `Demo for ${email} extended. New expiry: ${expiry}`);
+                    showAlert('success', `Demo reset to 24h for ${email}. Expires: ${expiry}`);
                     loadUsers();
                 } else {
                     showAlert('error', data.detail || 'Failed to extend demo');

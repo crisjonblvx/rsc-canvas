@@ -362,6 +362,23 @@ class BonitaEngine:
     def call_claude(self, prompt: str, system: str = "") -> tuple[str, float]:
         """Alias for call_ai() for backward compatibility"""
         return self.call_ai(prompt, system)
+
+    def call_haiku(self, prompt: str, system: str = "") -> tuple[str, float]:
+        """Use Claude Haiku 4.5 for high-quality, natural content generation."""
+        if self.anthropic_client:
+            try:
+                response = self.anthropic_client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=2048,
+                    system=system,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                cost = (response.usage.input_tokens / 1_000_000 * 0.80) + (response.usage.output_tokens / 1_000_000 * 4.0)
+                print(f"✅ Haiku 4.5 response (cost: ${cost:.4f})")
+                return response.content[0].text, cost
+            except Exception as e:
+                print(f"⚠️  Haiku failed: {e}, falling back to Groq...")
+        return self.call_ai(prompt, system)
     
     def call_qwen_local(self, prompt: str) -> tuple[str, float]:
         """Use Qwen local for structured content (FREE!)"""
@@ -796,6 +813,7 @@ class QuizGenerateRequest(BaseModel):
     grade_level: str = "college"  # NEW: elementary-k2, elementary-35, middle-68, high-912, college
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
     tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
+    course_name: Optional[str] = None  # Selected course name for filtering reference materials
 
 class QuizUploadRequest(BaseModel):
     """Request to upload generated quiz to Canvas"""
@@ -1443,8 +1461,8 @@ async def generate_quiz_questions(
     try:
         print(f"🧠 Generating {request.grade_level} quiz questions: {request.topic}")
 
-        # Enrich description with user's reference materials
-        reference_context = get_user_reference_context(current_user['user_id'], db)
+        # Enrich description with user's reference materials (filtered to selected course)
+        reference_context = get_user_reference_context(current_user['user_id'], db, course_name=request.course_name)
         enriched_description = request.description
         if reference_context:
             enriched_description += f"\n\nCourse reference materials (use specific topics and concepts from here):\n{reference_context}"
@@ -1661,6 +1679,7 @@ class AIAssignmentRequest(BaseModel):
     points: int = 100
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
     tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
+    course_name: Optional[str] = None  # Selected course name for filtering reference materials
 
 
 AI_TONE_MAP = {
@@ -1675,14 +1694,39 @@ AI_TONE_MAP = {
 ANNOUNCEMENT_TONE_MAP = AI_TONE_MAP
 
 
-def get_user_reference_context(user_id: int, db: Session, max_materials: int = 3, max_chars: int = 3000) -> str:
-    """Fetch a user's uploaded reference materials and return as a formatted context string."""
+def get_user_reference_context(user_id: int, db: Session, max_materials: int = 3, max_chars: int = 3000, course_name: str = None) -> str:
+    """Fetch a user's uploaded reference materials and return as a formatted context string.
+
+    If course_name is provided, attempts to extract a course code (e.g. 'MCM 200') and
+    filter materials to only those matching that course. Falls back to all materials if no match.
+    """
     try:
-        materials = db.query(ReferenceMaterial).filter_by(user_id=user_id).order_by(
+        all_materials = db.query(ReferenceMaterial).filter_by(user_id=user_id).order_by(
             ReferenceMaterial.upload_date.desc()
-        ).limit(max_materials).all()
-        if not materials:
+        ).all()
+        if not all_materials:
             return ""
+
+        # Try to filter by course code extracted from course_name
+        # e.g. "FOUNDATIONS OF MASS COMMUNICATIONS (2025;20;MCM 200 1001)" → "MCM 200"
+        filtered = all_materials
+        if course_name:
+            import re
+            code_match = re.search(r'\b([A-Z]{2,5})\s*(\d{3,4})\b', course_name)
+            if code_match:
+                course_code = f"{code_match.group(1)} {code_match.group(2)}"  # e.g. "MCM 200"
+                matched = [
+                    m for m in all_materials
+                    if (m.course_name and course_code.lower() in m.course_name.lower())
+                    or (m.file_name and course_code.lower() in m.file_name.lower())
+                ]
+                if matched:
+                    filtered = matched
+                    print(f"📚 Filtered reference materials to {len(filtered)} matching '{course_code}'")
+                else:
+                    print(f"📚 No materials matched '{course_code}', using all {len(all_materials)}")
+
+        materials = filtered[:max_materials]
         parts = []
         for m in materials:
             label = f"{m.file_name}" + (f" (Course: {m.course_name})" if m.course_name else "")
@@ -1708,6 +1752,7 @@ class AIPageRequest(BaseModel):
     objectives: Optional[str] = None
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
     tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
+    course_name: Optional[str] = None  # Selected course name for filtering reference materials
 
 
 class PageRequest(BaseModel):
@@ -1808,7 +1853,7 @@ Instructions:
 - Format in HTML for Canvas
 
 Return just the HTML content, no markdown code blocks."""
-            announcement_html, _ = bonita.call_claude(prompt, system)
+            announcement_html, _ = bonita.call_haiku(prompt, system)
         else:
             # AI Generate: write the full announcement from topic
             print(f"📢 Generating announcement on: {request.topic}")
@@ -1827,7 +1872,7 @@ Make it:
 - Formatted in HTML for Canvas
 
 Return just the HTML content, no markdown code blocks."""
-            announcement_html, _ = bonita.call_claude(prompt, system)
+            announcement_html, _ = bonita.call_haiku(prompt, system)
 
         # Upload to Canvas
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
@@ -1890,8 +1935,8 @@ async def generate_ai_page(
         language_name = LANGUAGE_MAP.get(request.language, "English")
         tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
-        # Fetch reference materials for context
-        reference_context = get_user_reference_context(current_user['user_id'], db)
+        # Fetch reference materials for context (filtered to selected course)
+        reference_context = get_user_reference_context(current_user['user_id'], db, course_name=request.course_name)
         ref_section = f"\n\nCOURSE REFERENCE MATERIALS (use specific topics and terminology from here):\n{reference_context}" if reference_context else ""
 
         system = """You are Bonita, an AI assistant helping college professors create course pages.
@@ -1915,8 +1960,8 @@ Format in HTML for Canvas:
 
 Do NOT include the page title as a heading (Canvas adds it automatically)."""
 
-        # Generate with AI
-        generated_content, cost = bonita.call_ai(prompt, system)
+        # Generate with Claude Haiku 4.5 (natural, course-specific content)
+        generated_content, cost = bonita.call_haiku(prompt, system)
 
         print(f"✅ Page generated (cost: ${cost:.4f})")
 
@@ -2014,8 +2059,8 @@ async def generate_ai_assignment(
         language_name = LANGUAGE_MAP.get(request.language, "English")
         tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
-        # Fetch reference materials for course-specific context
-        reference_context = get_user_reference_context(current_user['user_id'], db)
+        # Fetch reference materials for course-specific context (filtered to selected course)
+        reference_context = get_user_reference_context(current_user['user_id'], db, course_name=request.course_name)
         ref_section = f"\n\nCOURSE REFERENCE MATERIALS (syllabus/documents the professor uploaded — be specific to the actual topics, concepts, and terminology found here):\n{reference_context}" if reference_context else ""
 
         system = """You are Bonita, an AI assistant helping college professors create assignments.
@@ -2045,8 +2090,8 @@ Format in HTML for Canvas:
 
 Do NOT include the assignment title as a heading. Be practical, specific, and actionable."""
 
-        # Generate with Bonita AI
-        generated_content, cost = bonita.call_claude(prompt, system)
+        # Generate with Claude Haiku 4.5 (natural, course-specific content)
+        generated_content, cost = bonita.call_haiku(prompt, system)
 
         print(f"✅ Assignment generated (cost: ${cost:.4f})")
 
@@ -2490,6 +2535,7 @@ class AIDiscussionRequest(BaseModel):
     goals: str
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
     tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
+    course_name: Optional[str] = None  # Selected course name for filtering reference materials
 
 
 class AISyllabusRequest(BaseModel):
@@ -2499,6 +2545,7 @@ class AISyllabusRequest(BaseModel):
     grading: str
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
     tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
+    selected_course_name: Optional[str] = None  # Selected Canvas course for filtering reference materials
 
 
 class SyllabusRequest(BaseModel):
@@ -2519,7 +2566,7 @@ async def generate_ai_discussion(
         language_name = LANGUAGE_MAP.get(request.language, "English")
         tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
-        reference_context = get_user_reference_context(current_user['user_id'], db)
+        reference_context = get_user_reference_context(current_user['user_id'], db, course_name=request.course_name)
         ref_section = f"\n\nCOURSE REFERENCE MATERIALS (use specific topics and concepts from here):\n{reference_context}" if reference_context else ""
 
         system = "You are Bonita, helping professors create engaging class discussions."
@@ -2540,7 +2587,7 @@ Include:
 
 Format in HTML for Canvas. Be direct and engaging — students should know exactly what to discuss."""
 
-        content, cost = bonita.call_ai(prompt, system)
+        content, cost = bonita.call_haiku(prompt, system)
         print(f"✅ Discussion generated (cost: ${cost:.4f})")
         return {"status": "success", "generated_content": content, "cost": cost}
     except Exception as e:
@@ -2561,7 +2608,7 @@ async def generate_ai_syllabus(
         language_name = LANGUAGE_MAP.get(request.language, "English")
         tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
-        reference_context = get_user_reference_context(current_user['user_id'], db)
+        reference_context = get_user_reference_context(current_user['user_id'], db, course_name=request.selected_course_name or request.course_name)
         ref_section = f"\n\nEXISTING COURSE MATERIALS (use these to match actual course topics, readings, and structure):\n{reference_context}" if reference_context else ""
 
         system = "You are Bonita, helping professors create course syllabi."
@@ -2584,7 +2631,7 @@ Format in HTML for Canvas:
 
 Be specific, practical, and student-friendly. No filler."""
 
-        content, cost = bonita.call_ai(prompt, system)
+        content, cost = bonita.call_haiku(prompt, system)
         print(f"✅ Syllabus generated (cost: ${cost:.4f})")
         return {"status": "success", "generated_content": content, "cost": cost}
     except Exception as e:

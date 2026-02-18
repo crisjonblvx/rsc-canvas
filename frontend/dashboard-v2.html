@@ -2090,7 +2090,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                 const response = await fetch(`${API_URL}/api/v2/canvas/generate-syllabus`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ course_name: courseName, description, objectives, grading, language: currentLang, tone })
+                    body: JSON.stringify({ course_name: courseName, description, objectives, grading, language: currentLang, tone, selected_course_name: selectedCourse?.name || null })
                 });
                 const result = await response.json();
                 if (response.ok) {
@@ -2452,7 +2452,8 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                 const response = await fetch(`${API_URL}/api/v2/canvas/quiz/generate`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
                     },
                     body: JSON.stringify({
                         topic: topic,
@@ -2461,7 +2462,8 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         difficulty: difficulty,
                         grade_level: gradeLevel,
                         language: currentLang,
-                        tone: tone
+                        tone: tone,
+                        course_name: selectedCourse?.name || null
                     })
                 });
 
@@ -2707,7 +2709,8 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         requirements: requirements,
                         points: parseInt(document.getElementById('aiAssignmentPoints').value),
                         language: currentLang,
-                        tone: tone
+                        tone: tone,
+                        course_name: selectedCourse?.name || null
                     })
                 });
 
@@ -2886,7 +2889,8 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         description: description,
                         objectives: objectives,
                         language: currentLang,
-                        tone: tone
+                        tone: tone,
+                        course_name: selectedCourse?.name || null
                     })
                 });
 
@@ -3027,7 +3031,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                 const response = await fetch(`${API_URL}/api/v2/canvas/generate-discussion`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ topic, discussion_type: type, goals, language: currentLang, tone })
+                    body: JSON.stringify({ topic, discussion_type: type, goals, language: currentLang, tone, course_name: selectedCourse?.name || null })
                 });
                 const result = await response.json();
                 if (response.ok) {

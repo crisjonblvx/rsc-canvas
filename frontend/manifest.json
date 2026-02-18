@@ -25,6 +25,20 @@
   "categories": ["education", "productivity"],
   "shortcuts": [
     {
+      "name": "AI Grader",
+      "short_name": "Grade",
+      "description": "Grade student submissions with AI",
+      "url": "/grading.html",
+      "icons": [{ "src": "/assets/ReadySetClass_alpha_badge.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "My Courses",
+      "short_name": "Courses",
+      "description": "View your Canvas courses",
+      "url": "/dashboard-v2.html",
+      "icons": [{ "src": "/assets/ReadySetClass_alpha_badge.png", "sizes": "192x192" }]
+    },
+    {
       "name": "Create Quiz",
       "short_name": "Quiz",
       "description": "Create a new quiz with AI",

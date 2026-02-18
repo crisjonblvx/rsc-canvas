@@ -8,7 +8,12 @@
     <meta http-equiv="Expires" content="0">
     <title>Login - ReadySetClass™</title>
     <link rel="icon" href="/assets/ReadySetClass_alpha_badge.png" type="image/png">
-
+    <link rel="apple-touch-icon" href="/assets/ReadySetClass_alpha_badge.png">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1E3A5F">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ReadySetClass">
     <meta name="description" content="AI-powered Canvas course setup. Less time setting up. More time teaching.">
 
     <!-- IP Protection Metadata -->
@@ -363,5 +368,6 @@
         <p>&copy; 2026 ReadySetClass. All rights reserved.</p>
         <p>ReadySetClass™ is a registered trademark.</p>
     </footer>
+    <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/service-worker.js').catch(()=>{});}</script>
 </body>
 </html>

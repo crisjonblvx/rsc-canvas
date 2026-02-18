@@ -824,6 +824,7 @@
             </div>
             <ul class="nav-menu">
                 <li class="nav-item active" onclick="showSection('courses')">📚 My Courses</li>
+                <li class="nav-item" onclick="window.location.href='/grading.html'" style="background: linear-gradient(135deg, rgba(201,169,97,0.15), rgba(30,58,95,0.1)); border-left: 3px solid #C9A961; font-weight: 600;">✨ AI Grader</li>
                 <li class="nav-item" onclick="showSection('grading')">📊 Setup Grading</li>
                 <li class="nav-item" onclick="showSection('quiz')">📝 Create Quiz</li>
                 <li class="nav-item" onclick="showSection('announcement')">📢 Announcement</li>
@@ -1673,6 +1674,10 @@ Participation: 10%" style="min-height: 80px;"></textarea>
     <!-- Bottom Navigation (Mobile Only) -->
     <nav class="bottom-nav">
         <div class="bottom-nav-items">
+            <div class="bottom-nav-item" onclick="window.location.href='/grading.html'" style="color:#C9A961">
+                <div class="bottom-nav-icon">✨</div>
+                <div>AI Grade</div>
+            </div>
             <div class="bottom-nav-item active" data-section="create-quiz">
                 <div class="bottom-nav-icon">📝</div>
                 <div>Quiz</div>

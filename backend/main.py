@@ -91,23 +91,22 @@ openai_client = None
 groq_client = None
 anthropic_client = None
 
-# Initialize OpenAI (preferred - cheap and high quality)
-if os.getenv("OPENAI_API_KEY"):
-    try:
-        openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        print("✅ OpenAI client initialized (GPT-4o-mini - $0.002/assignment)")
-    except Exception as e:
-        print(f"⚠️  OpenAI initialization failed: {e}")
-
-# Initialize Groq (second choice - FREE!)
+# Initialize Groq (primary - FREE!)
 if os.getenv("GROQ_API_KEY"):
     try:
         groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        print("✅ Groq client initialized (Llama 3.3 70B - FREE!)")
+        print("✅ Groq client initialized (Llama 3.3 70B - FREE! - PRIMARY)")
     except Exception as e:
         print(f"⚠️  Groq initialization failed: {e}")
-        print("   This is a known compatibility issue with Python 3.13")
         print("   Using OpenAI or Anthropic instead")
+
+# Initialize OpenAI (fallback - paid)
+if os.getenv("OPENAI_API_KEY"):
+    try:
+        openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        print("✅ OpenAI client initialized (GPT-4o-mini - fallback)")
+    except Exception as e:
+        print(f"⚠️  OpenAI initialization failed: {e}")
 
 # Initialize Anthropic (fallback - expensive but highest quality)
 if os.getenv("ANTHROPIC_API_KEY"):
@@ -274,8 +273,8 @@ def get_reading_level_instructions(grade_level: str) -> Dict[str, str]:
 class BonitaEngine:
     """
     Smart AI routing for ReadySetClass
-    Supports: OpenAI (cheap), Groq (FREE!), Anthropic (premium)
-    Provider priority: OpenAI > Groq > Anthropic
+    Supports: Groq (FREE!), OpenAI (fallback), Anthropic (last resort)
+    Provider priority: Groq > OpenAI > Anthropic
     """
 
     def __init__(self):
@@ -293,10 +292,31 @@ class BonitaEngine:
     def call_ai(self, prompt: str, system: str = "") -> tuple[str, float]:
         """
         Call AI provider with automatic fallback
-        Priority: OpenAI > Groq (FREE!) > Anthropic
+        Priority: Groq (FREE!) > OpenAI > Anthropic
         Returns: (response_text, cost)
         """
-        # Try OpenAI first (cheapest paid option - $0.002/assignment)
+        # Try Groq first (FREE! - primary for all course building)
+        if self.groq_client:
+            try:
+                response = self.groq_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",  # Fast, high quality, FREE!
+                    messages=[
+                        {"role": "system", "content": system} if system else {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=2048,
+                    temperature=0.7
+                )
+
+                # Groq is FREE!
+                cost = 0.0
+
+                print(f"✅ Groq response (cost: FREE!)")
+                return response.choices[0].message.content, cost
+            except Exception as e:
+                print(f"⚠️  Groq failed: {e}, trying OpenAI...")
+
+        # Try OpenAI second (paid fallback)
         if self.openai_client:
             try:
                 response = self.openai_client.chat.completions.create(
@@ -317,30 +337,9 @@ class BonitaEngine:
                 print(f"✅ OpenAI response (cost: ${cost:.4f})")
                 return response.choices[0].message.content, cost
             except Exception as e:
-                print(f"⚠️  OpenAI failed: {e}, trying Groq...")
+                print(f"⚠️  OpenAI failed: {e}, falling back to Claude...")
 
-        # Try Groq second (FREE! 🎉)
-        if self.groq_client:
-            try:
-                response = self.groq_client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",  # Fast, high quality, FREE!
-                    messages=[
-                        {"role": "system", "content": system} if system else {"role": "system", "content": "You are a helpful assistant."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=2048,
-                    temperature=0.7
-                )
-
-                # Groq is FREE!
-                cost = 0.0
-
-                print(f"✅ Groq response (cost: FREE!)")
-                return response.choices[0].message.content, cost
-            except Exception as e:
-                print(f"⚠️  Groq failed: {e}, falling back to Claude...")
-
-        # Fallback to Claude (most expensive but highest quality)
+        # Last resort: Claude (most expensive)
         if self.anthropic_client:
             response = self.anthropic_client.messages.create(
                 model="claude-sonnet-4-20250514",

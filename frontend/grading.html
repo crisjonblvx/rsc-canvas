@@ -1030,6 +1030,7 @@
         let currentCanvasUrl = null;
         let currentRubric = null;
         let gradingSession = null;
+        let _assignmentsList = []; // cached list for onclick lookup
 
         // API Base URL
         const API_BASE = 'https://facultyflow-production.up.railway.app';
@@ -1099,6 +1100,8 @@
 
         // Render the list of assignments across all courses
         function renderAssignmentsList(assignments) {
+            _assignmentsList = assignments; // cache for index-based lookup
+
             if (!assignments.length) {
                 document.getElementById('app-container').innerHTML = `
                     <div class="empty-state">
@@ -1113,11 +1116,11 @@
                 return;
             }
 
-            const cards = assignments.map(a => {
+            const cards = assignments.map((a, idx) => {
                 const dueDate = a.due_at ? new Date(a.due_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : 'No due date';
                 const courseName = a.course_name || a.course_code || `Course ${a.course_id}`;
                 return `
-                    <div class="assignment-card" style="cursor:pointer" onclick="selectAssignment('${a.course_id}', '${a.id}', ${JSON.stringify(JSON.stringify(a))})">
+                    <div class="assignment-card" style="cursor:pointer" onclick="selectAssignment(${idx})">
                         <div class="assignment-header">
                             <div>
                                 <h3>${a.name}</h3>
@@ -1130,7 +1133,7 @@
                             <div class="stat"><label>Points:</label><value>${a.points_possible ?? '—'}</value></div>
                         </div>
                         <div class="assignment-actions">
-                            <button class="btn btn-primary btn-ai" onclick="event.stopPropagation(); selectAssignment('${a.course_id}', '${a.id}', ${JSON.stringify(JSON.stringify(a))})">
+                            <button class="btn btn-primary btn-ai" onclick="event.stopPropagation(); selectAssignment(${idx})">
                                 ✨ Grade with AI
                             </button>
                         </div>
@@ -1147,15 +1150,13 @@
             `;
         }
 
-        // User selects a specific assignment from the list
-        function selectAssignment(courseId, assignmentId, assignmentJson) {
-            currentCourseId = courseId;
-            currentAssignmentId = assignmentId;
-            try {
-                currentAssignment = JSON.parse(assignmentJson);
-            } catch(e) {
-                currentAssignment = {};
-            }
+        // User selects a specific assignment from the list by index
+        function selectAssignment(idx) {
+            const a = _assignmentsList[idx];
+            if (!a) return;
+            currentCourseId = String(a.course_id);
+            currentAssignmentId = String(a.id);
+            currentAssignment = a;
             loadAssignment();
         }
 

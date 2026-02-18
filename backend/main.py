@@ -764,11 +764,25 @@ async def build_course(course: CourseRequest, user=Depends(verify_token)):
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint with DB diagnostics"""
+    db_ok = False
+    db_error = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        cursor.close()
+        conn.close()
+        db_ok = True
+    except Exception as e:
+        db_error = f"{type(e).__name__}: {str(e)}"
     return {
-        "status": "healthy",
+        "status": "healthy" if db_ok else "degraded",
         "timestamp": datetime.utcnow().isoformat(),
-        "bonita": "online"
+        "bonita": "online",
+        "database": db_ok,
+        "db_error": db_error,
+        "database_url_set": bool(os.getenv('DATABASE_URL'))
     }
 
 # ============================================================================
@@ -989,28 +1003,6 @@ if stripe.api_key:
     print(f"Stripe configured with key ending in ...{stripe.api_key[-4:]}")
 else:
     print("WARNING: STRIPE_SECRET_KEY is not set! Payment features will not work.")
-
-@app.get("/api/health")
-async def health_check():
-    """Check overall system health (no auth required for diagnostics)"""
-    db_ok = False
-    db_error = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1")
-        cursor.close()
-        conn.close()
-        db_ok = True
-    except Exception as e:
-        db_error = f"{type(e).__name__}: {str(e)}"
-
-    return {
-        "status": "ok" if db_ok else "degraded",
-        "database": {"connected": db_ok, "error": db_error},
-        "stripe": {"configured": bool(stripe.api_key)},
-        "database_url_set": bool(os.getenv('DATABASE_URL'))
-    }
 
 @app.get("/api/stripe/status")
 async def stripe_status():

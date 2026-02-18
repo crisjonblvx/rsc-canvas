@@ -831,11 +831,11 @@ def get_db_connection():
 async def get_current_user_from_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Get current user from session token"""
     token = credentials.credentials
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
+    conn = None
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
         cursor.execute("""
             SELECT s.user_id, s.expires_at, u.email, u.role, u.is_demo, u.demo_expires_at
             FROM sessions s
@@ -865,9 +865,15 @@ async def get_current_user_from_token(credentials: HTTPAuthorizationCredentials 
             "is_demo": is_demo
         }
 
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Auth error: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail="Database connection error. Please try again.")
     finally:
-        cursor.close()
-        conn.close()
+        if conn:
+            try: conn.close()
+            except Exception: pass
 
 # ============================================================================
 # AUTH ENDPOINTS
@@ -876,11 +882,10 @@ async def get_current_user_from_token(credentials: HTTPAuthorizationCredentials 
 @app.post("/api/auth/login")
 async def login(request: LoginRequest):
     """Login endpoint"""
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
+    conn = None
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
         # Get user
         cursor.execute("""
             SELECT id, email, password_hash, role, is_active, is_demo, demo_expires_at, full_name
@@ -946,11 +951,16 @@ async def login(request: LoginRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Login error: {e}")
-        raise HTTPException(status_code=500, detail="Login failed")
+        print(f"Login error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
     finally:
-        cursor.close()
-        conn.close()
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 @app.post("/api/auth/logout")
@@ -979,6 +989,28 @@ if stripe.api_key:
     print(f"Stripe configured with key ending in ...{stripe.api_key[-4:]}")
 else:
     print("WARNING: STRIPE_SECRET_KEY is not set! Payment features will not work.")
+
+@app.get("/api/health")
+async def health_check():
+    """Check overall system health (no auth required for diagnostics)"""
+    db_ok = False
+    db_error = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        cursor.close()
+        conn.close()
+        db_ok = True
+    except Exception as e:
+        db_error = f"{type(e).__name__}: {str(e)}"
+
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "database": {"connected": db_ok, "error": db_error},
+        "stripe": {"configured": bool(stripe.api_key)},
+        "database_url_set": bool(os.getenv('DATABASE_URL'))
+    }
 
 @app.get("/api/stripe/status")
 async def stripe_status():

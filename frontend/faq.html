@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAQ — ReadySetClass™</title>
+    <link rel="icon" href="/assets/ReadySetClass_alpha_badge.png" type="image/png">
+    <meta name="description" content="Frequently asked questions about ReadySetClass — AI-powered Canvas course builder and grading tool for educators.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy: #1E3A5F;
+            --gold: #C9A961;
+            --cream: #F5F2E8;
+            --text: #2C3E50;
+            --light: #666;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--text); }
+
+        /* Header */
+        .header {
+            background: white;
+            border-bottom: 2px solid rgba(0,0,0,0.06);
+            padding: 1.25rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header img { height: 36px; width: auto; cursor: pointer; }
+        .header-links { display: flex; gap: 1.5rem; align-items: center; }
+        .header-links a { text-decoration: none; color: var(--light); font-size: 0.9rem; font-weight: 500; }
+        .header-links a:hover { color: var(--navy); }
+        .btn-dashboard {
+            background: var(--navy); color: white; padding: 0.5rem 1.1rem;
+            border-radius: 8px; font-size: 0.88rem; font-weight: 600; text-decoration: none;
+        }
+
+        /* Hero */
+        .hero {
+            background: linear-gradient(135deg, var(--navy) 0%, #2d5080 100%);
+            color: white;
+            text-align: center;
+            padding: 4rem 2rem 3rem;
+        }
+        .hero h1 { font-family: 'Sora', sans-serif; font-size: 2.4rem; font-weight: 800; margin-bottom: 0.75rem; }
+        .hero p { font-size: 1.05rem; opacity: 0.85; max-width: 520px; margin: 0 auto 1.75rem; }
+        .search-wrap { max-width: 460px; margin: 0 auto; position: relative; }
+        .search-wrap input {
+            width: 100%; padding: 0.85rem 1rem 0.85rem 2.75rem;
+            border-radius: 10px; border: none; font-size: 0.95rem;
+            font-family: inherit; outline: none;
+        }
+        .search-wrap .icon { position: absolute; left: 0.85rem; top: 50%; transform: translateY(-50%); font-size: 1rem; }
+
+        /* Main layout */
+        .container { max-width: 860px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+
+        /* Category pills */
+        .categories { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 2.5rem; }
+        .cat-pill {
+            padding: 0.4rem 1rem; border-radius: 99px; font-size: 0.85rem; font-weight: 600;
+            cursor: pointer; border: 2px solid transparent; background: white; color: var(--navy);
+            transition: all 0.2s;
+        }
+        .cat-pill.active, .cat-pill:hover { background: var(--navy); color: white; }
+
+        /* FAQ sections */
+        .faq-section { margin-bottom: 3rem; }
+        .faq-section-title {
+            font-family: 'Sora', sans-serif; font-size: 1.15rem; font-weight: 700;
+            color: var(--navy); margin-bottom: 1rem; padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--gold); display: inline-block;
+        }
+
+        /* Accordion items */
+        .faq-item {
+            background: white; border-radius: 10px; margin-bottom: 0.6rem;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06); overflow: hidden;
+        }
+        .faq-q {
+            width: 100%; text-align: left; padding: 1.1rem 1.25rem;
+            background: none; border: none; cursor: pointer;
+            font-family: inherit; font-size: 0.97rem; font-weight: 600; color: var(--text);
+            display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+        }
+        .faq-q:hover { background: #fafafa; }
+        .faq-q .arrow { font-size: 0.75rem; color: var(--gold); transition: transform 0.25s; flex-shrink:0; }
+        .faq-q.open .arrow { transform: rotate(180deg); }
+        .faq-a {
+            max-height: 0; overflow: hidden; transition: max-height 0.3s ease;
+            padding: 0 1.25rem;
+        }
+        .faq-a.open { max-height: 600px; padding: 0 1.25rem 1.1rem; }
+        .faq-a p, .faq-a li { font-size: 0.92rem; color: #555; line-height: 1.7; }
+        .faq-a ol, .faq-a ul { padding-left: 1.3rem; margin-top: 0.5rem; }
+        .faq-a li { margin-bottom: 0.3rem; }
+        .faq-a code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 0.88rem; }
+        .faq-a .callout {
+            background: var(--cream); border-left: 3px solid var(--gold);
+            padding: 0.65rem 0.9rem; border-radius: 6px; margin-top: 0.75rem;
+            font-size: 0.88rem; color: #555;
+        }
+
+        /* Still need help */
+        .help-cta {
+            text-align: center; background: white; border-radius: 16px;
+            padding: 2.5rem 2rem; box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+            margin-top: 2rem;
+        }
+        .help-cta h3 { font-family: 'Sora', sans-serif; font-size: 1.3rem; color: var(--navy); margin-bottom: 0.5rem; }
+        .help-cta p { color: var(--light); font-size: 0.92rem; margin-bottom: 1.25rem; }
+        .help-cta a {
+            display: inline-block; background: var(--navy); color: white;
+            padding: 0.7rem 1.75rem; border-radius: 10px; font-weight: 600;
+            text-decoration: none; font-size: 0.92rem;
+        }
+
+        @media (max-width: 600px) {
+            .hero h1 { font-size: 1.75rem; }
+            .header-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<header class="header">
+    <img src="/assets/ReadySetClass_alpha_full.png" alt="ReadySetClass" onclick="window.location.href='/'">
+    <div class="header-links">
+        <a href="/pricing.html">Pricing</a>
+        <a href="/dashboard-v2.html" class="btn-dashboard">Dashboard →</a>
+    </div>
+</header>
+
+<div class="hero">
+    <h1>Frequently Asked Questions</h1>
+    <p>Everything educators need to know about ReadySetClass — from setup to AI grading.</p>
+    <div class="search-wrap">
+        <span class="icon">🔍</span>
+        <input type="text" id="faq-search" placeholder="Search questions..." oninput="filterFAQ(this.value)">
+    </div>
+</div>
+
+<div class="container">
+
+    <div class="categories">
+        <div class="cat-pill active" onclick="filterCat('all', this)">All</div>
+        <div class="cat-pill" onclick="filterCat('getting-started', this)">Getting Started</div>
+        <div class="cat-pill" onclick="filterCat('canvas', this)">Canvas Setup</div>
+        <div class="cat-pill" onclick="filterCat('ai-grading', this)">AI Grading</div>
+        <div class="cat-pill" onclick="filterCat('pricing', this)">Pricing</div>
+        <div class="cat-pill" onclick="filterCat('security', this)">Privacy & Security</div>
+    </div>
+
+    <!-- Getting Started -->
+    <div class="faq-section" data-cat="getting-started">
+        <div class="faq-section-title">Getting Started</div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                What is ReadySetClass? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>ReadySetClass is an AI-powered tool that connects to your Canvas LMS account and helps you build courses, grade assignments, and create content dramatically faster. What normally takes hours — writing quizzes, rubrics, module content, syllabi — takes minutes. AI grading reduces a 10-hour grading session to about 1 hour.</p>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                Who is it for? K-12 or college? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>Both. ReadySetClass works with any institution using <strong>Instructure Canvas LMS</strong> — K-12 schools, community colleges, universities, and professional training programs. As long as your school uses Canvas, it works.</p>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                Do I need to know anything technical to use it? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>No coding or technical knowledge required. The only slightly technical step is generating a Canvas API token — we walk you through it step by step in the onboarding. After that, everything is point-and-click.</p>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                Does my school need to approve this tool? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>ReadySetClass uses your personal Canvas API token — the same type of token any instructor can generate themselves from their own Canvas settings. It does not require admin access or school-level approval to generate a token. However, some institutions have policies about third-party integrations, so check with your IT department if you're unsure.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Canvas Setup -->
+    <div class="faq-section" data-cat="canvas">
+        <div class="faq-section-title">Canvas Setup</div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                What is a Canvas API token and where do I get one? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>A Canvas API token is like a password that lets ReadySetClass communicate with Canvas on your behalf. Here's how to get one:</p>
+                <ol>
+                    <li>Log into Canvas at your school's URL</li>
+                    <li>Click your <strong>profile picture</strong> (top right corner) → <strong>Settings</strong></li>
+                    <li>Scroll down to <strong>Approved Integrations</strong></li>
+                    <li>Click <strong>+ New Access Token</strong></li>
+                    <li>Name it "ReadySetClass" and click <strong>Generate Token</strong></li>
+                    <li>Copy it immediately — Canvas only shows it once</li>
+                </ol>
+                <div class="callout">If you lose the token, just delete it in Canvas Settings and generate a new one. It only takes 30 seconds.</div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                What is my Canvas URL? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>It's the web address you use to log into Canvas at your school. It looks like:</p>
+                <ul>
+                    <li><code>https://yourschool.instructure.com</code></li>
+                    <li><code>https://canvas.yourschool.edu</code></li>
+                    <li><code>https://yourschool.canvas.com</code></li>
+                </ul>
+                <p>Just look at your browser's address bar while logged into Canvas — copy everything up to (and including) the domain, with no trailing slash.</p>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                My Canvas connection failed. What do I do? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>The most common causes of a failed connection:</p>
+                <ul>
+                    <li><strong>Token copied incorrectly</strong> — make sure there are no extra spaces or characters. Try copying it again.</li>
+                    <li><strong>Token expired or revoked</strong> — go to Canvas Settings and generate a new token.</li>
+                    <li><strong>Wrong Canvas URL</strong> — double-check the URL by logging into Canvas and copying the address bar.</li>
+                    <li><strong>Token lacks permissions</strong> — when creating the token in Canvas, leave the "Expires" field blank for full access.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                Will ReadySetClass post things to Canvas without me knowing? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>No. ReadySetClass never auto-publishes anything. Every action — creating a quiz, posting grades, publishing an assignment — requires you to click a "Publish to Canvas" button. You are always in control of what goes live.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Grading -->
+    <div class="faq-section" data-cat="ai-grading">
+        <div class="faq-section-title">AI Grading</div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                How does AI grading work? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>When students submit assignments to Canvas, ReadySetClass downloads each submission, reads the content, and grades it against your rubric using AI. Here's the full flow:</p>
+                <ol>
+                    <li>Go to <strong>✨ AI Grader</strong> in the sidebar</li>
+                    <li>Select the assignment with ungraded submissions</li>
+                    <li>Confirm your rubric (imported from Canvas automatically, or type one in)</li>
+                    <li>Click <strong>Start AI Grading</strong> — AI grades all submissions in 3–5 minutes</li>
+                    <li>Review each grade, edit scores and feedback as needed</li>
+                    <li>Click <strong>Post to Canvas</strong> — grades go live in your Canvas gradebook</li>
+                </ol>
+                <div class="callout">AI is your assistant, not your replacement. Every grade is reviewed and approved by you before students see it.</div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                What file types does AI grading support? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>ReadySetClass can read and grade submissions in these formats:</p>
+                <ul>
+                    <li><strong>PDF</strong> (.pdf)</li>
+                    <li><strong>Word documents</strong> (.docx)</li>
+                    <li><strong>Excel spreadsheets</strong> (.xlsx)</li>
+                    <li><strong>Plain text</strong> (.txt)</li>
+                    <li><strong>CSV files</strong> (.csv)</li>
+                    <li><strong>Canvas online text submissions</strong> (typed directly in Canvas)</li>
+                </ul>
+                <div class="callout">Submissions that are only a URL (website link) will be flagged for manual review since AI can't browse the web.</div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                Do I need a rubric set up in Canvas first? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>No. If your Canvas assignment already has a rubric attached, ReadySetClass imports it automatically. If there's no rubric, you can type your grading criteria directly in the AI Grader setup — name each criterion and assign point values. It takes under a minute.</p>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                How accurate is the AI grading? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>Accuracy depends on the clarity of your rubric. With a detailed rubric, AI grading is highly consistent — often more consistent than human grading across 20+ submissions where fatigue becomes a factor. That said:</p>
+                <ul>
+                    <li>AI grades may need adjustment for nuanced, subjective criteria</li>
+                    <li>Low-confidence grades are flagged so you know which ones to look at more carefully</li>
+                    <li>You review and edit every grade before posting</li>
+                </ul>
+                <p>Think of it like a very fast first pass — you do the final call.</p>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                Can AI detect if a student used ChatGPT? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>There is an optional <strong>AI content check</strong> flag in the grading setup. When enabled, the AI will note if a submission has patterns commonly associated with AI-generated text and flag it for your review. This is not a definitive detection tool — treat it as an indicator that warrants a closer look, not a verdict.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="faq-section" data-cat="pricing">
+        <div class="faq-section-title">Pricing & Plans</div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                Is there a free trial? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>Yes. You can create a free demo account instantly — no credit card required. The demo gives you a fully functional account for 24 hours so you can explore every feature before committing. Click <strong>"Try Free Demo"</strong> on the login page to start.</p>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                What's included in the Pro plan? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>The Pro plan includes:</p>
+                <ul>
+                    <li>Unlimited AI course generation (quizzes, assignments, modules, syllabi, pages, discussions)</li>
+                    <li>Unlimited AI grading sessions</li>
+                    <li>Direct Canvas publishing</li>
+                    <li>All file format support for grading (PDF, DOCX, Excel)</li>
+                    <li>Multi-language support</li>
+                    <li>Priority support</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                Can I cancel anytime? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>Yes. Cancel anytime from your <a href="/account.html" style="color:var(--navy);font-weight:600;">Account Settings</a> page. Your access continues until the end of your current billing period. No cancellation fees.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Privacy & Security -->
+    <div class="faq-section" data-cat="security">
+        <div class="faq-section-title">Privacy & Security</div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                Is ReadySetClass FERPA compliant? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>ReadySetClass is designed with FERPA considerations in mind. Student submission content is processed only for the purpose of generating grades — it is not stored permanently, sold, or used for any purpose other than providing the grading result to you. We recommend reviewing our privacy policy and, if required by your institution, completing a data processing agreement before use in credit-bearing courses.</p>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                How is my Canvas API token stored? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>Your Canvas API token is encrypted using AES-256 symmetric encryption (Fernet) before being stored in our database. It is never logged, displayed in plaintext after submission, or shared with third parties. Only ReadySetClass servers use it to make requests to Canvas on your behalf.</p>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-q" onclick="toggleFAQ(this)">
+                Can ReadySetClass access my entire Canvas account? <span class="arrow">▼</span>
+            </button>
+            <div class="faq-a">
+                <p>ReadySetClass uses your API token to access the courses and assignments you interact with in the app. It can technically read any course you have access to in Canvas (since the token has your full permissions), but it only requests data for courses you actively select. You can revoke the token at any time from your Canvas Settings to immediately cut off access.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="help-cta">
+        <h3>Still have questions?</h3>
+        <p>We're here to help. Reach out and we'll get back to you quickly.</p>
+        <a href="mailto:support@readysetclass.app">Contact Support →</a>
+    </div>
+
+</div>
+
+<script>
+    function toggleFAQ(btn) {
+        const answer = btn.nextElementSibling;
+        const isOpen = btn.classList.contains('open');
+        // Close all
+        document.querySelectorAll('.faq-q.open').forEach(b => {
+            b.classList.remove('open');
+            b.nextElementSibling.classList.remove('open');
+        });
+        // Open clicked if it was closed
+        if (!isOpen) {
+            btn.classList.add('open');
+            answer.classList.add('open');
+        }
+    }
+
+    function filterFAQ(query) {
+        const q = query.toLowerCase();
+        document.querySelectorAll('.faq-item').forEach(item => {
+            const text = item.textContent.toLowerCase();
+            item.style.display = text.includes(q) ? '' : 'none';
+        });
+        document.querySelectorAll('.faq-section').forEach(sec => {
+            const visible = [...sec.querySelectorAll('.faq-item')].some(i => i.style.display !== 'none');
+            sec.style.display = visible ? '' : 'none';
+        });
+    }
+
+    function filterCat(cat, pill) {
+        document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        document.getElementById('faq-search').value = '';
+        document.querySelectorAll('.faq-item').forEach(i => i.style.display = '');
+        if (cat === 'all') {
+            document.querySelectorAll('.faq-section').forEach(s => s.style.display = '');
+        } else {
+            document.querySelectorAll('.faq-section').forEach(s => {
+                s.style.display = s.dataset.cat === cat ? '' : 'none';
+            });
+        }
+    }
+</script>
+
+</body>
+</html>

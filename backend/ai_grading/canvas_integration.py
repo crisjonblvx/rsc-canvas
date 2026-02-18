@@ -5,10 +5,57 @@ Handles fetching submissions from Canvas and posting grades back.
 """
 
 import requests
+import io
+import re
 from typing import List, Dict, Optional
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_pdf_bytes(data: bytes) -> str:
+    """Extract text from PDF bytes using PyPDF2."""
+    try:
+        import PyPDF2
+        reader = PyPDF2.PdfReader(io.BytesIO(data))
+        text = ""
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text + "\n"
+        return text.strip()
+    except Exception as e:
+        logger.warning(f"PDF parsing failed: {e}")
+        return ""
+
+
+def _parse_docx_bytes(data: bytes) -> str:
+    """Extract text from DOCX bytes using python-docx."""
+    try:
+        import docx
+        doc = docx.Document(io.BytesIO(data))
+        paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+        return "\n".join(paragraphs).strip()
+    except Exception as e:
+        logger.warning(f"DOCX parsing failed: {e}")
+        return ""
+
+
+def _parse_xlsx_bytes(data: bytes) -> str:
+    """Extract text from Excel bytes - read cell values as plain text."""
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+        lines = []
+        for sheet in wb.worksheets:
+            for row in sheet.iter_rows(values_only=True):
+                row_text = "\t".join(str(c) for c in row if c is not None)
+                if row_text.strip():
+                    lines.append(row_text)
+        return "\n".join(lines).strip()
+    except Exception as e:
+        logger.warning(f"Excel parsing failed: {e}")
+        return ""
 
 
 class CanvasGradingIntegration:
@@ -22,13 +69,6 @@ class CanvasGradingIntegration:
     """
 
     def __init__(self, canvas_url: str, canvas_token: str):
-        """
-        Initialize Canvas integration
-
-        Args:
-            canvas_url: Canvas instance URL (e.g., "https://canvas.instructure.com")
-            canvas_token: Canvas API access token
-        """
         self.canvas_url = canvas_url.rstrip("/")
         self.headers = {
             "Authorization": f"Bearer {canvas_token}",
@@ -36,27 +76,14 @@ class CanvasGradingIntegration:
         }
         self.api_base = f"{self.canvas_url}/api/v1"
 
-    def get_assignment_details(
-        self,
-        course_id: str,
-        assignment_id: str
-    ) -> Dict:
-        """
-        Get assignment details including rubric
-
-        Returns assignment metadata and rubric information
-        """
-
+    def get_assignment_details(self, course_id: str, assignment_id: str) -> Dict:
+        """Get assignment details including rubric"""
         url = f"{self.api_base}/courses/{course_id}/assignments/{assignment_id}"
-
-        params = {
-            "include[]": ["rubric", "rubric_assessment"]
-        }
+        params = {"include[]": ["rubric", "rubric_assessment"]}
 
         try:
             response = requests.get(url, headers=self.headers, params=params, timeout=30)
             response.raise_for_status()
-
             assignment = response.json()
 
             return {
@@ -68,7 +95,6 @@ class CanvasGradingIntegration:
                 "rubric": assignment.get("rubric", []),
                 "submission_types": assignment.get("submission_types", [])
             }
-
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to fetch assignment details: {e}")
             raise Exception(f"Canvas API error: {str(e)}")
@@ -79,20 +105,8 @@ class CanvasGradingIntegration:
         assignment_id: str,
         include_unsubmitted: bool = False
     ) -> List[Dict]:
-        """
-        Fetch all submissions for an assignment
-
-        Args:
-            course_id: Canvas course ID
-            assignment_id: Canvas assignment ID
-            include_unsubmitted: Whether to include students who haven't submitted
-
-        Returns:
-            List of submission dicts with student info and submission content
-        """
-
+        """Fetch all submissions for an assignment, parsing file attachments."""
         url = f"{self.api_base}/courses/{course_id}/assignments/{assignment_id}/submissions"
-
         params = {
             "include[]": ["user", "submission_comments", "rubric_assessment"],
             "per_page": 100
@@ -101,27 +115,21 @@ class CanvasGradingIntegration:
         try:
             response = requests.get(url, headers=self.headers, params=params, timeout=30)
             response.raise_for_status()
-
             submissions = response.json()
 
-            # Format submissions for AI grading
             formatted = []
-
             for sub in submissions:
                 workflow_state = sub.get("workflow_state", "")
 
-                # Skip unsubmitted unless requested
                 if workflow_state not in ["submitted", "graded"] and not include_unsubmitted:
                     continue
 
-                # Extract submission text/content
                 submission_text = self._extract_submission_text(sub)
 
-                # Only include if there's actual content
                 if not submission_text or len(submission_text.strip()) < 10:
                     continue
 
-                formatted_sub = {
+                formatted.append({
                     "submission_id": str(sub.get("id")),
                     "student_id": str(sub.get("user_id")),
                     "student_name": sub.get("user", {}).get("name", "Unknown Student"),
@@ -129,12 +137,10 @@ class CanvasGradingIntegration:
                     "submission_text": submission_text,
                     "submitted_at": sub.get("submitted_at"),
                     "workflow_state": workflow_state,
-                    "score": sub.get("score"),  # Existing grade if any
+                    "score": sub.get("score"),
                     "attachments": sub.get("attachments", []),
                     "submission_type": sub.get("submission_type")
-                }
-
-                formatted.append(formatted_sub)
+                })
 
             logger.info(f"Fetched {len(formatted)} submissions for assignment {assignment_id}")
             return formatted
@@ -145,37 +151,82 @@ class CanvasGradingIntegration:
 
     def _extract_submission_text(self, submission: Dict) -> str:
         """
-        Extract text content from various submission types
-
-        Handles:
-        - online_text_entry (HTML body)
-        - online_upload (would need file parsing - TODO)
-        - online_url (would fetch URL content - TODO)
+        Extract text content from various submission types.
+        Supports: text entry, PDF, DOCX, TXT, Excel, URL submissions.
         """
-
         submission_type = submission.get("submission_type")
 
-        # Text submission
+        # ── Plain text submission ──────────────────────────────────────────
         if submission_type == "online_text_entry":
             body = submission.get("body", "")
-            # Strip HTML tags (basic)
-            import re
-            text = re.sub(r'<[^>]+>', '', body)
-            text = text.replace('&nbsp;', ' ').replace('&amp;', '&')
-            return text.strip()
+            text = re.sub(r'<[^>]+>', ' ', body)
+            text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+            return re.sub(r'\s+', ' ', text).strip()
 
-        # File upload - return filename for now
-        # TODO: Parse common file types (PDF, DOCX, TXT)
+        # ── File upload ────────────────────────────────────────────────────
         elif submission_type == "online_upload":
             attachments = submission.get("attachments", [])
-            if attachments:
-                filenames = [att.get("filename", "") for att in attachments]
-                return f"[File submission: {', '.join(filenames)}]"
+            all_text = []
 
-        # URL submission
+            for att in attachments:
+                file_url = att.get("url") or att.get("download_url")
+                filename = att.get("filename", "").lower()
+                content_type = att.get("content-type", "").lower()
+
+                if not file_url:
+                    continue
+
+                try:
+                    file_resp = requests.get(
+                        file_url,
+                        headers={"Authorization": self.headers["Authorization"]},
+                        timeout=60
+                    )
+                    file_resp.raise_for_status()
+                    data = file_resp.content
+
+                    # PDF
+                    if "pdf" in content_type or filename.endswith(".pdf"):
+                        text = _parse_pdf_bytes(data)
+                        if text:
+                            all_text.append(f"[PDF: {att.get('filename')}]\n{text}")
+
+                    # DOCX / DOC
+                    elif "word" in content_type or filename.endswith((".docx", ".doc")):
+                        text = _parse_docx_bytes(data)
+                        if text:
+                            all_text.append(f"[DOCX: {att.get('filename')}]\n{text}")
+
+                    # Excel / CSV
+                    elif "spreadsheet" in content_type or "excel" in content_type or filename.endswith((".xlsx", ".xls")):
+                        text = _parse_xlsx_bytes(data)
+                        if text:
+                            all_text.append(f"[Excel: {att.get('filename')}]\n{text}")
+
+                    elif filename.endswith(".csv"):
+                        text = data.decode("utf-8", errors="ignore")
+                        if text.strip():
+                            all_text.append(f"[CSV: {att.get('filename')}]\n{text.strip()}")
+
+                    # Plain text
+                    elif "text/plain" in content_type or filename.endswith(".txt"):
+                        text = data.decode("utf-8", errors="ignore").strip()
+                        if text:
+                            all_text.append(f"[TXT: {att.get('filename')}]\n{text}")
+
+                    else:
+                        logger.info(f"Unsupported file type: {filename} ({content_type})")
+
+                except Exception as e:
+                    logger.warning(f"Could not parse attachment {filename}: {e}")
+                    all_text.append(f"[Could not read: {att.get('filename')}]")
+
+            return "\n\n".join(all_text) if all_text else ""
+
+        # ── URL submission ─────────────────────────────────────────────────
         elif submission_type == "online_url":
             url = submission.get("url", "")
-            return f"[URL submission: {url}]"
+            return f"[URL submission: {url}]\n(URL content not fetched — professor should review manually)"
 
         return ""
 
@@ -188,87 +239,29 @@ class CanvasGradingIntegration:
         comment: Optional[str] = None,
         rubric_assessment: Optional[Dict] = None
     ) -> Dict:
-        """
-        Post a grade to Canvas for a specific student
-
-        Args:
-            course_id: Canvas course ID
-            assignment_id: Canvas assignment ID
-            student_id: Canvas student ID
-            score: Numeric score
-            comment: Optional feedback comment
-            rubric_assessment: Optional rubric scores dict
-
-        Returns:
-            Canvas submission object
-        """
-
+        """Post a grade to Canvas for a specific student"""
         url = f"{self.api_base}/courses/{course_id}/assignments/{assignment_id}/submissions/{student_id}"
 
-        data = {
-            "submission": {
-                "posted_grade": str(score)
-            }
-        }
+        data = {"submission": {"posted_grade": str(score)}}
 
-        # Add comment/feedback if provided
         if comment:
-            data["comment"] = {
-                "text_comment": comment
-            }
+            data["comment"] = {"text_comment": comment}
 
-        # Add rubric assessment if provided
         if rubric_assessment:
             data["rubric_assessment"] = rubric_assessment
 
         try:
             response = requests.put(url, headers=self.headers, json=data, timeout=30)
             response.raise_for_status()
-
             logger.info(f"Posted grade {score} for student {student_id}")
             return response.json()
-
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to post grade for student {student_id}: {e}")
             raise Exception(f"Canvas API error: {str(e)}")
 
-    def post_grades_batch(
-        self,
-        course_id: str,
-        assignment_id: str,
-        grades: List[Dict]
-    ) -> Dict:
-        """
-        Post multiple grades at once
-
-        Args:
-            grades: List of dicts:
-                [
-                    {
-                        "student_id": "12345",
-                        "score": 85.5,
-                        "comment": "Great work!",
-                        "rubric_assessment": {...}
-                    },
-                    ...
-                ]
-
-        Returns:
-            Dict with success and failure counts:
-            {
-                "success": [list of successful submissions],
-                "failed": [list of failed submissions with errors],
-                "success_count": 23,
-                "failed_count": 2
-            }
-        """
-
-        results = {
-            "success": [],
-            "failed": [],
-            "success_count": 0,
-            "failed_count": 0
-        }
+    def post_grades_batch(self, course_id: str, assignment_id: str, grades: List[Dict]) -> Dict:
+        """Post multiple grades at once"""
+        results = {"success": [], "failed": [], "success_count": 0, "failed_count": 0}
 
         for grade in grades:
             try:
@@ -280,58 +273,30 @@ class CanvasGradingIntegration:
                     comment=grade.get("comment"),
                     rubric_assessment=grade.get("rubric_assessment")
                 )
-
-                results["success"].append({
-                    "student_id": grade["student_id"],
-                    "score": grade["score"],
-                    "canvas_response": result
-                })
+                results["success"].append({"student_id": grade["student_id"], "score": grade["score"], "canvas_response": result})
                 results["success_count"] += 1
-
             except Exception as e:
                 logger.error(f"Failed to post grade for {grade['student_id']}: {e}")
-                results["failed"].append({
-                    "student_id": grade["student_id"],
-                    "score": grade["score"],
-                    "error": str(e)
-                })
+                results["failed"].append({"student_id": grade["student_id"], "score": grade["score"], "error": str(e)})
                 results["failed_count"] += 1
 
         logger.info(f"Batch grading complete: {results['success_count']} success, {results['failed_count']} failed")
         return results
 
-    def get_course_assignments(
-        self,
-        course_id: str,
-        include_ungraded: bool = True
-    ) -> List[Dict]:
-        """
-        Get all assignments for a course
-
-        Useful for listing assignments that need grading
-
-        Returns list of assignment summaries
-        """
-
+    def get_course_assignments(self, course_id: str, include_ungraded: bool = True) -> List[Dict]:
+        """Get all assignments for a course"""
         url = f"{self.api_base}/courses/{course_id}/assignments"
-
-        params = {
-            "per_page": 100,
-            "order_by": "due_at"
-        }
+        params = {"per_page": 100, "order_by": "due_at"}
 
         try:
             response = requests.get(url, headers=self.headers, params=params, timeout=30)
             response.raise_for_status()
-
             assignments = response.json()
 
             formatted = []
             for assignment in assignments:
-                # Skip if no submissions
-                if not include_ungraded and assignment.get("has_submitted_submissions", False) == False:
+                if not include_ungraded and not assignment.get("has_submitted_submissions", False):
                     continue
-
                 formatted.append({
                     "id": assignment.get("id"),
                     "name": assignment.get("name"),
@@ -340,46 +305,26 @@ class CanvasGradingIntegration:
                     "needs_grading_count": assignment.get("needs_grading_count", 0),
                     "published": assignment.get("published", False)
                 })
-
             return formatted
 
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to fetch course assignments: {e}")
             raise Exception(f"Canvas API error: {str(e)}")
 
-    def get_submission_count(
-        self,
-        course_id: str,
-        assignment_id: str
-    ) -> Dict:
-        """
-        Get submission statistics for an assignment
-
-        Returns:
-            {
-                "total_students": 25,
-                "submitted": 23,
-                "graded": 5,
-                "needs_grading": 18
-            }
-        """
-
+    def get_submission_count(self, course_id: str, assignment_id: str) -> Dict:
+        """Get submission statistics for an assignment"""
         try:
             submissions = self.get_assignment_submissions(
                 course_id=course_id,
                 assignment_id=assignment_id,
                 include_unsubmitted=True
             )
-
-            stats = {
+            return {
                 "total_students": len(submissions),
                 "submitted": sum(1 for s in submissions if s["workflow_state"] in ["submitted", "graded"]),
                 "graded": sum(1 for s in submissions if s.get("score") is not None),
                 "needs_grading": sum(1 for s in submissions if s["workflow_state"] == "submitted" and s.get("score") is None)
             }
-
-            return stats
-
         except Exception as e:
             logger.error(f"Failed to get submission count: {e}")
             raise

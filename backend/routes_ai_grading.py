@@ -5,11 +5,14 @@ FastAPI endpoints for AI-powered grading workflow
 """
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 from datetime import datetime
 import logging
+import os
+import psycopg2
 
 from database import get_db, AIGradingSession, AIGrade, CanvasCredentials
 from ai_grading.grading_engine import AIGradingEngine
@@ -19,6 +22,47 @@ from canvas_auth import decrypt_token
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/ai-grading", tags=["ai-grading"])
+
+_grading_security = HTTPBearer()
+
+
+# ============================================================================
+# Auth
+# ============================================================================
+
+def get_current_grading_user(
+    credentials: HTTPAuthorizationCredentials = Depends(_grading_security)
+) -> int:
+    """Validate session token and return user_id."""
+    token = credentials.credentials
+    DATABASE_URL = os.getenv('DATABASE_URL', '')
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    conn = None
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT s.user_id FROM sessions s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.session_token = %s
+              AND u.is_active = TRUE
+              AND s.expires_at > NOW()
+        """, (token,))
+        result = cursor.fetchone()
+        cursor.close()
+        if not result:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        return result[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Auth error in grading routes: {e}")
+        raise HTTPException(status_code=500, detail="Authentication error")
+    finally:
+        if conn:
+            try: conn.close()
+            except Exception: pass
 
 
 # ============================================================================
@@ -44,20 +88,6 @@ class SessionStatusResponse(BaseModel):
     total_submissions: int
     graded_count: int
     progress_percent: float
-
-
-# ============================================================================
-# Helper Functions
-# ============================================================================
-
-def get_current_user_id() -> int:
-    """
-    Get current user ID from auth
-    TODO: Implement proper JWT auth
-    For now, returning placeholder
-    """
-    # This would normally come from JWT token
-    return 1
 
 
 async def grade_submissions_background(
@@ -137,7 +167,8 @@ async def grade_submissions_background(
 async def start_grading_session(
     request: StartGradingRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_grading_user)
 ):
     """
     Start a new AI grading session
@@ -147,7 +178,6 @@ async def start_grading_session(
     3. Start background task to grade all submissions
     4. Return session ID for progress tracking
     """
-    user_id = get_current_user_id()
 
     # Get Canvas credentials
     canvas_creds = db.query(CanvasCredentials).filter_by(user_id=user_id).first()
@@ -224,12 +254,10 @@ async def start_grading_session(
 @router.get("/sessions/{session_id}/status", response_model=SessionStatusResponse)
 async def get_session_status(
     session_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_grading_user)
 ):
-    """
-    Get status of grading session (for progress tracking UI)
-    """
-    user_id = get_current_user_id()
+    """Get status of grading session (for progress tracking UI)"""
 
     session = db.query(AIGradingSession).filter_by(
         id=session_id,
@@ -255,12 +283,10 @@ async def get_session_status(
 @router.get("/sessions/{session_id}/grades")
 async def get_session_grades(
     session_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_grading_user)
 ):
-    """
-    Get all grades for a session (for review interface)
-    """
-    user_id = get_current_user_id()
+    """Get all grades for a session (for review interface)"""
 
     session = db.query(AIGradingSession).filter_by(
         id=session_id,
@@ -307,12 +333,10 @@ async def get_session_grades(
 async def review_grade(
     grade_id: int,
     request: ReviewGradeRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_grading_user)
 ):
-    """
-    Professor reviews and approves/edits a grade
-    """
-    user_id = get_current_user_id()
+    """Professor reviews and approves/edits a grade"""
 
     grade = db.query(AIGrade).filter_by(id=grade_id).first()
 
@@ -359,12 +383,10 @@ async def review_grade(
 @router.post("/grades/{grade_id}/regenerate")
 async def regenerate_grade(
     grade_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_grading_user)
 ):
-    """
-    Regenerate AI grade for a submission
-    """
-    user_id = get_current_user_id()
+    """Regenerate AI grade for a submission"""
 
     grade = db.query(AIGrade).filter_by(id=grade_id).first()
 
@@ -412,12 +434,10 @@ async def regenerate_grade(
 @router.post("/sessions/{session_id}/post-to-canvas")
 async def post_grades_to_canvas(
     session_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_grading_user)
 ):
-    """
-    Post all reviewed grades to Canvas
-    """
-    user_id = get_current_user_id()
+    """Post all reviewed grades to Canvas"""
 
     session = db.query(AIGradingSession).filter_by(
         id=session_id,
@@ -498,14 +518,10 @@ async def post_grades_to_canvas(
 @router.get("/assignments/ready-to-grade")
 async def get_assignments_ready_to_grade(
     course_id: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_grading_user)
 ):
-    """
-    Get list of assignments that have submissions ready to grade
-
-    Used for the dashboard "Ready to Grade" section
-    """
-    user_id = get_current_user_id()
+    """Get list of assignments that have submissions ready to grade"""
 
     canvas_creds = db.query(CanvasCredentials).filter_by(user_id=user_id).first()
 

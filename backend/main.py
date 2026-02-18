@@ -446,7 +446,8 @@ Format in clean HTML for Canvas. Keep it practical and actionable."""
         num_questions: int = 10,
         difficulty: str = "medium",
         grade_level: str = "college",
-        language: str = "en"
+        language: str = "en",
+        tone: int = 3
     ) -> Dict:
         """Generate quiz questions with detailed context and grade-appropriate language (Groq - FREE!)"""
 
@@ -455,6 +456,9 @@ Format in clean HTML for Canvas. Keep it practical and actionable."""
 
         # Get language name
         language_name = LANGUAGE_MAP.get(language, "English")
+
+        # Get tone description
+        tone_desc = AI_TONE_MAP.get(tone, AI_TONE_MAP[3])
 
         system = f"You are Bonita, an AI assistant helping educators create {grade_level} quiz questions that assess student understanding at the appropriate reading level."
 
@@ -486,6 +490,8 @@ CRITICAL READING LEVEL REQUIREMENTS:
 {level_info['instructions']}
 
 {level_info['example_words']}
+
+Tone: {tone_desc}
 
 Requirements:
 - {num_questions} questions total
@@ -789,6 +795,7 @@ class QuizGenerateRequest(BaseModel):
     difficulty: str = "medium"
     grade_level: str = "college"  # NEW: elementary-k2, elementary-35, middle-68, high-912, college
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
+    tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
 
 class QuizUploadRequest(BaseModel):
     """Request to upload generated quiz to Canvas"""
@@ -1439,7 +1446,8 @@ async def generate_quiz_questions(request: QuizGenerateRequest):
             num_questions=request.num_questions,
             difficulty=request.difficulty,
             grade_level=request.grade_level,
-            language=request.language
+            language=request.language,
+            tone=request.tone
         )
 
         return {
@@ -1642,15 +1650,19 @@ class AIAssignmentRequest(BaseModel):
     requirements: str
     points: int = 100
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
+    tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
 
 
-ANNOUNCEMENT_TONE_MAP = {
+AI_TONE_MAP = {
     1: "very formal and academic — use professional language, avoid contractions, maintain scholarly distance",
     2: "professional and clear — well-organized, polished, approachable",
     3: "balanced — professional yet warm, friendly tone",
     4: "friendly and conversational — warm, encouraging, use contractions naturally",
     5: "casual and personable — like a colleague talking to students, relaxed and approachable"
 }
+
+# Keep ANNOUNCEMENT_TONE_MAP as alias for backwards compatibility
+ANNOUNCEMENT_TONE_MAP = AI_TONE_MAP
 
 class AnnouncementRequest(BaseModel):
     course_id: int
@@ -1668,6 +1680,7 @@ class AIPageRequest(BaseModel):
     description: str
     objectives: Optional[str] = None
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
+    tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
 
 
 class PageRequest(BaseModel):
@@ -1845,8 +1858,9 @@ async def generate_ai_page(
 
         page_type_desc = type_descriptions.get(request.page_type, "course page")
 
-        # Get language name
+        # Get language name and tone description
         language_name = LANGUAGE_MAP.get(request.language, "English")
+        tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
         system = """You are Bonita, an AI assistant helping college professors create course pages.
 Your output should be well-formatted HTML suitable for Canvas LMS.
@@ -1857,6 +1871,7 @@ Use clear structure, headers, lists, and proper formatting."""
 IMPORTANT: Generate ALL content in {language_name}.
 The entire page must be in {language_name}, including all sections, headings, and content.
 
+Tone: {tone_desc}
 Page Type: {page_type_desc}
 Description: {request.description}
 {f'Learning Objectives: {request.objectives}' if request.objectives else ''}
@@ -1983,8 +1998,9 @@ async def generate_ai_assignment(
 
         assignment_type_desc = type_descriptions.get(request.assignment_type, "assignment")
 
-        # Get language name
+        # Get language name and tone description
         language_name = LANGUAGE_MAP.get(request.language, "English")
+        tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
         system = """You are Bonita, an AI assistant helping college professors create high-quality assignments.
 Your output should be professional, clear, and properly formatted for Canvas LMS.
@@ -1995,6 +2011,7 @@ Use HTML formatting with headers, lists, and proper structure."""
 IMPORTANT: Generate ALL content in {language_name}.
 The entire response must be in {language_name}, including title, description, objectives, instructions, deliverables, and rubric.
 
+Tone: {tone_desc}
 Assignment Type: {assignment_type_desc}
 Points: {request.points}
 Professor's Requirements:
@@ -2469,6 +2486,7 @@ class AIDiscussionRequest(BaseModel):
     discussion_type: str
     goals: str
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
+    tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
 
 
 class AISyllabusRequest(BaseModel):
@@ -2477,6 +2495,7 @@ class AISyllabusRequest(BaseModel):
     objectives: str
     grading: str
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
+    tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
 
 
 class SyllabusRequest(BaseModel):
@@ -2490,8 +2509,9 @@ async def generate_ai_discussion(request: AIDiscussionRequest):
     try:
         print(f"🤖 Generating AI discussion: {request.topic}")
 
-        # Get language name
+        # Get language name and tone description
         language_name = LANGUAGE_MAP.get(request.language, "English")
+        tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
         system = "You are Bonita, helping professors create engaging class discussions."
         prompt = f"""Create a discussion topic on: {request.topic}
@@ -2499,6 +2519,7 @@ async def generate_ai_discussion(request: AIDiscussionRequest):
 IMPORTANT: Generate ALL content in {language_name}.
 The entire discussion topic must be in {language_name}, including the prompt, questions, guidelines, and outcomes.
 
+Tone: {tone_desc}
 Discussion Type: {request.discussion_type}
 Learning Goals: {request.goals}
 
@@ -2528,8 +2549,9 @@ async def generate_ai_syllabus(request: AISyllabusRequest):
     try:
         print(f"🤖 Generating AI syllabus: {request.course_name}")
 
-        # Get language name
+        # Get language name and tone description
         language_name = LANGUAGE_MAP.get(request.language, "English")
+        tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
         system = "You are Bonita, helping professors create comprehensive course syllabi."
         prompt = f"""Create a professional course syllabus for: {request.course_name}
@@ -2537,6 +2559,7 @@ async def generate_ai_syllabus(request: AISyllabusRequest):
 IMPORTANT: Generate ALL content in {language_name}.
 The entire syllabus must be in {language_name}, including all sections, policies, and schedule.
 
+Tone: {tone_desc}
 Course Description: {request.description}
 Learning Objectives: {request.objectives}
 Grading Policy: {request.grading}

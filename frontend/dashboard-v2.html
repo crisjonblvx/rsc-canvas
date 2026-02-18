@@ -1189,6 +1189,18 @@ Students should demonstrate understanding of how technology challenges tradition
                         <label>Due Date (Optional)</label>
                         <input type="datetime-local" id="aiQuizDueDate">
                     </div>
+                    <div class="form-group">
+                        <label style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Tone</span>
+                            <span id="quizToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                        </label>
+                        <input type="range" id="quizTone" min="1" max="5" value="3"
+                            oninput="updateToneLabel('quizToneLabel', this.value)"
+                            style="width: 100%; accent-color: var(--purple);">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                            <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        </div>
+                    </div>
                     <button class="btn btn-primary" onclick="generateAIQuiz()">✨ Generate Quiz with AI</button>
                 </div>
 
@@ -1236,7 +1248,7 @@ Students should demonstrate understanding of how technology challenges tradition
                         <span id="announcementToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
                     </label>
                     <input type="range" id="announcementTone" min="1" max="5" value="3"
-                        oninput="updateAnnouncementToneLabel(this.value)"
+                        oninput="updateToneLabel('announcementToneLabel', this.value)"
                         style="width: 100%; accent-color: var(--purple);">
                     <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
                         <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
@@ -1356,6 +1368,19 @@ Students should demonstrate understanding of how technology challenges tradition
                         <input type="datetime-local" id="aiAssignmentDueDate">
                     </div>
 
+                    <div class="form-group">
+                        <label style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Tone</span>
+                            <span id="assignmentToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                        </label>
+                        <input type="range" id="assignmentTone" min="1" max="5" value="3"
+                            oninput="updateToneLabel('assignmentToneLabel', this.value)"
+                            style="width: 100%; accent-color: var(--purple);">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                            <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        </div>
+                    </div>
+
                     <button class="btn btn-primary" onclick="generateAIAssignment()">✨ Generate with AI</button>
                 </div>
 
@@ -1449,6 +1474,19 @@ Students should demonstrate understanding of how technology challenges tradition
                         <textarea id="aiPageObjectives" placeholder="What should students learn from this page?" style="min-height: 80px;"></textarea>
                     </div>
 
+                    <div class="form-group">
+                        <label style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Tone</span>
+                            <span id="pageToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                        </label>
+                        <input type="range" id="pageTone" min="1" max="5" value="3"
+                            oninput="updateToneLabel('pageToneLabel', this.value)"
+                            style="width: 100%; accent-color: var(--purple);">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                            <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        </div>
+                    </div>
+
                     <button class="btn btn-primary" onclick="generateAIPage()">✨ Generate with AI</button>
                 </div>
 
@@ -1535,6 +1573,19 @@ Students should demonstrate understanding of how technology challenges tradition
                     <div class="form-group">
                         <label>What should students discuss? (Brief description)</label>
                         <textarea id="aiDiscussionGoals" placeholder="Example: 'Students will debate the ethical implications of targeted advertising, considering privacy, manipulation, and consumer protection.'" style="min-height: 100px;"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Tone</span>
+                            <span id="discussionToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                        </label>
+                        <input type="range" id="discussionTone" min="1" max="5" value="3"
+                            oninput="updateToneLabel('discussionToneLabel', this.value)"
+                            style="width: 100%; accent-color: var(--purple);">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                            <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        </div>
                     </div>
 
                     <button class="btn btn-primary" onclick="generateAIDiscussion()">✨ Generate with AI</button>
@@ -1640,6 +1691,18 @@ Students should demonstrate understanding of how technology challenges tradition
 Assignments: 30%
 Quizzes: 20%
 Participation: 10%" style="min-height: 80px;"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Tone</span>
+                            <span id="syllabusToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                        </label>
+                        <input type="range" id="syllabusTone" min="1" max="5" value="3"
+                            oninput="updateToneLabel('syllabusToneLabel', this.value)"
+                            style="width: 100%; accent-color: var(--purple);">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                            <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        </div>
                     </div>
                     <button class="btn btn-primary" onclick="generateAISyllabus()">✨ Generate with AI</button>
                 </div>
@@ -2016,10 +2079,11 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             showAlert('syllabusAlert', 'info', '✨ AI is generating syllabus...');
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
+                const tone = parseInt(document.getElementById('syllabusTone').value) || 3;
                 const response = await fetch(`${API_URL}/api/v2/canvas/generate-syllabus`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ course_name: courseName, description, objectives, grading, language: currentLang })
+                    body: JSON.stringify({ course_name: courseName, description, objectives, grading, language: currentLang, tone })
                 });
                 const result = await response.json();
                 if (response.ok) {
@@ -2372,6 +2436,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             const numQuestions = parseInt(document.getElementById('aiNumQuestions').value);
             const difficulty = document.getElementById('aiDifficulty').value;
             const gradeLevel = document.getElementById('aiQuizGradeLevel').value;
+            const tone = parseInt(document.getElementById('quizTone').value) || 3;
 
             showAlert('quizAlert', 'info', '✨ AI is generating quiz questions...');
 
@@ -2388,7 +2453,8 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         num_questions: numQuestions,
                         difficulty: difficulty,
                         grade_level: gradeLevel,
-                        language: currentLang
+                        language: currentLang,
+                        tone: tone
                     })
                 });
 
@@ -2532,8 +2598,9 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         }
 
         const _toneLabelMap = { 1: 'Formal', 2: 'Professional', 3: 'Balanced', 4: 'Friendly', 5: 'Casual' };
-        function updateAnnouncementToneLabel(val) {
-            document.getElementById('announcementToneLabel').textContent = _toneLabelMap[val] || 'Balanced';
+        function updateToneLabel(labelId, val) {
+            const el = document.getElementById(labelId);
+            if (el) el.textContent = _toneLabelMap[val] || 'Balanced';
         }
 
         function _getAnnouncementTone() {
@@ -2620,6 +2687,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
 
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
+                const tone = parseInt(document.getElementById('assignmentTone').value) || 3;
                 const response = await fetch(`${API_URL}/api/v2/canvas/generate-assignment`, {
                     method: 'POST',
                     headers: {
@@ -2631,7 +2699,8 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         assignment_type: type,
                         requirements: requirements,
                         points: parseInt(document.getElementById('aiAssignmentPoints').value),
-                        language: currentLang
+                        language: currentLang,
+                        tone: tone
                     })
                 });
 
@@ -2797,6 +2866,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
 
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
+                const tone = parseInt(document.getElementById('pageTone').value) || 3;
                 const response = await fetch(`${API_URL}/api/v2/canvas/generate-page`, {
                     method: 'POST',
                     headers: {
@@ -2808,7 +2878,8 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         page_type: pageType,
                         description: description,
                         objectives: objectives,
-                        language: currentLang
+                        language: currentLang,
+                        tone: tone
                     })
                 });
 
@@ -2945,10 +3016,11 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             showAlert('discussionAlert', 'info', '✨ AI is generating discussion...');
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
+                const tone = parseInt(document.getElementById('discussionTone').value) || 3;
                 const response = await fetch(`${API_URL}/api/v2/canvas/generate-discussion`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ topic, discussion_type: type, goals, language: currentLang })
+                    body: JSON.stringify({ topic, discussion_type: type, goals, language: currentLang, tone })
                 });
                 const result = await response.json();
                 if (response.ok) {

@@ -1096,6 +1096,20 @@
                     </div>
                 </div>
 
+                <!-- Tone (applies to AI Generate mode) -->
+                <div class="form-group">
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Tone</span>
+                        <span id="quizToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                    </label>
+                    <input type="range" id="quizTone" min="1" max="5" value="3"
+                        oninput="updateToneLabel('quizToneLabel', this.value)"
+                        style="width: 100%; accent-color: var(--purple);">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                        <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                    </div>
+                </div>
+
                 <!-- Quick Input Mode -->
                 <div id="quickQuizForm">
                     <div class="form-group">
@@ -1188,18 +1202,6 @@ Students should demonstrate understanding of how technology challenges tradition
                     <div class="form-group">
                         <label>Due Date (Optional)</label>
                         <input type="datetime-local" id="aiQuizDueDate">
-                    </div>
-                    <div class="form-group">
-                        <label style="display: flex; justify-content: space-between; align-items: center;">
-                            <span>Tone</span>
-                            <span id="quizToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
-                        </label>
-                        <input type="range" id="quizTone" min="1" max="5" value="3"
-                            oninput="updateToneLabel('quizToneLabel', this.value)"
-                            style="width: 100%; accent-color: var(--purple);">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
-                            <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
-                        </div>
                     </div>
                     <button class="btn btn-primary" onclick="generateAIQuiz()">✨ Generate Quiz with AI</button>
                 </div>
@@ -1306,6 +1308,20 @@ Students should demonstrate understanding of how technology challenges tradition
                     </div>
                 </div>
 
+                <!-- Tone (applies to AI Generate mode) -->
+                <div class="form-group">
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Tone</span>
+                        <span id="assignmentToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                    </label>
+                    <input type="range" id="assignmentTone" min="1" max="5" value="3"
+                        oninput="updateToneLabel('assignmentToneLabel', this.value)"
+                        style="width: 100%; accent-color: var(--purple);">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                        <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                    </div>
+                </div>
+
                 <!-- Quick Input Mode Form -->
                 <div id="quickAssignmentForm">
                     <div class="form-group">
@@ -1368,19 +1384,6 @@ Students should demonstrate understanding of how technology challenges tradition
                         <input type="datetime-local" id="aiAssignmentDueDate">
                     </div>
 
-                    <div class="form-group">
-                        <label style="display: flex; justify-content: space-between; align-items: center;">
-                            <span>Tone</span>
-                            <span id="assignmentToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
-                        </label>
-                        <input type="range" id="assignmentTone" min="1" max="5" value="3"
-                            oninput="updateToneLabel('assignmentToneLabel', this.value)"
-                            style="width: 100%; accent-color: var(--purple);">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
-                            <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
-                        </div>
-                    </div>
-
                     <button class="btn btn-primary" onclick="generateAIAssignment()">✨ Generate with AI</button>
                 </div>
 
@@ -1429,6 +1432,20 @@ Students should demonstrate understanding of how technology challenges tradition
                     </div>
                 </div>
 
+                <!-- Tone (applies to AI Generate mode) -->
+                <div class="form-group">
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Tone</span>
+                        <span id="pageToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                    </label>
+                    <input type="range" id="pageTone" min="1" max="5" value="3"
+                        oninput="updateToneLabel('pageToneLabel', this.value)"
+                        style="width: 100%; accent-color: var(--purple);">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                        <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                    </div>
+                </div>
+
                 <!-- Quick Input Mode Form -->
                 <div id="quickPageForm">
                     <div class="form-group">
@@ -1472,19 +1489,6 @@ Students should demonstrate understanding of how technology challenges tradition
                     <div class="form-group">
                         <label>Learning Objectives (Optional)</label>
                         <textarea id="aiPageObjectives" placeholder="What should students learn from this page?" style="min-height: 80px;"></textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label style="display: flex; justify-content: space-between; align-items: center;">
-                            <span>Tone</span>
-                            <span id="pageToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
-                        </label>
-                        <input type="range" id="pageTone" min="1" max="5" value="3"
-                            oninput="updateToneLabel('pageToneLabel', this.value)"
-                            style="width: 100%; accent-color: var(--purple);">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
-                            <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
-                        </div>
                     </div>
 
                     <button class="btn btn-primary" onclick="generateAIPage()">✨ Generate with AI</button>
@@ -1535,6 +1539,20 @@ Students should demonstrate understanding of how technology challenges tradition
                     </div>
                 </div>
 
+                <!-- Tone (applies to AI Generate mode) -->
+                <div class="form-group">
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Tone</span>
+                        <span id="discussionToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                    </label>
+                    <input type="range" id="discussionTone" min="1" max="5" value="3"
+                        oninput="updateToneLabel('discussionToneLabel', this.value)"
+                        style="width: 100%; accent-color: var(--purple);">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                        <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                    </div>
+                </div>
+
                 <!-- Quick Input Mode Form -->
                 <div id="quickDiscussionForm">
                     <div class="form-group">
@@ -1573,19 +1591,6 @@ Students should demonstrate understanding of how technology challenges tradition
                     <div class="form-group">
                         <label>What should students discuss? (Brief description)</label>
                         <textarea id="aiDiscussionGoals" placeholder="Example: 'Students will debate the ethical implications of targeted advertising, considering privacy, manipulation, and consumer protection.'" style="min-height: 100px;"></textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label style="display: flex; justify-content: space-between; align-items: center;">
-                            <span>Tone</span>
-                            <span id="discussionToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
-                        </label>
-                        <input type="range" id="discussionTone" min="1" max="5" value="3"
-                            oninput="updateToneLabel('discussionToneLabel', this.value)"
-                            style="width: 100%; accent-color: var(--purple);">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
-                            <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
-                        </div>
                     </div>
 
                     <button class="btn btn-primary" onclick="generateAIDiscussion()">✨ Generate with AI</button>
@@ -1660,6 +1665,20 @@ Students should demonstrate understanding of how technology challenges tradition
                     </div>
                 </div>
 
+                <!-- Tone (applies to AI Generate mode) -->
+                <div class="form-group">
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Tone</span>
+                        <span id="syllabusToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                    </label>
+                    <input type="range" id="syllabusTone" min="1" max="5" value="3"
+                        oninput="updateToneLabel('syllabusToneLabel', this.value)"
+                        style="width: 100%; accent-color: var(--purple);">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                        <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                    </div>
+                </div>
+
                 <!-- Quick Input Mode -->
                 <div id="quickSyllabusForm">
                     <div class="form-group">
@@ -1691,18 +1710,6 @@ Students should demonstrate understanding of how technology challenges tradition
 Assignments: 30%
 Quizzes: 20%
 Participation: 10%" style="min-height: 80px;"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label style="display: flex; justify-content: space-between; align-items: center;">
-                            <span>Tone</span>
-                            <span id="syllabusToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
-                        </label>
-                        <input type="range" id="syllabusTone" min="1" max="5" value="3"
-                            oninput="updateToneLabel('syllabusToneLabel', this.value)"
-                            style="width: 100%; accent-color: var(--purple);">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
-                            <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
-                        </div>
                     </div>
                     <button class="btn btn-primary" onclick="generateAISyllabus()">✨ Generate with AI</button>
                 </div>

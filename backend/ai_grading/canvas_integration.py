@@ -283,6 +283,32 @@ class CanvasGradingIntegration:
         logger.info(f"Batch grading complete: {results['success_count']} success, {results['failed_count']} failed")
         return results
 
+    def get_teacher_courses(self) -> List[Dict]:
+        """Get all courses where the user is a teacher/TA."""
+        url = f"{self.api_base}/courses"
+        params = {
+            "enrollment_type": "teacher",
+            "enrollment_state": "active",
+            "state[]": ["available"],
+            "per_page": 100,
+        }
+        try:
+            response = requests.get(url, headers=self.headers, params=params, timeout=30)
+            response.raise_for_status()
+            courses = response.json()
+            return [
+                {
+                    "id": str(c.get("id")),
+                    "name": c.get("name", "Unnamed Course"),
+                    "course_code": c.get("course_code", ""),
+                }
+                for c in courses
+                if c.get("id")
+            ]
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to fetch teacher courses: {e}")
+            raise Exception(f"Canvas API error: {str(e)}")
+
     def get_course_assignments(self, course_id: str, include_ungraded: bool = True) -> List[Dict]:
         """Get all assignments for a course"""
         url = f"{self.api_base}/courses/{course_id}/assignments"

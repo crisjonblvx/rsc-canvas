@@ -9,6 +9,9 @@ Based on: Canvas API OAuth documentation
 import requests
 from typing import Dict, Optional
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class CanvasAuth:
@@ -125,44 +128,45 @@ class CanvasAuth:
             return None
 
 
-def encrypt_token(token: str) -> str:
-    """
-    Encrypt Canvas API token for secure storage
-
-    Args:
-        token: Plain text API token
-
-    Returns:
-        str: Encrypted token
-
-    Note: In production, use proper encryption (e.g., Fernet from cryptography)
-    """
-    # TODO: Implement proper encryption using ENCRYPTION_KEY from environment
-    # For now, return as-is (NOT SECURE - fix before production)
+def _get_fernet():
+    """Return a Fernet cipher using ENCRYPTION_KEY env var, or None if not configured."""
     encryption_key = os.getenv("ENCRYPTION_KEY")
     if not encryption_key:
-        # Placeholder - implement actual encryption
-        return token
+        return None
+    try:
+        from cryptography.fernet import Fernet
+        # Accept raw key or base64-encoded key
+        key_bytes = encryption_key.encode() if isinstance(encryption_key, str) else encryption_key
+        return Fernet(key_bytes)
+    except Exception as e:
+        logger.error(f"Failed to initialize Fernet cipher: {e}")
+        return None
 
-    # Implement Fernet encryption here
-    return token
+
+def encrypt_token(token: str) -> str:
+    """
+    Encrypt Canvas API token for secure storage using Fernet symmetric encryption.
+    Falls back to plain text if ENCRYPTION_KEY is not set (logs a warning).
+    """
+    fernet = _get_fernet()
+    if fernet is None:
+        logger.warning("ENCRYPTION_KEY not set — storing Canvas token unencrypted. Set ENCRYPTION_KEY in environment variables.")
+        return token
+    return fernet.encrypt(token.encode()).decode()
 
 
 def decrypt_token(encrypted_token: str) -> str:
     """
-    Decrypt Canvas API token for use
-
-    Args:
-        encrypted_token: Encrypted token from database
-
-    Returns:
-        str: Decrypted token
+    Decrypt Canvas API token for use.
+    Handles both Fernet-encrypted tokens and legacy plain-text tokens gracefully.
     """
-    # TODO: Implement proper decryption
-    encryption_key = os.getenv("ENCRYPTION_KEY")
-    if not encryption_key:
-        # Placeholder - implement actual decryption
+    fernet = _get_fernet()
+    if fernet is None:
         return encrypted_token
-
-    # Implement Fernet decryption here
-    return encrypted_token
+    try:
+        from cryptography.fernet import InvalidToken
+        return fernet.decrypt(encrypted_token.encode()).decode()
+    except (InvalidToken, Exception):
+        # Token was stored before encryption was enabled — return as-is
+        logger.debug("Token appears to be unencrypted (legacy); returning as-is")
+        return encrypted_token

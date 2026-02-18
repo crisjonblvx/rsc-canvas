@@ -90,6 +90,18 @@
 
         .assignment-card:hover {
             box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            transform: translateY(-1px);
+        }
+
+        .badge-needs-grading {
+            display: inline-block;
+            background: #fef3c7;
+            color: #92400e;
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 0.25rem 0.65rem;
+            border-radius: 99px;
+            white-space: nowrap;
         }
 
         .assignment-header {
@@ -1015,10 +1027,20 @@
         let currentCourseId = null;
         let currentAssignmentId = null;
         let currentAssignment = null;
+        let currentCanvasUrl = null;
+        let currentRubric = null;
         let gradingSession = null;
 
         // API Base URL
         const API_BASE = 'https://facultyflow-production.up.railway.app';
+
+        function getAuthHeaders() {
+            const token = localStorage.getItem('auth_token');
+            return {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            };
+        }
 
         // Initialize app
         async function init() {
@@ -1036,87 +1058,179 @@
             }
         }
 
-        // Load assignments ready to grade
+        // Load all assignments across all courses ready to grade
         async function loadAssignments() {
+            document.getElementById('app-container').innerHTML = `
+                <div class="loading"><div class="spinner"></div><p style="margin-top:1rem;color:#666">Loading your assignments from Canvas...</p></div>
+            `;
             try {
-                // For now, show a placeholder until we fetch from backend
-                document.getElementById('app-container').innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📚</div>
-                        <h3>Assignments Ready to Grade</h3>
-                        <p>Connect to Canvas to see assignments with ungraded submissions</p>
-                        <button class="btn btn-primary" onclick="window.location.href='dashboard-v2.html'">
-                            Go to Dashboard
-                        </button>
-                    </div>
-                `;
+                const response = await fetch(`${API_BASE}/api/ai-grading/assignments/ready-to-grade`, {
+                    headers: getAuthHeaders()
+                });
 
-                // TODO: Fetch from API
-                // const response = await fetch(`${API_BASE}/api/ai-grading/assignments/ready-to-grade`);
-                // const data = await response.json();
-                // renderAssignments(data.assignments);
+                if (response.status === 401) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+                if (response.status === 400) {
+                    // Canvas not connected
+                    document.getElementById('app-container').innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🔗</div>
+                            <h3>Canvas Not Connected</h3>
+                            <p>Connect your Canvas account to start grading assignments with AI.</p>
+                            <button class="btn btn-primary" onclick="window.location.href='/dashboard-v2.html'">
+                                Connect Canvas in Dashboard
+                            </button>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const data = await response.json();
+                currentCanvasUrl = data.canvas_url || '';
+                renderAssignmentsList(data.assignments || []);
 
             } catch (error) {
                 console.error('Error loading assignments:', error);
-                showError('Failed to load assignments');
+                showError('Failed to load assignments. Please check your connection and try again.');
             }
         }
 
-        // Load specific assignment
-        async function loadAssignment() {
-            try {
-                // Mock data for now
-                currentAssignment = {
-                    name: "Media Ethics Essay",
-                    course_name: "MCM 490 - Content Creation",
-                    submissions_count: 25,
-                    due_date: "Feb 12, 2026",
-                    graded_count: 0
-                };
+        // Render the list of assignments across all courses
+        function renderAssignmentsList(assignments) {
+            if (!assignments.length) {
+                document.getElementById('app-container').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">✅</div>
+                        <h3>All Caught Up!</h3>
+                        <p>No assignments have ungraded submissions right now. Check back after your next due date.</p>
+                        <button class="btn btn-secondary" onclick="window.location.href='/dashboard-v2.html'">
+                            ← Back to Dashboard
+                        </button>
+                    </div>
+                `;
+                return;
+            }
 
+            const cards = assignments.map(a => {
+                const dueDate = a.due_at ? new Date(a.due_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : 'No due date';
+                const courseName = a.course_name || a.course_code || `Course ${a.course_id}`;
+                return `
+                    <div class="assignment-card" style="cursor:pointer" onclick="selectAssignment('${a.course_id}', '${a.id}', ${JSON.stringify(JSON.stringify(a))})">
+                        <div class="assignment-header">
+                            <div>
+                                <h3>${a.name}</h3>
+                                <span class="course-tag">${courseName}</span>
+                            </div>
+                            <span class="badge-needs-grading">${a.needs_grading_count} to grade</span>
+                        </div>
+                        <div class="assignment-stats">
+                            <div class="stat"><label>Due:</label><value>${dueDate}</value></div>
+                            <div class="stat"><label>Points:</label><value>${a.points_possible ?? '—'}</value></div>
+                        </div>
+                        <div class="assignment-actions">
+                            <button class="btn btn-primary btn-ai" onclick="event.stopPropagation(); selectAssignment('${a.course_id}', '${a.id}', ${JSON.stringify(JSON.stringify(a))})">
+                                ✨ Grade with AI
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('app-container').innerHTML = `
+                <div style="margin-bottom:1.5rem">
+                    <h2 style="font-size:1.4rem;font-weight:700">Assignments Ready to Grade (${assignments.length})</h2>
+                    <p style="color:#666;margin-top:0.25rem">Select an assignment to start AI grading</p>
+                </div>
+                <div class="assignments-grid">${cards}</div>
+            `;
+        }
+
+        // User selects a specific assignment from the list
+        function selectAssignment(courseId, assignmentId, assignmentJson) {
+            currentCourseId = courseId;
+            currentAssignmentId = assignmentId;
+            try {
+                currentAssignment = JSON.parse(assignmentJson);
+            } catch(e) {
+                currentAssignment = {};
+            }
+            loadAssignment();
+        }
+
+        // Load specific assignment detail view
+        async function loadAssignment() {
+            document.getElementById('app-container').innerHTML = `
+                <div class="loading"><div class="spinner"></div><p style="margin-top:1rem;color:#666">Loading assignment details...</p></div>
+            `;
+            try {
+                const response = await fetch(
+                    `${API_BASE}/api/ai-grading/courses/${currentCourseId}/assignments/${currentAssignmentId}/details`,
+                    { headers: getAuthHeaders() }
+                );
+
+                if (response.status === 401) { window.location.href = '/login.html'; return; }
+
+                if (response.ok) {
+                    const details = await response.json();
+                    currentAssignment = { ...currentAssignment, ...details };
+                    currentCanvasUrl = details.canvas_url || currentCanvasUrl || '';
+                    currentRubric = details.rubric_criteria && details.rubric_criteria.length
+                        ? details.rubric_criteria
+                        : null;
+                }
+                // If details fetch fails, we still have basic data from the list - proceed
                 renderAssignmentCard();
 
             } catch (error) {
-                console.error('Error loading assignment:', error);
-                showError('Failed to load assignment');
+                console.error('Error loading assignment details:', error);
+                renderAssignmentCard(); // Fallback to basic data
             }
         }
 
-        // Render assignment card
+        // Render single assignment detail card
         function renderAssignmentCard() {
-            const manual_time = Math.ceil(currentAssignment.submissions_count * 25 / 60);
-            const ai_time = 1;
+            const subCount = currentAssignment.needs_grading_count || currentAssignment.submissions_count || '?';
+            const manual_time = typeof subCount === 'number' ? Math.max(1, Math.ceil(subCount * 25 / 60)) : '?';
+            const dueDate = currentAssignment.due_at
+                ? new Date(currentAssignment.due_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
+                : (currentAssignment.due_date || '—');
+            const courseName = currentAssignment.course_name || currentAssignment.course_code || '';
+            const manualLink = currentCanvasUrl
+                ? `${currentCanvasUrl}/courses/${currentCourseId}/gradebook`
+                : '#';
 
             document.getElementById('app-container').innerHTML = `
+                <div style="margin-bottom:1rem">
+                    <button class="btn btn-text" onclick="loadAssignments()">← All Assignments</button>
+                </div>
                 <div class="assignments-grid">
                     <div class="assignment-card">
                         <div class="assignment-header">
                             <div>
-                                <h3>${currentAssignment.name}</h3>
-                                <span class="course-tag">${currentAssignment.course_name}</span>
+                                <h3>${currentAssignment.name || 'Assignment'}</h3>
+                                ${courseName ? `<span class="course-tag">${courseName}</span>` : ''}
                             </div>
                         </div>
 
                         <div class="assignment-stats">
                             <div class="stat">
-                                <label>Submissions:</label>
-                                <value>${currentAssignment.submissions_count} students</value>
+                                <label>Ungraded Submissions:</label>
+                                <value>${subCount} student${subCount !== 1 ? 's' : ''}</value>
                             </div>
-
                             <div class="stat">
                                 <label>Due Date:</label>
-                                <value>${currentAssignment.due_date}</value>
+                                <value>${dueDate}</value>
                             </div>
-
                             <div class="stat">
-                                <label>Graded:</label>
-                                <value>${currentAssignment.graded_count} / ${currentAssignment.submissions_count} (${Math.round(currentAssignment.graded_count / currentAssignment.submissions_count * 100)}%)</value>
+                                <label>Points Possible:</label>
+                                <value>${currentAssignment.points_possible ?? '—'}</value>
                             </div>
-
                             <div class="stat">
                                 <label>Estimated Time:</label>
                                 <value class="warning">~${manual_time} hours manual</value>
-                                <value class="success">~${ai_time} hour with AI ✨</value>
+                                <value class="success">~1 hour with AI ✨</value>
                             </div>
                         </div>
 
@@ -1125,52 +1239,102 @@
                                 ✨ Grade with AI (Recommended)
                             </button>
                             <span class="inline-hint">AI grades in 3-5 min, you review in ~1 hour. Saves 90% of your time!</span>
-                            <button class="btn btn-secondary" onclick="alert('Opens Canvas grading page')">
+                            <a class="btn btn-secondary" href="${manualLink}" target="_blank" rel="noopener">
                                 Grade Manually in Canvas
-                            </button>
+                            </a>
                         </div>
                     </div>
                 </div>
             `;
         }
 
-        // Open setup modal
-        function openSetupModal() {
-            // Mock rubric for demo
-            const rubric = {
-                criteria: [
-                    {name: "Thesis Statement", points: 20, description: "Clear, arguable thesis"},
-                    {name: "Evidence & Support", points: 30, description: "Strong evidence from sources"},
-                    {name: "Analysis", points: 30, description: "Critical thinking and depth"},
-                    {name: "Writing Quality", points: 20, description: "Grammar and clarity"}
-                ]
-            };
-
-            // Render rubric
-            const rubricHTML = `
-                <table class="rubric-table">
-                    <thead>
-                        <tr>
-                            <th>Criterion</th>
-                            <th>Points</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${rubric.criteria.map(c => `
+        // Build rubric UI from Canvas rubric or show manual builder
+        function buildRubricHTML(criteria) {
+            if (criteria && criteria.length) {
+                const totalPts = criteria.reduce((s, c) => s + (c.points || 0), 0);
+                return {
+                    html: `
+                        <div style="margin-bottom:0.5rem;color:#22c55e;font-size:0.85rem;font-weight:600">
+                            ✅ Rubric imported from Canvas (${criteria.length} criteria, ${totalPts} pts total)
+                        </div>
+                        <table class="rubric-table">
+                            <thead><tr><th>Criterion</th><th>Points</th><th>Description</th></tr></thead>
+                            <tbody>
+                                ${criteria.map(c => `
+                                    <tr>
+                                        <td>${c.name}</td>
+                                        <td>${c.points} pts</td>
+                                        <td>${c.description || '—'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>`,
+                    criteria
+                };
+            }
+            // No Canvas rubric — show manual builder with one starter row
+            return {
+                html: `
+                    <div style="margin-bottom:0.75rem;color:#f59e0b;font-size:0.85rem;font-weight:600">
+                        ⚠️ No rubric found on this Canvas assignment. Add your criteria below.
+                    </div>
+                    <table class="rubric-table" id="rubric-builder">
+                        <thead><tr><th>Criterion Name</th><th>Points</th><th>Description</th><th></th></tr></thead>
+                        <tbody id="rubric-rows">
                             <tr>
-                                <td>${c.name}</td>
-                                <td>${c.points} points</td>
-                                <td>${c.description}</td>
+                                <td><input type="text" placeholder="e.g. Thesis" style="width:100%;padding:4px 6px;border:1px solid #ddd;border-radius:4px"></td>
+                                <td><input type="number" min="0" value="10" style="width:70px;padding:4px 6px;border:1px solid #ddd;border-radius:4px"></td>
+                                <td><input type="text" placeholder="Description (optional)" style="width:100%;padding:4px 6px;border:1px solid #ddd;border-radius:4px"></td>
+                                <td><button class="btn btn-text" style="color:#ef4444" onclick="this.closest('tr').remove()">✕</button></td>
                             </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
+                        </tbody>
+                    </table>
+                    <button class="btn btn-text" onclick="addRubricRow()" style="margin-top:0.5rem;font-size:0.85rem">+ Add Criterion</button>`,
+                criteria: null
+            };
+        }
 
-            document.getElementById('rubric-preview').innerHTML = rubricHTML;
-            document.getElementById('summary-count').textContent = currentAssignment.submissions_count;
-            document.getElementById('summary-rubric').textContent = `${rubric.criteria.length} criteria, ${rubric.criteria.reduce((sum, c) => sum + c.points, 0)} points total`;
+        function addRubricRow() {
+            const tbody = document.getElementById('rubric-rows');
+            if (!tbody) return;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><input type="text" placeholder="Criterion name" style="width:100%;padding:4px 6px;border:1px solid #ddd;border-radius:4px"></td>
+                <td><input type="number" min="0" value="10" style="width:70px;padding:4px 6px;border:1px solid #ddd;border-radius:4px"></td>
+                <td><input type="text" placeholder="Description (optional)" style="width:100%;padding:4px 6px;border:1px solid #ddd;border-radius:4px"></td>
+                <td><button class="btn btn-text" style="color:#ef4444" onclick="this.closest('tr').remove()">✕</button></td>
+            `;
+            tbody.appendChild(tr);
+        }
+
+        function getManualRubric() {
+            const rows = document.querySelectorAll('#rubric-rows tr');
+            const criteria = [];
+            rows.forEach(row => {
+                const inputs = row.querySelectorAll('input');
+                const name = inputs[0]?.value?.trim();
+                const pts = parseFloat(inputs[1]?.value) || 0;
+                const desc = inputs[2]?.value?.trim() || '';
+                if (name) criteria.push({ name, points: pts, description: desc });
+            });
+            return criteria;
+        }
+
+        // Open setup modal — uses real Canvas rubric if available
+        function openSetupModal() {
+            const rubricResult = buildRubricHTML(currentRubric);
+            document.getElementById('rubric-preview').innerHTML = rubricResult.html;
+
+            const subCount = currentAssignment.needs_grading_count || currentAssignment.submissions_count || '?';
+            document.getElementById('summary-count').textContent = subCount;
+
+            if (currentRubric && currentRubric.length) {
+                const totalPts = currentRubric.reduce((s, c) => s + (c.points || 0), 0);
+                document.getElementById('summary-rubric').textContent =
+                    `${currentRubric.length} criteria, ${totalPts} points total`;
+            } else {
+                document.getElementById('summary-rubric').textContent = 'Set up below';
+            }
 
             document.getElementById('setup-modal').classList.add('active');
         }
@@ -1190,26 +1354,25 @@
                 strictness: document.getElementById('pref-strictness').value
             };
 
-            // Mock rubric
-            const rubric = {
-                criteria: [
-                    {name: "Thesis Statement", points: 20, description: "Clear, arguable thesis"},
-                    {name: "Evidence & Support", points: 30, description: "Strong evidence from sources"},
-                    {name: "Analysis", points: 30, description: "Critical thinking and depth"},
-                    {name: "Writing Quality", points: 20, description: "Grammar and clarity"}
-                ]
-            };
+            // Use Canvas rubric if available, otherwise read from manual builder
+            let rubricCriteria = currentRubric;
+            if (!rubricCriteria || !rubricCriteria.length) {
+                rubricCriteria = getManualRubric();
+            }
+            if (!rubricCriteria || !rubricCriteria.length) {
+                alert('Please add at least one rubric criterion before starting.');
+                return;
+            }
+
+            const rubric = { criteria: rubricCriteria };
 
             closeSetupModal();
-
-            // Show progress screen
             showProgressScreen();
 
             try {
-                // Start grading session
                 const response = await fetch(`${API_BASE}/api/ai-grading/sessions/start`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({
                         course_id: currentCourseId,
                         assignment_id: currentAssignmentId,
@@ -1218,15 +1381,19 @@
                     })
                 });
 
+                if (response.status === 401) { window.location.href = '/login.html'; return; }
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.detail || `Server error ${response.status}`);
+                }
+
                 const data = await response.json();
                 gradingSession = data;
-
-                // Poll for progress
                 pollGradingProgress(data.session_id);
 
             } catch (error) {
                 console.error('Error starting grading:', error);
-                alert('Failed to start AI grading. Please try again.');
+                alert(`Failed to start AI grading: ${error.message}`);
                 loadAssignment();
             }
         }
@@ -1275,7 +1442,9 @@
         async function pollGradingProgress(sessionId) {
             const interval = setInterval(async () => {
                 try {
-                    const response = await fetch(`${API_BASE}/api/ai-grading/sessions/${sessionId}/status`);
+                    const response = await fetch(`${API_BASE}/api/ai-grading/sessions/${sessionId}/status`, {
+                        headers: getAuthHeaders()
+                    });
                     const data = await response.json();
 
                     // Update progress
@@ -1303,7 +1472,9 @@
         // Load grades for review
         async function loadGradesForReview(sessionId) {
             try {
-                const response = await fetch(`${API_BASE}/api/ai-grading/sessions/${sessionId}/grades`);
+                const response = await fetch(`${API_BASE}/api/ai-grading/sessions/${sessionId}/grades`, {
+                    headers: getAuthHeaders()
+                });
                 const data = await response.json();
 
                 // Render review interface
@@ -1562,7 +1733,7 @@
             try {
                 const response = await fetch(`${API_BASE}/api/ai-grading/grades/${gradeId}/review`, {
                     method: 'PUT',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({
                         final_score: grade.final_score !== null ? grade.final_score : grade.ai_total_score,
                         final_feedback: grade.final_feedback || grade.ai_feedback
@@ -1608,7 +1779,7 @@
             try {
                 const response = await fetch(`${API_BASE}/api/ai-grading/grades/${gradeId}/regenerate`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
+                    headers: getAuthHeaders()
                 });
 
                 if (response.ok) {
@@ -1662,7 +1833,7 @@
             try {
                 const response = await fetch(`${API_BASE}/api/ai-grading/sessions/${currentSession.id}/post-to-canvas`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
+                    headers: getAuthHeaders()
                 });
 
                 const data = await response.json();

@@ -536,22 +536,73 @@ async def get_assignments_ready_to_grade(
         )
 
         if course_id:
-            # Get assignments for specific course
-            assignments = canvas.get_course_assignments(course_id=course_id)
-
-            # Filter to only those needing grading
-            ready_to_grade = [
-                a for a in assignments
-                if a.get("needs_grading_count", 0) > 0
-            ]
-
-            return {"assignments": ready_to_grade}
-
+            courses_to_check = [{"id": course_id, "name": "", "course_code": ""}]
         else:
-            # Get all courses and their assignments
-            # TODO: Implement when we have course listing
-            return {"assignments": []}
+            # Fetch all courses where this user is a teacher
+            courses_to_check = canvas.get_teacher_courses()
+
+        ready_to_grade = []
+        for course in courses_to_check:
+            cid = str(course["id"])
+            try:
+                assignments = canvas.get_course_assignments(course_id=cid)
+                for a in assignments:
+                    if a.get("needs_grading_count", 0) > 0:
+                        a["course_id"] = cid
+                        a["course_name"] = course.get("name", "")
+                        a["course_code"] = course.get("course_code", "")
+                        ready_to_grade.append(a)
+            except Exception as e:
+                logger.warning(f"Could not fetch assignments for course {cid}: {e}")
+                continue
+
+        return {
+            "assignments": ready_to_grade,
+            "canvas_url": canvas_creds.canvas_url
+        }
 
     except Exception as e:
         logger.error(f"Error fetching assignments: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch assignments: {str(e)}")
+
+
+@router.get("/courses/{course_id}/assignments/{assignment_id}/details")
+async def get_assignment_details(
+    course_id: str,
+    assignment_id: str,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_grading_user)
+):
+    """Get full assignment details including Canvas rubric"""
+
+    canvas_creds = db.query(CanvasCredentials).filter_by(user_id=user_id).first()
+    if not canvas_creds:
+        raise HTTPException(status_code=400, detail="Canvas not connected")
+
+    try:
+        canvas_token = decrypt_token(canvas_creds.access_token_encrypted)
+        canvas = CanvasGradingIntegration(
+            canvas_url=canvas_creds.canvas_url,
+            canvas_token=canvas_token
+        )
+        details = canvas.get_assignment_details(
+            course_id=course_id,
+            assignment_id=assignment_id
+        )
+        # Normalise Canvas rubric format into the grading engine's expected shape
+        canvas_rubric = details.get("rubric", [])
+        criteria = []
+        for item in canvas_rubric:
+            max_pts = item.get("points", 0)
+            criteria.append({
+                "name": item.get("description", "Criterion"),
+                "points": max_pts,
+                "description": item.get("long_description") or item.get("description", ""),
+                "canvas_id": item.get("id")
+            })
+        details["rubric_criteria"] = criteria
+        details["canvas_url"] = canvas_creds.canvas_url
+        return details
+    except Exception as e:
+        logger.error(f"Error fetching assignment details: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch assignment details: {str(e)}")

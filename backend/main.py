@@ -52,7 +52,7 @@ async def startup_event():
         print(f"⚠️  Database initialization failed: {e}")
         print("   App will continue but some features may not work")
 
-# CORS middleware - Allow readysetclass.app and all origins
+# CORS middleware - Allow readysetclass.app domains only
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -64,7 +64,6 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "*"  # Allow all for development
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -661,30 +660,6 @@ async def root():
         "tagline": "Less time setting up. More time teaching."
     }
 
-@app.post("/api/auth/signup")
-async def signup(user: UserSignup):
-    """User signup"""
-    # In production: save to database with hashed password
-    # For now: return token
-    token = create_access_token({"email": user.email, "name": user.full_name})
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "email": user.email,
-            "name": user.full_name
-        }
-    }
-
-@app.post("/api/canvas/connect")
-async def connect_canvas(canvas_data: CanvasToken, user=Depends(verify_token)):
-    """Save user's Canvas credentials (encrypted)"""
-    # In production: encrypt and save to database
-    return {
-        "status": "connected",
-        "canvas_url": canvas_data.canvas_url
-    }
-
 @app.post("/api/build-course", response_model=CourseResponse)
 async def build_course(course: CourseRequest, user=Depends(verify_token)):
     """
@@ -1137,13 +1112,15 @@ async def stripe_webhook(request: Request):
             session = event['data']['object']
             user_id = session['metadata']['user_id']
 
-            # Update user subscription
+            # Update user subscription and clear demo status if they were a demo user
             cursor.execute("""
                 UPDATE users
                 SET subscription_status = 'active',
                     subscription_tier = 'pro',
                     stripe_subscription_id = %s,
-                    trial_ends_at = NULL
+                    trial_ends_at = NULL,
+                    is_demo = FALSE,
+                    demo_expires_at = NULL
                 WHERE id = %s
             """, (session['subscription'], user_id))
 
@@ -2884,14 +2861,25 @@ async def fix_grading_setup(
 # Allows visitors to create isolated demo accounts for testing
 
 import secrets
+from collections import defaultdict
+
+# Simple in-memory rate limiter: {ip: [timestamp, ...]}
+_demo_rate_limit: dict = defaultdict(list)
+_DEMO_RATE_LIMIT_MAX = 5    # max demo accounts per IP
+_DEMO_RATE_LIMIT_WINDOW = 3600  # per hour (seconds)
 
 def generate_demo_email():
     """Generate unique demo email"""
     random_id = ''.join(secrets.choice('abcdefghijklmnopqrstuvwxyz0123456789') for _ in range(8))
     return f"demo-{random_id}@readysetclass.com"
 
+def generate_demo_password() -> str:
+    """Generate a unique random password for each demo account."""
+    chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'
+    return ''.join(secrets.choice(chars) for _ in range(10))
+
 @app.post("/api/demo/create")
-async def create_demo_account(db: Session = Depends(get_db)):
+async def create_demo_account(request: Request, db: Session = Depends(get_db)):
     """
     Create a temporary demo account
 
@@ -2906,10 +2894,20 @@ async def create_demo_account(db: Session = Depends(get_db)):
             "expires_in_hours": 24
         }
     """
+    # IP-based rate limiting
+    import time
+    client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown").split(",")[0].strip()
+    now = time.time()
+    # Prune old timestamps
+    _demo_rate_limit[client_ip] = [t for t in _demo_rate_limit[client_ip] if now - t < _DEMO_RATE_LIMIT_WINDOW]
+    if len(_demo_rate_limit[client_ip]) >= _DEMO_RATE_LIMIT_MAX:
+        raise HTTPException(status_code=429, detail="Too many demo accounts created from this IP. Please try again later.")
+    _demo_rate_limit[client_ip].append(now)
+
     try:
-        # Generate unique email
+        # Generate unique email and password per demo account
         email = generate_demo_email()
-        password = "demo2026"  # Simple password for all demos
+        password = generate_demo_password()
 
         # Hash password
         password_bytes = password.encode('utf-8')

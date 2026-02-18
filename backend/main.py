@@ -1644,11 +1644,22 @@ class AIAssignmentRequest(BaseModel):
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
 
 
+ANNOUNCEMENT_TONE_MAP = {
+    1: "very formal and academic — use professional language, avoid contractions, maintain scholarly distance",
+    2: "professional and clear — well-organized, polished, approachable",
+    3: "balanced — professional yet warm, friendly tone",
+    4: "friendly and conversational — warm, encouraging, use contractions naturally",
+    5: "casual and personable — like a colleague talking to students, relaxed and approachable"
+}
+
 class AnnouncementRequest(BaseModel):
     course_id: int
     topic: str
     details: Optional[str] = None
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
+    tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
+    custom_message: Optional[str] = None  # If set, use this text instead of generating
+    enhance: bool = False  # If True + custom_message, AI polishes the custom message
 
 
 class AIPageRequest(BaseModel):
@@ -1728,29 +1739,55 @@ async def create_announcement_v2(
         if not credentials:
             raise HTTPException(status_code=404, detail="Canvas not connected")
 
-        # Generate announcement with AI
-        print(f"📢 Generating announcement on: {request.topic}")
-
-        # Get language name
+        # Get language name and tone description
         language_name = LANGUAGE_MAP.get(request.language, "English")
+        tone_desc = ANNOUNCEMENT_TONE_MAP.get(request.tone, ANNOUNCEMENT_TONE_MAP[3])
 
-        system = "You are Bonita, helping professors create course announcements."
-        prompt = f"""Create a professional course announcement about: {request.topic}
+        if request.custom_message and not request.enhance:
+            # Quick Input: Post as-is, just wrap in HTML paragraphs
+            print(f"📢 Posting announcement as-is (no AI)")
+            paragraphs = [f"<p>{p.strip()}</p>" for p in request.custom_message.strip().split('\n\n') if p.strip()]
+            announcement_html = '\n'.join(paragraphs) if paragraphs else f"<p>{request.custom_message}</p>"
+        elif request.custom_message and request.enhance:
+            # Quick Input + AI Polish: lightly improve what they wrote
+            print(f"📢 Polishing announcement with AI (tone={request.tone})")
+            system = "You are Bonita, helping professors refine course announcements."
+            prompt = f"""Polish and lightly improve this course announcement while keeping the author's voice and intent.
 
-IMPORTANT: Generate ALL content in {language_name}.
-The entire announcement must be in {language_name}.
+Tone: {tone_desc}
+Language: {language_name} — ALL content must be in {language_name}.
+
+Original announcement:
+{request.custom_message}
+
+Instructions:
+- Keep the same meaning and key points
+- Improve clarity, flow, and grammar
+- Apply the requested tone — do not over-formalize or over-casualize
+- Keep it concise (2-3 paragraphs max)
+- Format in HTML for Canvas
+
+Return just the HTML content, no markdown code blocks."""
+            announcement_html, _ = bonita.call_claude(prompt, system)
+        else:
+            # AI Generate: write the full announcement from topic
+            print(f"📢 Generating announcement on: {request.topic}")
+            system = "You are Bonita, helping professors create course announcements."
+            prompt = f"""Create a course announcement about: {request.topic}
+
+Tone: {tone_desc}
+IMPORTANT: Generate ALL content in {language_name}. The entire announcement must be in {language_name}.
 
 {f'Additional details: {request.details}' if request.details else ''}
 
 Make it:
-- Professional but friendly
+- {tone_desc}
 - Clear and concise (2-3 paragraphs max)
 - Action-oriented if needed
 - Formatted in HTML for Canvas
 
 Return just the HTML content, no markdown code blocks."""
-
-        announcement_html, _ = bonita.call_claude(prompt, system)
+            announcement_html, _ = bonita.call_claude(prompt, system)
 
         # Upload to Canvas
         decrypted_token = decrypt_token(credentials.access_token_encrypted)

@@ -1214,17 +1214,59 @@ Students should demonstrate understanding of how technology challenges tradition
                 <div class="selected-course-info" id="announcementCourseInfo"></div>
                 <div id="announcementAlert"></div>
 
-                <div class="form-group">
-                    <label>Announcement Topic</label>
-                    <input type="text" id="announcementTopic" placeholder="e.g., Upcoming Assignment Reminder">
+                <!-- Mode Selection -->
+                <div style="background: #f8f9fa; padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                    <div style="font-weight: 600; margin-bottom: 1rem; color: var(--dark);">Choose Mode:</div>
+                    <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
+                            <input type="radio" name="announcementMode" value="quick" checked onchange="toggleAnnouncementMode()">
+                            <span style="margin-left: 0.5rem;"><strong>Quick Input</strong> — Write it yourself</span>
+                        </label>
+                        <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
+                            <input type="radio" name="announcementMode" value="ai" onchange="toggleAnnouncementMode()">
+                            <span style="margin-left: 0.5rem;"><strong>✨ AI Generate</strong> — AI writes it for you</span>
+                        </label>
+                    </div>
                 </div>
 
+                <!-- Tone Slider (always visible) -->
                 <div class="form-group">
-                    <label>Additional Details (Optional)</label>
-                    <textarea id="announcementDetails" placeholder="Any specific details to include..."></textarea>
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Tone</span>
+                        <span id="announcementToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
+                    </label>
+                    <input type="range" id="announcementTone" min="1" max="5" value="3"
+                        oninput="updateAnnouncementToneLabel(this.value)"
+                        style="width: 100%; accent-color: var(--purple);">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
+                        <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                    </div>
                 </div>
 
-                <button class="btn btn-primary" onclick="createAnnouncement()">Generate & Post Announcement</button>
+                <!-- Quick Input Form -->
+                <div id="quickAnnouncementForm">
+                    <div class="form-group">
+                        <label>Your Announcement</label>
+                        <textarea id="announcementCustomMessage" rows="6" placeholder="Write your announcement here. Separate paragraphs with a blank line."></textarea>
+                    </div>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <button class="btn" style="background: #f0f0f0; color: var(--dark);" onclick="postAnnouncementDirect()">Post As-Is</button>
+                        <button class="btn btn-primary" onclick="postAnnouncementPolished()">✨ AI Polish & Post</button>
+                    </div>
+                </div>
+
+                <!-- AI Generate Form -->
+                <div id="aiAnnouncementForm" style="display: none;">
+                    <div class="form-group">
+                        <label>Announcement Topic</label>
+                        <input type="text" id="announcementTopic" placeholder="e.g., Upcoming Assignment Reminder">
+                    </div>
+                    <div class="form-group">
+                        <label>Additional Details (Optional)</label>
+                        <textarea id="announcementDetails" placeholder="Any specific details to include..."></textarea>
+                    </div>
+                    <button class="btn btn-primary" onclick="createAnnouncement()">Generate & Post Announcement</button>
+                </div>
             </div>
 
             <!-- Assignment Creator -->
@@ -2482,43 +2524,67 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             generatedQuizData = null;
         }
 
-        // Create Announcement
-        async function createAnnouncement() {
+        // Announcement: mode toggle + tone label
+        function toggleAnnouncementMode() {
+            const mode = document.querySelector('input[name="announcementMode"]:checked').value;
+            document.getElementById('quickAnnouncementForm').style.display = mode === 'quick' ? 'block' : 'none';
+            document.getElementById('aiAnnouncementForm').style.display = mode === 'ai' ? 'block' : 'none';
+        }
+
+        const _toneLabelMap = { 1: 'Formal', 2: 'Professional', 3: 'Balanced', 4: 'Friendly', 5: 'Casual' };
+        function updateAnnouncementToneLabel(val) {
+            document.getElementById('announcementToneLabel').textContent = _toneLabelMap[val] || 'Balanced';
+        }
+
+        function _getAnnouncementTone() {
+            return parseInt(document.getElementById('announcementTone').value) || 3;
+        }
+
+        async function _submitAnnouncement(body) {
             if (!selectedCourse) { alert('Select a course first'); return; }
-
-            const topic = document.getElementById('announcementTopic').value;
-            if (!topic) { alert('Enter announcement topic'); return; }
-
-            showAlert('announcementAlert', 'info', '📢 Creating announcement...');
-
+            showAlert('announcementAlert', 'info', '📢 Posting announcement...');
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
                 const response = await fetch(`${API_URL}/api/v2/canvas/announcement`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify({
-                        course_id: selectedCourse.id,
-                        topic: topic,
-                        details: document.getElementById('announcementDetails').value || null,
-                        language: currentLang
-                    })
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                    body: JSON.stringify({ course_id: selectedCourse.id, language: currentLang, tone: _getAnnouncementTone(), ...body })
                 });
-
                 const result = await response.json();
-
                 if (response.ok) {
                     showAlert('announcementAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank" style="color: var(--purple);">View in Canvas →</a>`);
-                    document.getElementById('announcementTopic').value = '';
-                    document.getElementById('announcementDetails').value = '';
                 } else {
                     showAlert('announcementAlert', 'error', '❌ ' + result.detail);
                 }
             } catch (error) {
                 showAlert('announcementAlert', 'error', '❌ Error: ' + error.message);
             }
+        }
+
+        async function postAnnouncementDirect() {
+            const msg = document.getElementById('announcementCustomMessage').value.trim();
+            if (!msg) { alert('Write your announcement first'); return; }
+            showAlert('announcementAlert', 'info', '📢 Posting announcement...');
+            await _submitAnnouncement({ topic: msg.split('\n')[0].substring(0, 80), custom_message: msg, enhance: false });
+            document.getElementById('announcementCustomMessage').value = '';
+        }
+
+        async function postAnnouncementPolished() {
+            const msg = document.getElementById('announcementCustomMessage').value.trim();
+            if (!msg) { alert('Write your announcement first'); return; }
+            showAlert('announcementAlert', 'info', '✨ Polishing with AI...');
+            await _submitAnnouncement({ topic: msg.split('\n')[0].substring(0, 80), custom_message: msg, enhance: true });
+            document.getElementById('announcementCustomMessage').value = '';
+        }
+
+        // AI Generate Announcement
+        async function createAnnouncement() {
+            const topic = document.getElementById('announcementTopic').value;
+            if (!topic) { alert('Enter announcement topic'); return; }
+            showAlert('announcementAlert', 'info', '✨ Generating announcement...');
+            await _submitAnnouncement({ topic, details: document.getElementById('announcementDetails').value || null });
+            document.getElementById('announcementTopic').value = '';
+            document.getElementById('announcementDetails').value = '';
         }
 
         // Create Assignment

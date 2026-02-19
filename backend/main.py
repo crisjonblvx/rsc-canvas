@@ -1089,7 +1089,8 @@ async def create_checkout_session(
             success_url=request.success_url,
             cancel_url=request.cancel_url,
             metadata={
-                'user_id': str(current_user['user_id'])
+                'user_id': str(current_user['user_id']),
+                'price_id': request.price_id
             }
         )
 
@@ -1123,6 +1124,16 @@ async def stripe_webhook(request: Request):
     payload = await request.body()
     sig_header = request.headers.get('stripe-signature')
 
+    # Map Stripe price IDs to subscription tiers
+    PRICE_TIER_MAP = {
+        'price_1T0FFFGKcotGCnJDC4jShxqY': 'educator',   # educator-monthly
+        'price_1T0FJnGKcotGCnJDGuf6bhAv': 'educator',   # educator-yearly
+        'price_1T0FLtGKcotGCnJDTKbwtYHu': 'pro',        # pro-monthly
+        'price_1T0FQXGKcotGCnJDIRJygEV0': 'pro',        # pro-yearly
+        'price_1T0FrdGKcotGCnJDLCLHZxhK': 'school',     # school
+        'price_1T0FbKGKcotGCnJDVrqbHUHu': 'district',   # district
+    }
+
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, STRIPE_WEBHOOK_SECRET
@@ -1136,17 +1147,22 @@ async def stripe_webhook(request: Request):
             session = event['data']['object']
             user_id = session['metadata']['user_id']
 
+            # Determine tier from price_id stored in metadata
+            price_id = session['metadata'].get('price_id', '')
+            tier = PRICE_TIER_MAP.get(price_id, 'educator')  # default to educator if unknown
+            print(f"✅ Checkout completed: user={user_id}, price={price_id}, tier={tier}")
+
             # Update user subscription and clear demo status if they were a demo user
             cursor.execute("""
                 UPDATE users
                 SET subscription_status = 'active',
-                    subscription_tier = 'pro',
+                    subscription_tier = %s,
                     stripe_subscription_id = %s,
                     trial_ends_at = NULL,
                     is_demo = FALSE,
                     demo_expires_at = NULL
                 WHERE id = %s
-            """, (session['subscription'], user_id))
+            """, (tier, session['subscription'], user_id))
 
         elif event['type'] == 'customer.subscription.updated':
             subscription = event['data']['object']

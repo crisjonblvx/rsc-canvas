@@ -1470,10 +1470,10 @@ Students should demonstrate understanding of how technology challenges tradition
 
                     <div class="form-group">
                         <label>Page Type</label>
-                        <select id="aiPageType" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem;">
+                        <select id="aiPageType" onchange="toggleStudyPackOptions()" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem;">
                             <option value="overview">Course/Unit Overview</option>
                             <option value="resource_list">Resource List</option>
-                            <option value="study_guide">Study Guide</option>
+                            <option value="study_guide">Study Guide / Study Pack</option>
                             <option value="tutorial">Tutorial/How-To</option>
                             <option value="reading">Reading Material</option>
                             <option value="reference">Reference Material</option>
@@ -1489,6 +1489,53 @@ Students should demonstrate understanding of how technology challenges tradition
                     <div class="form-group">
                         <label>Learning Objectives (Optional)</label>
                         <textarea id="aiPageObjectives" placeholder="What should students learn from this page?" style="min-height: 80px;"></textarea>
+                    </div>
+
+                    <!-- Study Pack Builder — only shown when Study Guide is selected -->
+                    <div id="studyPackOptions" style="display: none; background: #f8f0ff; border: 1px solid var(--purple); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem;">
+                        <p style="font-weight: 600; color: var(--purple); margin: 0 0 1rem 0;">📦 Study Pack Builder</p>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1.5rem; margin-bottom: 1rem;">
+                            <p style="grid-column: 1; font-weight: 600; font-size: 0.85rem; color: #555; margin: 0 0 0.25rem 0;">Study Pack Sections</p>
+                            <p style="grid-column: 2; font-weight: 600; font-size: 0.85rem; color: #555; margin: 0 0 0.25rem 0;">Assignment Add-ons</p>
+
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer;">
+                                <input type="checkbox" id="sp_hook" checked> Hook / Opening scenario
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer;">
+                                <input type="checkbox" id="sp_assignment"> Assignment prompt
+                            </label>
+
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer;">
+                                <input type="checkbox" id="sp_cases" checked> Case studies
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer;">
+                                <input type="checkbox" id="sp_model_example"> Model example (Weak/Strong)
+                            </label>
+
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer;">
+                                <input type="checkbox" id="sp_critical" checked> Cultural/critical analysis
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer;">
+                                <input type="checkbox" id="sp_rubric"> Grading rubric
+                            </label>
+
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer;">
+                                <input type="checkbox" id="sp_glossary" checked> Key terms & glossary
+                            </label>
+                            <div></div>
+
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer;">
+                                <input type="checkbox" id="sp_resources" checked> Resources with links
+                            </label>
+                            <div></div>
+
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer;">
+                                <input type="checkbox" id="sp_closing"> Closing frame
+                            </label>
+                        </div>
+
+                        <p style="font-size: 0.78rem; color: #888; margin: 0;">⚠️ Always verify links before posting to students.</p>
                     </div>
 
                     <button class="btn btn-primary" onclick="generateAIPage()">✨ Generate with AI</button>
@@ -2859,6 +2906,12 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         }
 
         // Generate AI-Enhanced Page
+        function toggleStudyPackOptions() {
+            const pageType = document.getElementById('aiPageType').value;
+            const opts = document.getElementById('studyPackOptions');
+            opts.style.display = pageType === 'study_guide' ? 'block' : 'none';
+        }
+
         async function generateAIPage() {
             if (!selectedCourse) { alert('Select a course first'); return; }
 
@@ -2870,6 +2923,16 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             if (!title || !description) {
                 alert('Please enter title and description');
                 return;
+            }
+
+            // Collect study pack section selections
+            let studyPackSections = null;
+            if (pageType === 'study_guide') {
+                studyPackSections = [];
+                const checks = { hook: 'sp_hook', cases: 'sp_cases', critical: 'sp_critical', glossary: 'sp_glossary', resources: 'sp_resources', closing: 'sp_closing', assignment: 'sp_assignment', model_example: 'sp_model_example', rubric: 'sp_rubric' };
+                for (const [key, id] of Object.entries(checks)) {
+                    if (document.getElementById(id)?.checked) studyPackSections.push(key);
+                }
             }
 
             showAlert('pageAlert', 'info', '✨ AI is generating your page...');
@@ -2890,7 +2953,8 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         objectives: objectives,
                         language: currentLang,
                         tone: tone,
-                        course_name: selectedCourse?.name || null
+                        course_name: selectedCourse?.name || null,
+                        study_pack_sections: studyPackSections
                     })
                 });
 

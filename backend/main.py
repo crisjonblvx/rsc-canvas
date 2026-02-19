@@ -363,13 +363,13 @@ class BonitaEngine:
         """Alias for call_ai() for backward compatibility"""
         return self.call_ai(prompt, system)
 
-    def call_haiku(self, prompt: str, system: str = "") -> tuple[str, float]:
+    def call_haiku(self, prompt: str, system: str = "", max_tokens: int = 2048) -> tuple[str, float]:
         """Use Claude Haiku 4.5 for high-quality, natural content generation."""
         if self.anthropic_client:
             try:
                 response = self.anthropic_client.messages.create(
                     model="claude-haiku-4-5-20251001",
-                    max_tokens=2048,
+                    max_tokens=max_tokens,
                     system=system,
                     messages=[{"role": "user", "content": prompt}]
                 )
@@ -1956,15 +1956,45 @@ async def generate_ai_page(
         language_name = LANGUAGE_MAP.get(request.language, "English")
         tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
+        # Study guides need more material to avoid truncating sections
+        ref_max_chars = 8000 if request.page_type == "study_guide" else 3000
+
         # Fetch reference materials for context (filtered to selected course)
-        reference_context = get_user_reference_context(current_user['user_id'], db, course_name=request.course_name)
+        reference_context = get_user_reference_context(current_user['user_id'], db, course_name=request.course_name, max_chars=ref_max_chars)
         course_label = request.course_name or "this course"
-        ref_section = f"\n\nCOURSE REFERENCE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
 
         system = """You are Bonita, an AI assistant helping college professors create course pages.
 Your output should be well-formatted HTML suitable for Canvas LMS."""
 
-        prompt = f"""Create a course page titled: {request.title}
+        # Study guides: faithfully reproduce source material, don't summarize
+        if request.page_type == "study_guide" and reference_context:
+            prompt = f"""Convert this professor's study guide into polished HTML for Canvas LMS.
+
+SELECTED COURSE: {course_label}
+Tone: {tone_desc}
+Language: {language_name} — ALL content must be in {language_name}.
+
+SOURCE MATERIAL (convert ALL of this — do NOT skip or summarize any section):
+{reference_context}
+
+STRICT RULES:
+1. Include EVERY section from the source — do not drop any people, topics, or sections. If the source mentions Ida B. Wells, Max Robinson, or any other person, they MUST appear in the output.
+2. Preserve ALL links exactly as written in the source. Convert each URL into a clickable HTML anchor: <a href="URL" target="_blank">Link Text</a>
+3. Do NOT add sections, glossaries, or content that isn't in the source.
+4. Do NOT remove or summarize sections — convert each one fully.
+5. Maintain the order and structure of the original.
+
+Format in HTML for Canvas:
+- <h3> for numbered section headings (e.g., "1. Journalism = Narrative Power")
+- <p> for paragraphs, <ul>/<li> for bullet lists
+- <strong> for key terms, <a href="..." target="_blank"> for all links
+- For Read/Watch resources: format as a labeled list with clickable links
+
+Do NOT include the page title as a heading (Canvas adds it automatically)."""
+
+        else:
+            ref_section = f"\n\nCOURSE REFERENCE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
+            prompt = f"""Create a course page titled: {request.title}
 
 SELECTED COURSE: {course_label}
 Language: {language_name} — ALL content must be in {language_name}.
@@ -1985,8 +2015,11 @@ Format in HTML for Canvas:
 
 Do NOT include the page title as a heading (Canvas adds it automatically)."""
 
+        # Study guides need more output tokens to render all sections fully
+        haiku_max_tokens = 4096 if request.page_type == "study_guide" else 2048
+
         # Generate with Claude Haiku 4.5 (natural, course-specific content)
-        generated_content, cost = bonita.call_haiku(prompt, system)
+        generated_content, cost = bonita.call_haiku(prompt, system, max_tokens=haiku_max_tokens)
 
         print(f"✅ Page generated (cost: ${cost:.4f})")
 

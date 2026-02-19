@@ -1800,6 +1800,7 @@ class AIPageRequest(BaseModel):
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
     tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
     course_name: Optional[str] = None  # Selected course name for filtering reference materials
+    study_pack_sections: Optional[List[str]] = None  # hook, cases, critical, glossary, resources, closing, assignment, model_example, rubric
 
 
 class PageRequest(BaseModel):
@@ -1992,7 +1993,9 @@ async def generate_ai_page(
         system = """You are Bonita, an AI assistant helping college professors create course pages.
 Your output should be well-formatted HTML suitable for Canvas LMS."""
 
-        # Study guides: faithfully reproduce source material, don't summarize
+        sections = set(request.study_pack_sections or [])
+
+        # CASE 1: Study guide — convert professor's uploaded source material faithfully
         if request.page_type == "study_guide" and reference_context:
             prompt = f"""Convert this professor's study guide into polished HTML for Canvas LMS.
 
@@ -2007,20 +2010,88 @@ Professor's additional instructions:
 {request.description}
 
 STRICT RULES:
-1. Include EVERY section from the source — do not drop any people, topics, or sections. If the source mentions Ida B. Wells, Max Robinson, or any other person, they MUST appear in the output.
-2. Preserve ALL links exactly as written in the source. Convert each URL into a clickable HTML anchor: <a href="URL" target="_blank">Link Text</a>
+1. Include EVERY section from the source — do not drop any people, topics, or sections.
+2. Preserve ALL links exactly as written. Convert each URL to: <a href="URL" target="_blank">Link Text</a>
 3. Do NOT remove or summarize sections — convert each one fully.
 4. Maintain the order and structure of the original.
-5. Only add extra sections (like a glossary or key takeaways) if the professor's instructions above explicitly request them.
+5. Only add extra sections (glossary, key takeaways, etc.) if explicitly requested above.
 
 Format in HTML for Canvas:
-- <h3> for numbered section headings (e.g., "1. Journalism = Narrative Power")
-- <p> for paragraphs, <ul>/<li> for bullet lists
+- <h3> for numbered section headings, <p> for paragraphs, <ul>/<li> for bullet lists
 - <strong> for key terms, <a href="..." target="_blank"> for all links
-- For Read/Watch resources: format as a labeled list with clickable links
 
 Do NOT include the page title as a heading (Canvas adds it automatically)."""
 
+        # CASE 2: Study guide — generate fresh from scratch using professor's format
+        elif request.page_type == "study_guide":
+            # Build section instructions based on checkboxes
+            section_instructions = []
+            num = 1
+
+            if 'hook' in sections:
+                section_instructions.append(f"{num}. HOOK / OPENING SCENARIO — Open with a compelling real-world story or question (a specific person, dollar amount, date, platform). End with a sharp question that reframes the issue. Use short punchy paragraphs.")
+                num += 1
+            if 'cases' in sections:
+                section_instructions.append(f"{num}. CASE STUDIES (2-3) — Each with: a scene-setting intro, the problem, key facts/timeline, what happened after, and the lesson. Use real names, dates, and numbers. Keep it tight and engaging.")
+                num += 1
+            if 'critical' in sections:
+                section_instructions.append(f"{num}. CULTURAL/CRITICAL ANALYSIS — Examine race, power, systemic dynamics, or double standards related to the topic. Ask hard questions. Don't just describe — analyze.")
+                num += 1
+            if 'glossary' in sections:
+                section_instructions.append(f"{num}. KEY TERMS / GLOSSARY — 5-8 terms with clear, direct definitions. Format as a definition list.")
+                num += 1
+            if 'resources' in sections:
+                section_instructions.append(f"{num}. RESOURCES WITH LINKS — 2-3 resources per major section. Use REAL URLs from stable sources: FTC.gov, FCC.gov, history.com, Britannica, NPR, PBS, Pew Research, Rolling Stone, YouTube, Netflix, academic journals, major newspapers. Format each as: <a href='URL' target='_blank'>Source Name – Article/Resource Title</a>. Add a note to verify links before posting.")
+                num += 1
+            if 'closing' in sections:
+                section_instructions.append(f"{num}. CLOSING FRAME — A tight 2-3 line paragraph that connects back to the course's bigger theme and teases what comes next. Conversational and punchy.")
+                num += 1
+            if 'assignment' in sections:
+                section_instructions.append(f"{num}. ASSIGNMENT — Title, due date placeholder, point value, word count range, and a clear mission statement. Break it into numbered steps (Find, Document, Analyze, Conclude). Each step should tell students exactly what to do.")
+                num += 1
+            if 'model_example' in sections:
+                section_instructions.append(f"{num}. MODEL EXAMPLE (WEAK vs STRONG) — Show students the difference between a C-level response and an A-level response on the assignment. The weak example should be vague and surface-level. The strong example should be specific, analytical, cite sources, and demonstrate critical thinking.")
+                num += 1
+            if 'rubric' in sections:
+                section_instructions.append(f"{num}. GRADING RUBRIC — HTML table with 4 criteria columns (A: 90-100, B: 80-89, C/D: 60-79) and a points column. Make each level description specific and actionable, not generic.")
+                num += 1
+
+            sections_block = "\n\n".join(section_instructions) if section_instructions else "Create a complete study guide with all standard sections."
+
+            prompt = f"""You are creating a college-level study pack for a professor. Write it with the energy and editorial voice of a professor who is direct, culturally aware, and knows how to engage students.
+
+TOPIC: {request.title}
+COURSE: {course_label}
+Tone: {tone_desc}
+Language: {language_name} — ALL content must be in {language_name}.
+Professor's notes: {request.description}
+{f'Learning objectives: {request.objectives}' if request.objectives else ''}
+
+STYLE GUIDE:
+- Short, punchy paragraphs — never more than 3-4 sentences in a row
+- Use em-dashes (—) for emphasis and rhythm
+- Ask rhetorical questions to pull students in
+- Be specific: use real names, real dollar amounts, real dates, real cases
+- Don't hedge or qualify everything — take a stance
+- Cultural and racial dynamics are fair game when relevant to the topic
+- Connect ideas to previous or upcoming course themes when natural
+
+SECTIONS TO INCLUDE (in this order):
+{sections_block}
+
+FORMAT IN HTML FOR CANVAS:
+- <h3> for major section headings
+- <h4> for subsections within a section
+- <p> for paragraphs, <ul>/<li> for bullet lists, <ol>/<li> for numbered steps
+- <strong> for key terms and emphasis
+- <a href="URL" target="_blank">Link text</a> for all resources
+- <table> for the rubric if included
+- Do NOT wrap everything in a div — just the HTML elements directly
+
+Do NOT include the page title as a heading (Canvas adds it automatically).
+Do NOT add a generic introduction paragraph before the first section."""
+
+        # CASE 3: All other page types
         else:
             ref_section = f"\n\nCOURSE REFERENCE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
             prompt = f"""Create a course page titled: {request.title}

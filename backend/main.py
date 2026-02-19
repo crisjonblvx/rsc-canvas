@@ -1697,9 +1697,12 @@ ANNOUNCEMENT_TONE_MAP = AI_TONE_MAP
 def get_user_reference_context(user_id: int, db: Session, max_materials: int = 3, max_chars: int = 3000, course_name: str = None) -> str:
     """Fetch a user's uploaded reference materials and return as a formatted context string.
 
-    If course_name is provided, attempts to extract a course code (e.g. 'MCM 200') and
-    filter materials to only those matching that course. Falls back to all materials if no match.
+    If course_name is provided, tries multiple strategies to filter materials to the correct course:
+    1. Extract course code (e.g. 'MCM 200') and match against stored course_name / file_name
+    2. If no code match, match by significant words from the canvas course display name
+    Falls back to all materials if nothing matches.
     """
+    import re
     try:
         all_materials = db.query(ReferenceMaterial).filter_by(user_id=user_id).order_by(
             ReferenceMaterial.upload_date.desc()
@@ -1707,14 +1710,14 @@ def get_user_reference_context(user_id: int, db: Session, max_materials: int = 3
         if not all_materials:
             return ""
 
-        # Try to filter by course code extracted from course_name
-        # e.g. "FOUNDATIONS OF MASS COMMUNICATIONS (2025;20;MCM 200 1001)" → "MCM 200"
         filtered = all_materials
+        matched_label = None  # human-readable label for what was matched
+
         if course_name:
-            import re
+            # Strategy 1: extract course code (e.g. "MCM 200") and match against stored metadata
             code_match = re.search(r'\b([A-Z]{2,5})\s*(\d{3,4})\b', course_name)
             if code_match:
-                course_code = f"{code_match.group(1)} {code_match.group(2)}"  # e.g. "MCM 200"
+                course_code = f"{code_match.group(1)} {code_match.group(2)}"
                 matched = [
                     m for m in all_materials
                     if (m.course_name and course_code.lower() in m.course_name.lower())
@@ -1722,9 +1725,27 @@ def get_user_reference_context(user_id: int, db: Session, max_materials: int = 3
                 ]
                 if matched:
                     filtered = matched
-                    print(f"📚 Filtered reference materials to {len(filtered)} matching '{course_code}'")
-                else:
-                    print(f"📚 No materials matched '{course_code}', using all {len(all_materials)}")
+                    matched_label = course_code
+                    print(f"📚 Filtered to {len(filtered)} materials matching course code '{course_code}'")
+
+            # Strategy 2: if code match found nothing, try significant words from the display name
+            # Strip Canvas semester codes like (2025;20;MCM 200 1001) and use the course title words
+            if filtered is all_materials and course_name:
+                clean_name = re.sub(r'\(.*?\)', '', course_name).strip()  # remove parenthetical codes
+                words = [w for w in re.split(r'\W+', clean_name) if len(w) >= 5]  # meaningful words only
+                if words:
+                    matched = [
+                        m for m in all_materials
+                        if m.course_name and any(w.lower() in m.course_name.lower() for w in words)
+                        or m.file_name and any(w.lower() in m.file_name.lower() for w in words)
+                    ]
+                    if matched:
+                        filtered = matched
+                        matched_label = clean_name
+                        print(f"📚 Filtered to {len(filtered)} materials matching course name words")
+
+            if filtered is all_materials:
+                print(f"📚 No filter match for '{course_name}', using all {len(all_materials)} materials")
 
         materials = filtered[:max_materials]
         parts = []
@@ -1937,18 +1958,22 @@ async def generate_ai_page(
 
         # Fetch reference materials for context (filtered to selected course)
         reference_context = get_user_reference_context(current_user['user_id'], db, course_name=request.course_name)
-        ref_section = f"\n\nCOURSE REFERENCE MATERIALS (use specific topics and terminology from here):\n{reference_context}" if reference_context else ""
+        course_label = request.course_name or "this course"
+        ref_section = f"\n\nCOURSE REFERENCE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
 
         system = """You are Bonita, an AI assistant helping college professors create course pages.
 Your output should be well-formatted HTML suitable for Canvas LMS."""
 
         prompt = f"""Create a course page titled: {request.title}
 
+SELECTED COURSE: {course_label}
 Language: {language_name} — ALL content must be in {language_name}.
 Tone: {tone_desc}
 Page Type: {page_type_desc}
 Description: {request.description}
 {f'Learning Objectives: {request.objectives}' if request.objectives else ''}{ref_section}
+
+IMPORTANT: Generate content SPECIFICALLY for {course_label}. Use ONLY reference materials that belong to this course.
 
 Write content that is specific to this course — use actual topics, concepts, and terminology from the reference materials above. Avoid generic filler.
 
@@ -2061,13 +2086,15 @@ async def generate_ai_assignment(
 
         # Fetch reference materials for course-specific context (filtered to selected course)
         reference_context = get_user_reference_context(current_user['user_id'], db, course_name=request.course_name)
-        ref_section = f"\n\nCOURSE REFERENCE MATERIALS (syllabus/documents the professor uploaded — be specific to the actual topics, concepts, and terminology found here):\n{reference_context}" if reference_context else ""
+        course_label = request.course_name or "this course"
+        ref_section = f"\n\nCOURSE REFERENCE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
 
         system = """You are Bonita, an AI assistant helping college professors create assignments.
 Write in HTML formatted for Canvas LMS."""
 
         prompt = f"""Help a professor create a {assignment_type_desc} for their course.
 
+SELECTED COURSE: {course_label}
 Tone: {tone_desc}
 Assignment Title: {request.topic}
 Points: {request.points}
@@ -2075,6 +2102,8 @@ Language: {language_name} — ALL content must be in {language_name}.
 
 Professor's instructions:
 {request.requirements}{ref_section}
+
+IMPORTANT: Generate content SPECIFICALLY for {course_label}. If reference materials are provided above, use ONLY the ones that belong to this course. Do NOT pull in concepts from other courses.
 
 Write a focused, course-specific assignment. Use the actual topics, concepts, and terminology from this course — do NOT write generic academic boilerplate.
 
@@ -2567,16 +2596,20 @@ async def generate_ai_discussion(
         tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
         reference_context = get_user_reference_context(current_user['user_id'], db, course_name=request.course_name)
-        ref_section = f"\n\nCOURSE REFERENCE MATERIALS (use specific topics and concepts from here):\n{reference_context}" if reference_context else ""
+        course_label = request.course_name or "this course"
+        ref_section = f"\n\nCOURSE REFERENCE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
 
         system = "You are Bonita, helping professors create engaging class discussions."
         prompt = f"""Create a discussion topic for a college course.
 
+SELECTED COURSE: {course_label}
 Tone: {tone_desc}
 Topic: {request.topic}
 Discussion Type: {request.discussion_type}
 Learning Goals: {request.goals}
 Language: {language_name} — ALL content must be in {language_name}.{ref_section}
+
+IMPORTANT: Generate content SPECIFICALLY for {course_label}. Use ONLY reference materials that belong to this course.
 
 Write a discussion post that is specific to this course — reference actual concepts and readings from the course materials. Avoid generic prompts.
 
@@ -2608,17 +2641,22 @@ async def generate_ai_syllabus(
         language_name = LANGUAGE_MAP.get(request.language, "English")
         tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
 
-        reference_context = get_user_reference_context(current_user['user_id'], db, course_name=request.selected_course_name or request.course_name)
-        ref_section = f"\n\nEXISTING COURSE MATERIALS (use these to match actual course topics, readings, and structure):\n{reference_context}" if reference_context else ""
+        selected_cn = request.selected_course_name or request.course_name
+        reference_context = get_user_reference_context(current_user['user_id'], db, course_name=selected_cn)
+        course_label = selected_cn or request.course_name or "this course"
+        ref_section = f"\n\nEXISTING COURSE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
 
         system = "You are Bonita, helping professors create course syllabi."
         prompt = f"""Create a course syllabus for: {request.course_name}
 
+SELECTED COURSE: {course_label}
 Language: {language_name} — ALL content must be in {language_name}.
 Tone: {tone_desc}
 Course Description: {request.description}
 Learning Objectives: {request.objectives}
 Grading Policy: {request.grading}{ref_section}
+
+IMPORTANT: Generate content SPECIFICALLY for {course_label}. Use ONLY reference materials that belong to this course.
 
 Write a complete syllabus that is specific to this course. If existing materials are provided above, reflect the actual topics, readings, and structure from them.
 

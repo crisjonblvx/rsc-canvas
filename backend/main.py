@@ -1977,12 +1977,15 @@ Language: {language_name} — ALL content must be in {language_name}.
 SOURCE MATERIAL (convert ALL of this — do NOT skip or summarize any section):
 {reference_context}
 
+Professor's additional instructions:
+{request.description}
+
 STRICT RULES:
 1. Include EVERY section from the source — do not drop any people, topics, or sections. If the source mentions Ida B. Wells, Max Robinson, or any other person, they MUST appear in the output.
 2. Preserve ALL links exactly as written in the source. Convert each URL into a clickable HTML anchor: <a href="URL" target="_blank">Link Text</a>
-3. Do NOT add sections, glossaries, or content that isn't in the source.
-4. Do NOT remove or summarize sections — convert each one fully.
-5. Maintain the order and structure of the original.
+3. Do NOT remove or summarize sections — convert each one fully.
+4. Maintain the order and structure of the original.
+5. Only add extra sections (like a glossary or key takeaways) if the professor's instructions above explicitly request them.
 
 Format in HTML for Canvas:
 - <h3> for numbered section headings (e.g., "1. Journalism = Narrative Power")

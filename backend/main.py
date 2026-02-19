@@ -1060,21 +1060,31 @@ async def create_checkout_session(
         email = result[0]
         stripe_customer_id = result[1]
 
-        if not stripe_customer_id:
-            # Create Stripe customer
+        def ensure_stripe_customer(email, user_id, existing_customer_id):
+            """Get or create a Stripe customer, handling mode mismatches (test vs live)."""
+            if existing_customer_id:
+                try:
+                    # Verify the stored customer still works in the current Stripe mode
+                    stripe.Customer.retrieve(existing_customer_id)
+                    return existing_customer_id
+                except stripe.InvalidRequestError:
+                    print(f"⚠️  Stored customer {existing_customer_id} invalid (mode mismatch?), creating new one")
+
+            # Create new Stripe customer
             print(f"Creating Stripe customer for {email}")
             customer = stripe.Customer.create(
                 email=email,
-                metadata={"user_id": str(current_user['user_id'])}
+                metadata={"user_id": str(user_id)}
             )
-            stripe_customer_id = customer.id
-
-            # Save customer ID
+            # Save new customer ID
             cursor.execute(
                 "UPDATE users SET stripe_customer_id = %s WHERE id = %s",
-                (stripe_customer_id, current_user['user_id'])
+                (customer.id, user_id)
             )
             conn.commit()
+            return customer.id
+
+        stripe_customer_id = ensure_stripe_customer(email, current_user['user_id'], stripe_customer_id)
 
         # Create checkout session
         print(f"Creating Stripe checkout session for customer {stripe_customer_id}, price {request.price_id}")

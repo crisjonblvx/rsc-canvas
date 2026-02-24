@@ -4589,6 +4589,169 @@ async def delete_asset(asset_id: int, current_user=Depends(get_current_user_from
         conn.close()
 
 
+# --- Image Generation (C1) ---
+
+class ImageGenerateRequest(BaseModel):
+    prompt: str
+    style: Optional[str] = "illustration"  # banner | illustration | icon_set | photo
+    context: Optional[str] = "page"         # page | syllabus
+
+
+@app.post("/api/v2/generate-image")
+async def generate_image(
+    request: ImageGenerateRequest,
+    current_user=Depends(get_current_user_from_token)
+):
+    """
+    Generate an AI image using Gemini image generation.
+    Costs 1 image credit. Saves to media_library.
+    """
+    user_id = current_user['user_id']
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Check credit balance
+        cursor.execute("SELECT image_credits_balance FROM users WHERE id = %s", (user_id,))
+        row = cursor.fetchone()
+        if not row or (row[0] or 0) < 1:
+            raise HTTPException(
+                status_code=402,
+                detail="Insufficient image credits. Purchase a credit pack to generate images."
+            )
+
+        if not gemini_client:
+            raise HTTPException(status_code=503, detail="Image generation service unavailable (GEMINI_API_KEY not set)")
+
+        # Build style-aware prompt
+        style_map = {
+            "banner":       "wide horizontal banner image, 16:9 aspect ratio, professional education design",
+            "illustration": "clean flat illustration, minimal style, educational theme",
+            "icon_set":     "set of 4-6 related icons, flat design, consistent style, white background",
+            "photo":        "realistic photo-style image, high quality, educational context",
+        }
+        style_hint = style_map.get(request.style, style_map["illustration"])
+        full_prompt = f"{request.prompt}. Style: {style_hint}. Clean, professional, suitable for a college course page."
+
+        # Call Gemini image generation
+        print(f"🎨 Generating image: {request.prompt[:60]}...")
+        try:
+            image_model = gemini_client.GenerativeModel("gemini-2.0-flash-exp-image-generation")
+            import google.generativeai as genai_mod
+            response = image_model.generate_content(
+                contents=full_prompt,
+                generation_config=genai_mod.GenerationConfig(response_modalities=["IMAGE"])
+            )
+            image_base64 = None
+            mime_type = "image/png"
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, "inline_data") and part.inline_data:
+                    image_base64 = part.inline_data.data
+                    mime_type = part.inline_data.mime_type or "image/png"
+                    break
+            if not image_base64:
+                raise Exception("No image data returned from Gemini")
+        except Exception as img_err:
+            print(f"⚠️  Gemini image generation failed: {img_err}")
+            raise HTTPException(status_code=500, detail=f"Image generation failed: {str(img_err)}")
+
+        data_url = f"data:{mime_type};base64,{image_base64}"
+
+        # Deduct 1 credit atomically
+        cursor.execute(
+            "UPDATE users SET image_credits_balance = image_credits_balance - 1 WHERE id = %s AND image_credits_balance >= 1 RETURNING image_credits_balance",
+            (user_id,)
+        )
+        updated = cursor.fetchone()
+        if not updated:
+            raise HTTPException(status_code=402, detail="Credit deduction failed — balance may have changed")
+        credits_remaining = updated[0]
+
+        # Save to media_library
+        cursor.execute("""
+            INSERT INTO media_library (user_id, prompt_used, style_preset, image_url, image_data, mime_type, credit_cost)
+            VALUES (%s, %s, %s, %s, %s, %s, 1)
+            RETURNING id
+        """, (user_id, request.prompt, request.style, data_url, image_base64, mime_type))
+        media_id = cursor.fetchone()[0]
+
+        # Log credit usage
+        cursor.execute("""
+            INSERT INTO credit_usage_log (user_id, credits_used, image_url, prompt_used)
+            VALUES (%s, 1, %s, %s)
+        """, (user_id, data_url[:500], request.prompt))
+
+        conn.commit()
+        print(f"✅ Image generated — media_id={media_id}, credits_remaining={credits_remaining}")
+
+        return {
+            "status": "success",
+            "media_id": media_id,
+            "image_url": data_url,
+            "mime_type": mime_type,
+            "credits_remaining": credits_remaining,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Image generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/v2/media-library")
+async def get_media_library(current_user=Depends(get_current_user_from_token)):
+    """Return all images in the user's media library (for My Images tab)."""
+    user_id = current_user['user_id']
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT id, prompt_used, style_preset, image_url, alt_text, created_at
+            FROM media_library
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            LIMIT 50
+        """, (user_id,))
+        rows = cursor.fetchall()
+        return {
+            "images": [
+                {
+                    "id": r[0],
+                    "prompt": r[1],
+                    "style": r[2],
+                    "image_url": r[3],
+                    "alt_text": r[4] or r[1],
+                    "created_at": r[5].isoformat() if r[5] else None,
+                }
+                for r in rows
+            ]
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.patch("/api/v2/media-library/{media_id}/alt")
+async def update_image_alt(media_id: int, payload: dict, current_user=Depends(get_current_user_from_token)):
+    """Update alt text for a saved image."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE media_library SET alt_text = %s WHERE id = %s AND user_id = %s",
+            (payload.get("alt_text", ""), media_id, current_user['user_id'])
+        )
+        conn.commit()
+        return {"status": "updated"}
+    finally:
+        cursor.close()
+        conn.close()
+
+
 # --- Time Saved Counter (D1) ---
 
 @app.get("/api/v2/time-savings")

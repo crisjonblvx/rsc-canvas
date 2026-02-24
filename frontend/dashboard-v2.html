@@ -2202,9 +2202,10 @@ Students should demonstrate understanding of how technology challenges tradition
                         <textarea id="aiGeneratedPageContent" style="display: none; min-height: 300px; font-family: 'DM Sans', sans-serif; line-height: 1.6;"></textarea>
                     </div>
 
-                    <div style="display: flex; gap: 1rem;">
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
                         <button class="btn btn-primary" onclick="uploadAIPage()">📤 <span data-i18n="btn.uploadToCanvas">Upload to Canvas</span></button>
                         <button class="btn" onclick="togglePreviewMode('aiGeneratedPageContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
+                        <button class="btn" onclick="openImagePanel('page')" style="background: var(--purple); color: white;">📷✨ Add AI Image</button>
                         <button class="btn" onclick="cancelAIPage()" style="background: #666; color: white;">Cancel</button>
                     </div>
                 </div>
@@ -2420,9 +2421,10 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         <div id="aiGeneratedSyllabusContentPreview" class="rendered-preview"></div>
                         <textarea id="aiGeneratedSyllabusContent" style="display: none; min-height: 400px;"></textarea>
                     </div>
-                    <div style="display: flex; gap: 1rem;">
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
                         <button class="btn btn-primary" onclick="uploadAISyllabus()">📤 Upload to Canvas</button>
                         <button class="btn" onclick="togglePreviewMode('aiGeneratedSyllabusContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
+                        <button class="btn" onclick="openImagePanel('syllabus')" style="background: var(--purple); color: white;">📷✨ Add AI Image</button>
                         <button class="btn" onclick="cancelAISyllabus()" style="background: #666; color: white;">Cancel</button>
                     </div>
                 </div>
@@ -5676,5 +5678,251 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             }, 2000);
         });
     </script>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     C1 — AI Image Generation Panel
+     Slide-in from right. Works in both Page builder and Syllabus builder.
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="imagePanel" style="
+    position: fixed; top: 0; right: -420px; width: 400px; height: 100vh;
+    background: white; box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+    z-index: 9999; transition: right 0.3s ease; display: flex; flex-direction: column;
+    border-left: 3px solid var(--purple);
+">
+    <!-- Header -->
+    <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid #e9ecef; background: var(--purple);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-weight: 700; font-size: 1rem; color: white;">📷✨ AI Image Generator</div>
+                <div id="imagePanelCredits" style="font-size: 0.8rem; color: rgba(255,255,255,0.8); margin-top: 2px;"></div>
+            </div>
+            <button onclick="closeImagePanel()" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center;">✕</button>
+        </div>
+        <!-- Tabs -->
+        <div style="display: flex; gap: 0; margin-top: 1rem; background: rgba(255,255,255,0.15); border-radius: 6px; padding: 3px;">
+            <button id="imgTabGenerate" onclick="switchImageTab('generate')" style="flex: 1; padding: 0.4rem; border: none; border-radius: 4px; font-size: 0.85rem; font-weight: 600; cursor: pointer; background: white; color: var(--purple);">Generate New</button>
+            <button id="imgTabMine" onclick="switchImageTab('mine')" style="flex: 1; padding: 0.4rem; border: none; border-radius: 4px; font-size: 0.85rem; font-weight: 600; cursor: pointer; background: transparent; color: white;">My Images</button>
+        </div>
+    </div>
+
+    <!-- Generate New Tab -->
+    <div id="imgTabGenerateContent" style="flex: 1; overflow-y: auto; padding: 1.25rem;">
+        <div style="margin-bottom: 1rem;">
+            <label style="font-size: 0.85rem; font-weight: 600; color: var(--dark); display: block; margin-bottom: 0.4rem;">Describe the image</label>
+            <textarea id="imgPrompt" placeholder="e.g. A wide banner for a Media Ethics course showing social media icons and a newspaper, modern flat style" style="width: 100%; min-height: 90px; padding: 0.6rem; border: 1px solid #ddd; border-radius: 6px; font-family: inherit; font-size: 0.9rem; resize: vertical; box-sizing: border-box;"></textarea>
+        </div>
+        <div style="margin-bottom: 1.25rem;">
+            <label style="font-size: 0.85rem; font-weight: 600; color: var(--dark); display: block; margin-bottom: 0.5rem;">Style</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <label id="style-banner" class="img-style-btn selected-style" onclick="selectStyle('banner')" style="padding: 0.5rem 0.75rem; border: 2px solid var(--purple); border-radius: 6px; cursor: pointer; font-size: 0.82rem; font-weight: 600; text-align: center; background: #f0ebff; color: var(--purple);">🖼 Banner</label>
+                <label id="style-illustration" class="img-style-btn" onclick="selectStyle('illustration')" style="padding: 0.5rem 0.75rem; border: 2px solid #ddd; border-radius: 6px; cursor: pointer; font-size: 0.82rem; font-weight: 600; text-align: center; background: white; color: #555;">✏️ Illustration</label>
+                <label id="style-icon_set" class="img-style-btn" onclick="selectStyle('icon_set')" style="padding: 0.5rem 0.75rem; border: 2px solid #ddd; border-radius: 6px; cursor: pointer; font-size: 0.82rem; font-weight: 600; text-align: center; background: white; color: #555;">🔷 Icon Set</label>
+                <label id="style-photo" class="img-style-btn" onclick="selectStyle('photo')" style="padding: 0.5rem 0.75rem; border: 2px solid #ddd; border-radius: 6px; cursor: pointer; font-size: 0.82rem; font-weight: 600; text-align: center; background: white; color: #555;">📸 Photo-style</label>
+            </div>
+        </div>
+
+        <!-- Generate button -->
+        <button id="imgGenerateBtn" onclick="generateImage()" style="width: 100%; padding: 0.75rem; background: var(--purple); color: white; border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 700; cursor: pointer; margin-bottom: 1.25rem;">
+            ✨ Generate Image <span style="font-size: 0.8rem; opacity: 0.85;">(1 credit)</span>
+        </button>
+
+        <!-- Generated preview -->
+        <div id="imgGeneratedPreview" style="display: none;">
+            <div style="border-radius: 8px; overflow: hidden; border: 2px solid var(--purple); margin-bottom: 1rem;">
+                <img id="imgGeneratedImg" src="" alt="" style="width: 100%; display: block; max-height: 260px; object-fit: cover;">
+            </div>
+            <div style="margin-bottom: 0.75rem;">
+                <label style="font-size: 0.82rem; font-weight: 600; color: var(--dark); display: block; margin-bottom: 0.35rem;">Alt text (required for accessibility)</label>
+                <input id="imgAltText" type="text" placeholder="Describe the image for screen readers..." style="width: 100%; padding: 0.5rem 0.65rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.88rem; box-sizing: border-box;">
+            </div>
+            <div style="display: flex; gap: 0.6rem;">
+                <button onclick="insertGeneratedImage()" style="flex: 1; padding: 0.6rem; background: var(--green, #28a745); color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.9rem;">✅ Insert</button>
+                <button onclick="generateImage()" style="flex: 1; padding: 0.6rem; background: var(--coral); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">🔄 Retry</button>
+            </div>
+        </div>
+
+        <!-- Generating spinner -->
+        <div id="imgGeneratingSpinner" style="display: none; text-align: center; padding: 2rem 0;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎨</div>
+            <div style="font-size: 0.9rem; color: #666;">Generating your image…<br><span style="font-size: 0.8rem; color: #999;">This takes 10-20 seconds</span></div>
+        </div>
+    </div>
+
+    <!-- My Images Tab -->
+    <div id="imgTabMineContent" style="flex: 1; overflow-y: auto; padding: 1.25rem; display: none;">
+        <div id="myImagesGrid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div style="color: #999; font-size: 0.85rem; grid-column: 1/-1; text-align: center; padding: 2rem 0;">Loading your images…</div>
+        </div>
+    </div>
+</div>
+
+<!-- Overlay to close panel on click outside -->
+<div id="imagePanelOverlay" onclick="closeImagePanel()" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.2); z-index: 9998;"></div>
+
+<script>
+// ─── C1 Image Generation Panel ───────────────────────────────────────────────
+
+let _imgPanelContext = 'page'; // 'page' | 'syllabus'
+let _imgSelectedStyle = 'banner';
+let _imgCurrentDataUrl = null;
+let _imgCurrentMediaId = null;
+
+function openImagePanel(context) {
+    _imgPanelContext = context || 'page';
+    document.getElementById('imagePanel').style.right = '0';
+    document.getElementById('imagePanelOverlay').style.display = 'block';
+    // Load credit count
+    const status = window._genStatus;
+    if (status) {
+        const c = status.image_credits || 0;
+        document.getElementById('imagePanelCredits').textContent = `${c} image credit${c !== 1 ? 's' : ''} remaining`;
+    } else {
+        fetchGenStatus().then(() => {
+            const s = window._genStatus;
+            const c = (s && s.image_credits) || 0;
+            document.getElementById('imagePanelCredits').textContent = `${c} image credit${c !== 1 ? 's' : ''} remaining`;
+        });
+    }
+    // Load My Images in background
+    loadMyImages();
+}
+
+function closeImagePanel() {
+    document.getElementById('imagePanel').style.right = '-420px';
+    document.getElementById('imagePanelOverlay').style.display = 'none';
+}
+
+function switchImageTab(tab) {
+    const isGenerate = tab === 'generate';
+    document.getElementById('imgTabGenerateContent').style.display = isGenerate ? 'block' : 'none';
+    document.getElementById('imgTabMineContent').style.display = isGenerate ? 'none' : 'block';
+    const btnGen = document.getElementById('imgTabGenerate');
+    const btnMine = document.getElementById('imgTabMine');
+    btnGen.style.background = isGenerate ? 'white' : 'transparent';
+    btnGen.style.color = isGenerate ? 'var(--purple)' : 'white';
+    btnMine.style.background = isGenerate ? 'transparent' : 'white';
+    btnMine.style.color = isGenerate ? 'white' : 'var(--purple)';
+    if (!isGenerate) loadMyImages();
+}
+
+function selectStyle(style) {
+    _imgSelectedStyle = style;
+    document.querySelectorAll('.img-style-btn').forEach(el => {
+        const isSelected = el.id === `style-${style}`;
+        el.style.border = isSelected ? '2px solid var(--purple)' : '2px solid #ddd';
+        el.style.background = isSelected ? '#f0ebff' : 'white';
+        el.style.color = isSelected ? 'var(--purple)' : '#555';
+    });
+}
+
+async function generateImage() {
+    const prompt = document.getElementById('imgPrompt').value.trim();
+    if (!prompt) {
+        alert('Please describe the image you want to generate.');
+        return;
+    }
+    document.getElementById('imgGeneratedPreview').style.display = 'none';
+    document.getElementById('imgGeneratingSpinner').style.display = 'block';
+    document.getElementById('imgGenerateBtn').disabled = true;
+    try {
+        const resp = await fetch('/api/v2/generate-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+            body: JSON.stringify({ prompt, style: _imgSelectedStyle, context: _imgPanelContext })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            if (resp.status === 402) {
+                alert('Not enough image credits. Purchase a credit pack to continue.');
+            } else {
+                alert(data.detail || 'Image generation failed. Please try again.');
+            }
+            return;
+        }
+        _imgCurrentDataUrl = data.image_url;
+        _imgCurrentMediaId = data.media_id;
+        document.getElementById('imgGeneratedImg').src = data.image_url;
+        document.getElementById('imgAltText').value = prompt;
+        document.getElementById('imgGeneratedPreview').style.display = 'block';
+        // Update credits display
+        document.getElementById('imagePanelCredits').textContent = `${data.credits_remaining} image credit${data.credits_remaining !== 1 ? 's' : ''} remaining`;
+        if (window._genStatus) window._genStatus.image_credits = data.credits_remaining;
+    } catch (err) {
+        alert('Network error. Please check your connection and try again.');
+        console.error('Image generation error:', err);
+    } finally {
+        document.getElementById('imgGeneratingSpinner').style.display = 'none';
+        document.getElementById('imgGenerateBtn').disabled = false;
+    }
+}
+
+function insertGeneratedImage() {
+    const altText = document.getElementById('imgAltText').value.trim() || 'AI-generated image';
+    if (!_imgCurrentDataUrl) return;
+    insertImageIntoBuilder(_imgPanelContext, _imgCurrentDataUrl, altText);
+    closeImagePanel();
+}
+
+function insertImageIntoBuilder(context, dataUrl, altText) {
+    const imgHtml = `\n<figure style="margin: 1.5rem 0; text-align: center;">\n  <img src="${dataUrl}" alt="${altText}" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.1);">\n  <figcaption style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">${altText}</figcaption>\n</figure>`;
+
+    let textareaId, previewId;
+    if (context === 'page') {
+        textareaId = 'aiGeneratedPageContent';
+        previewId = 'aiGeneratedPageContentPreview';
+    } else {
+        textareaId = 'aiGeneratedSyllabusContent';
+        previewId = 'aiGeneratedSyllabusContentPreview';
+    }
+
+    // Append to textarea
+    const ta = document.getElementById(textareaId);
+    if (ta) ta.value = (ta.value || '') + imgHtml;
+
+    // Append to preview
+    const preview = document.getElementById(previewId);
+    if (preview) preview.innerHTML = (preview.innerHTML || '') + imgHtml;
+}
+
+async function loadMyImages() {
+    const grid = document.getElementById('myImagesGrid');
+    try {
+        const resp = await fetch('/api/v2/media-library', {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await resp.json();
+        if (!data.images || data.images.length === 0) {
+            grid.innerHTML = '<div style="color: #999; font-size: 0.85rem; grid-column: 1/-1; text-align: center; padding: 2rem 0;">No images yet. Generate your first one!</div>';
+            return;
+        }
+        grid.innerHTML = data.images.map(img => `
+            <div style="border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden; cursor: pointer;">
+                <img src="${img.image_url}" alt="${img.alt_text || img.prompt}" style="width: 100%; height: 100px; object-fit: cover; display: block;">
+                <div style="padding: 0.4rem 0.5rem; background: #f8f9fa;">
+                    <div style="font-size: 0.72rem; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${img.prompt}">${img.prompt}</div>
+                    <button onclick="useLibraryImage('${encodeURIComponent(img.image_url)}', '${encodeURIComponent(img.alt_text || img.prompt)}')"
+                        style="width: 100%; margin-top: 0.35rem; padding: 0.3rem; background: var(--purple); color: white; border: none; border-radius: 4px; font-size: 0.78rem; font-weight: 600; cursor: pointer;">
+                        Use
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        grid.innerHTML = '<div style="color: #999; font-size: 0.85rem; grid-column: 1/-1; text-align: center; padding: 2rem 0;">Could not load images.</div>';
+    }
+}
+
+function useLibraryImage(encodedUrl, encodedAlt) {
+    const dataUrl = decodeURIComponent(encodedUrl);
+    const altText = decodeURIComponent(encodedAlt);
+    insertImageIntoBuilder(_imgPanelContext, dataUrl, altText);
+    closeImagePanel();
+}
+
+// Close panel on Escape key
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeImagePanel();
+});
+</script>
 </body>
 </html>

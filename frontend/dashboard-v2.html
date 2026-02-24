@@ -5694,7 +5694,10 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
                 <div style="font-weight: 700; font-size: 1rem; color: white;">📷✨ AI Image Generator</div>
-                <div id="imagePanelCredits" style="font-size: 0.8rem; color: rgba(255,255,255,0.8); margin-top: 2px;"></div>
+                <div style="display: flex; align-items: center; gap: 0.6rem; margin-top: 2px;">
+                    <span id="imagePanelCredits" style="font-size: 0.8rem; color: rgba(255,255,255,0.8);"></span>
+                    <button onclick="openCreditPackModal()" style="font-size: 0.72rem; background: rgba(255,255,255,0.25); color: white; border: none; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-weight: 600;">Buy Credits</button>
+                </div>
             </div>
             <button onclick="closeImagePanel()" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center;">✕</button>
         </div>
@@ -5921,8 +5924,113 @@ function useLibraryImage(encodedUrl, encodedAlt) {
 
 // Close panel on Escape key
 document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeImagePanel();
+    if (e.key === 'Escape') {
+        closeImagePanel();
+        closeCreditPackModal();
+    }
 });
+
+// ─── B3 Credit Pack Purchase Modal ─────────────────────────────────────────
+
+function openCreditPackModal() {
+    document.getElementById('creditPackModal').style.display = 'flex';
+}
+
+function closeCreditPackModal() {
+    document.getElementById('creditPackModal').style.display = 'none';
+}
+
+async function purchaseCreditPack(packId) {
+    // Map packId to Stripe price ID
+    const packPriceIds = {
+        'starter':       'price_CREDIT_STARTER',
+        'standard':      'price_CREDIT_STANDARD',
+        'power':         'price_CREDIT_POWER',
+        'institutional': 'price_CREDIT_INSTITUTIONAL',
+    };
+    const priceId = packPriceIds[packId];
+    if (!priceId) return alert('Invalid pack.');
+
+    try {
+        const resp = await fetch(`${API_URL}/api/stripe/create-checkout-credits`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+            body: JSON.stringify({
+                price_id: priceId,
+                success_url: window.location.origin + '/dashboard-v2.html?payment=credits_success',
+                cancel_url: window.location.origin + '/dashboard-v2.html?payment=canceled',
+            })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            window.location.href = data.checkout_url;
+        } else {
+            alert(data.detail || 'Error creating checkout. Please try again.');
+        }
+    } catch (err) {
+        alert('Network error. Please try again.');
+        console.error(err);
+    }
+}
+
+// Check for credit purchase success on page load
+(function() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') === 'credits_success') {
+        setTimeout(() => {
+            showAlert('alert', 'success', '✅ Image credits added to your account!');
+            fetchGenStatus();
+        }, 500);
+        window.history.replaceState({}, '', window.location.pathname);
+    }
+})();
 </script>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     B3 — Credit Pack Purchase Modal
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="creditPackModal" onclick="if(event.target===this)closeCreditPackModal()" style="
+    display: none; position: fixed; inset: 0; z-index: 10000;
+    background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
+">
+    <div style="background: white; border-radius: 16px; max-width: 520px; width: 90%; padding: 2rem; box-shadow: 0 8px 32px rgba(0,0,0,0.2); position: relative;">
+        <button onclick="closeCreditPackModal()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 1.3rem; cursor: pointer; color: #999;">✕</button>
+        <h2 style="margin: 0 0 0.5rem; font-size: 1.3rem; color: var(--dark);">📷 Image Generation Credits</h2>
+        <p style="margin: 0 0 1.5rem; font-size: 0.88rem; color: #666;">Each credit generates one AI image for your course pages.</p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <!-- Starter -->
+            <div style="border: 2px solid #e9ecef; border-radius: 12px; padding: 1.25rem; text-align: center;">
+                <div style="font-weight: 700; font-size: 1rem; color: var(--dark);">Starter</div>
+                <div style="font-size: 2rem; font-weight: 800; color: var(--purple); margin: 0.5rem 0;">10</div>
+                <div style="font-size: 0.78rem; color: #888; margin-bottom: 0.75rem;">images &middot; $0.30/ea</div>
+                <button onclick="purchaseCreditPack('starter')" style="width: 100%; padding: 0.5rem; background: var(--purple); color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.9rem;">$2.99</button>
+            </div>
+            <!-- Standard -->
+            <div style="border: 2px solid var(--purple); border-radius: 12px; padding: 1.25rem; text-align: center; background: #faf8ff;">
+                <div style="font-weight: 700; font-size: 1rem; color: var(--dark);">Standard</div>
+                <div style="font-size: 2rem; font-weight: 800; color: var(--purple); margin: 0.5rem 0;">25</div>
+                <div style="font-size: 0.78rem; color: #888; margin-bottom: 0.75rem;">images &middot; $0.40/ea</div>
+                <button onclick="purchaseCreditPack('standard')" style="width: 100%; padding: 0.5rem; background: var(--purple); color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.9rem;">$9.99</button>
+            </div>
+            <!-- Power -->
+            <div style="border: 2px solid #e9ecef; border-radius: 12px; padding: 1.25rem; text-align: center;">
+                <div style="font-weight: 700; font-size: 1rem; color: var(--dark);">Power</div>
+                <div style="font-size: 2rem; font-weight: 800; color: var(--purple); margin: 0.5rem 0;">75</div>
+                <div style="font-size: 0.78rem; color: #888; margin-bottom: 0.75rem;">images &middot; $0.33/ea</div>
+                <button onclick="purchaseCreditPack('power')" style="width: 100%; padding: 0.5rem; background: var(--purple); color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.9rem;">$24.99</button>
+            </div>
+            <!-- Institutional -->
+            <div style="border: 2px solid #e9ecef; border-radius: 12px; padding: 1.25rem; text-align: center;">
+                <div style="font-weight: 700; font-size: 1rem; color: var(--dark);">Institutional</div>
+                <div style="font-size: 2rem; font-weight: 800; color: var(--purple); margin: 0.5rem 0;">250</div>
+                <div style="font-size: 0.78rem; color: #888; margin-bottom: 0.75rem;">images &middot; $0.20/ea</div>
+                <button onclick="purchaseCreditPack('institutional')" style="width: 100%; padding: 0.5rem; background: var(--purple); color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.9rem;">$49.99</button>
+            </div>
+        </div>
+
+        <p style="margin: 1rem 0 0; font-size: 0.75rem; color: #999; text-align: center;">Credits never expire. Reuse saved images anytime at 0 credits.</p>
+    </div>
+</div>
 </body>
 </html>

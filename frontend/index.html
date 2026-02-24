@@ -22,9 +22,10 @@
     <meta name="author" content="ReadySetClass">
     <meta name="rights" content="All content, branding, and intellectual property is protected by copyright and trademark law.">
 
-    <!-- Fonts: Distinctive choices that elevate the aesthetic -->
+    <!-- Fonts: preconnect + preload critical weights for faster first paint -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Sora:wght@700;800&display=swap" as="style">
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     
     <style>
@@ -61,26 +62,31 @@
             overflow-x: hidden;
         }
 
-        /* Animated background gradient mesh */
+        /* Animated background gradient mesh — GPU-composited */
         body::before {
             content: '';
             position: fixed;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
+            top: -25%;
+            left: -25%;
+            width: 150%;
+            height: 150%;
             background:
                 radial-gradient(circle at 20% 50%, rgba(30, 58, 95, 0.08) 0%, transparent 50%),
                 radial-gradient(circle at 80% 80%, rgba(201, 169, 97, 0.12) 0%, transparent 50%),
                 radial-gradient(circle at 40% 90%, rgba(102, 126, 234, 0.08) 0%, transparent 50%);
             animation: meshMove 20s ease-in-out infinite;
             z-index: -1;
+            will-change: transform;
         }
-        
+
         @keyframes meshMove {
             0%, 100% { transform: translate(0, 0) rotate(0deg); }
             33% { transform: translate(5%, -5%) rotate(1deg); }
             66% { transform: translate(-3%, 3%) rotate(-1deg); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            body::before { animation: none; }
         }
         
         /* Header/Nav */
@@ -605,25 +611,12 @@
     </style>
 </head>
 <body>
-    <!-- Nuclear Cache Buster - runs on every page load -->
+    <!-- Version check — force reload only when app version changes -->
     <script>
       (function() {
-        var APP_VERSION = '2.3.0';
-        // Unregister all service workers
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            registrations.forEach(function(r) { r.unregister(); });
-          });
-        }
-        // Delete all caches
-        if ('caches' in window) {
-          caches.keys().then(function(names) {
-            names.forEach(function(name) { caches.delete(name); });
-          });
-        }
-        // Version check - force reload if outdated
-        var storedVersion = localStorage.getItem('rsc_version');
-        if (storedVersion && storedVersion !== APP_VERSION) {
+        var APP_VERSION = '2.4.0';
+        var prev = localStorage.getItem('rsc_version');
+        if (prev && prev !== APP_VERSION) {
           localStorage.setItem('rsc_version', APP_VERSION);
           window.location.reload(true);
           return;
@@ -636,7 +629,7 @@
     <nav>
         <div class="nav-content">
             <a href="/" class="logo">
-                <img src="/assets/ReadySetClass_alpha_full.png" alt="ReadySetClass" style="height: 40px; width: auto;">
+                <img src="/assets/ReadySetClass_alpha_full.png" alt="ReadySetClass" width="180" height="40" fetchpriority="high" style="height: 40px; width: auto;">
             </a>
             <div class="nav-links">
                 <a href="#features" data-i18n="nav.features">Features</a>

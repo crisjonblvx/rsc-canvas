@@ -1478,6 +1478,81 @@ async def create_checkout_session(
         raise HTTPException(status_code=500, detail=f"Checkout error: {str(e)}")
 
 
+# --- Credit Pack Checkout (B3) ---
+
+class CreditCheckoutRequest(BaseModel):
+    price_id: str
+    success_url: str
+    cancel_url: str
+
+
+@app.post("/api/stripe/create-checkout-credits")
+async def create_credit_checkout(
+    request: CreditCheckoutRequest,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Create Stripe checkout session for one-time credit pack purchase."""
+    if not stripe.api_key:
+        raise HTTPException(status_code=500, detail="Payment system not configured.")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT email, stripe_customer_id FROM users WHERE id = %s", (current_user['user_id'],))
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="User not found")
+        email, stripe_customer_id = result
+
+        # Reuse ensure_stripe_customer logic
+        if stripe_customer_id:
+            try:
+                stripe.Customer.retrieve(stripe_customer_id)
+            except stripe.InvalidRequestError:
+                stripe_customer_id = None
+
+        if not stripe_customer_id:
+            customer = stripe.Customer.create(email=email, metadata={"user_id": str(current_user['user_id'])})
+            stripe_customer_id = customer.id
+            cursor.execute("UPDATE users SET stripe_customer_id = %s WHERE id = %s", (stripe_customer_id, current_user['user_id']))
+            conn.commit()
+
+        checkout_session = stripe.checkout.Session.create(
+            customer=stripe_customer_id,
+            payment_method_types=['card'],
+            line_items=[{'price': request.price_id, 'quantity': 1}],
+            mode='payment',
+            success_url=request.success_url,
+            cancel_url=request.cancel_url,
+            metadata={
+                'user_id': str(current_user['user_id']),
+                'price_id': request.price_id,
+            }
+        )
+
+        return {"checkout_url": checkout_session.url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Credit checkout error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/v2/credit-packs")
+async def get_credit_packs():
+    """Return available credit packs with pricing (no auth required)."""
+    packs = [
+        {"id": "starter",       "name": "Starter Pack",       "credits": 10,  "price": 2.99,  "per_image": 0.30},
+        {"id": "standard",      "name": "Standard Pack",      "credits": 25,  "price": 9.99,  "per_image": 0.40},
+        {"id": "power",         "name": "Power Pack",         "credits": 75,  "price": 24.99, "per_image": 0.33},
+        {"id": "institutional", "name": "Institutional Pack", "credits": 250, "price": 49.99, "per_image": 0.20},
+    ]
+    return {"packs": packs}
+
+
 @app.post("/api/stripe/webhook")
 async def stripe_webhook(request: Request):
     """Handle Stripe webhook events"""
@@ -1494,6 +1569,15 @@ async def stripe_webhook(request: Request):
         'price_1T0FbKGKcotGCnJDVrqbHUHu': 'district',   # district
     }
 
+    # Map Stripe credit pack price IDs to (pack_type, credits)
+    # TODO: Replace placeholders with live Stripe price IDs from CJ
+    CREDIT_PACK_MAP = {
+        'price_CREDIT_STARTER':       ('starter', 10),
+        'price_CREDIT_STANDARD':      ('standard', 25),
+        'price_CREDIT_POWER':         ('power', 75),
+        'price_CREDIT_INSTITUTIONAL': ('institutional', 250),
+    }
+
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, STRIPE_WEBHOOK_SECRET
@@ -1506,23 +1590,42 @@ async def stripe_webhook(request: Request):
         if event['type'] == 'checkout.session.completed':
             session = event['data']['object']
             user_id = session['metadata']['user_id']
-
-            # Determine tier from price_id stored in metadata
             price_id = session['metadata'].get('price_id', '')
-            tier = PRICE_TIER_MAP.get(price_id, 'educator')  # default to educator if unknown
-            print(f"✅ Checkout completed: user={user_id}, price={price_id}, tier={tier}")
+            checkout_mode = session.get('mode', 'subscription')
 
-            # Update user subscription and clear demo status if they were a demo user
-            cursor.execute("""
-                UPDATE users
-                SET subscription_status = 'active',
-                    subscription_tier = %s,
-                    stripe_subscription_id = %s,
-                    trial_ends_at = NULL,
-                    is_demo = FALSE,
-                    demo_expires_at = NULL
-                WHERE id = %s
-            """, (tier, session['subscription'], user_id))
+            # ── Credit pack purchase (one-time payment) ──
+            if price_id in CREDIT_PACK_MAP:
+                pack_type, credits = CREDIT_PACK_MAP[price_id]
+                amount_paid = (session.get('amount_total') or 0) / 100.0
+                payment_intent = session.get('payment_intent', '')
+                print(f"✅ Credit pack purchased: user={user_id}, pack={pack_type}, credits={credits}, amount=${amount_paid:.2f}")
+
+                # Add credits to user balance
+                cursor.execute(
+                    "UPDATE users SET image_credits_balance = COALESCE(image_credits_balance, 0) + %s WHERE id = %s",
+                    (credits, user_id)
+                )
+                # Record the purchase
+                cursor.execute("""
+                    INSERT INTO credit_pack_purchases (user_id, pack_type, credits_purchased, amount_paid, stripe_payment_intent_id)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (user_id, pack_type, credits, amount_paid, payment_intent))
+
+            # ── Subscription purchase ──
+            else:
+                tier = PRICE_TIER_MAP.get(price_id, 'educator')
+                print(f"✅ Subscription checkout: user={user_id}, price={price_id}, tier={tier}")
+
+                cursor.execute("""
+                    UPDATE users
+                    SET subscription_status = 'active',
+                        subscription_tier = %s,
+                        stripe_subscription_id = %s,
+                        trial_ends_at = NULL,
+                        is_demo = FALSE,
+                        demo_expires_at = NULL
+                    WHERE id = %s
+                """, (tier, session.get('subscription'), user_id))
 
         elif event['type'] == 'customer.subscription.updated':
             subscription = event['data']['object']

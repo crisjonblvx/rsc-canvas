@@ -155,7 +155,77 @@
     "edit": "Editar",
     "delete": "Eliminar",
     "close": "Cerrar",
-    "account": "Cuenta"
+    "account": "Cuenta",
+    "uploadToCanvas": "Subir a Canvas",
+    "regenerate": "Regenerar",
+    "postAsIs": "Publicar tal como está",
+    "aiPolish": "Pulir con IA y Publicar",
+    "generatePost": "Generar y Publicar Anuncio",
+    "editSource": "Editar Fuente"
+  },
+  "form": {
+    "chooseMode": "Elige el Modo:",
+    "quickInput": "Entrada Rápida",
+    "aiEnhanced": "✨ Mejorado con IA",
+    "aiGenerate": "✨ Generar con IA",
+    "tone": "Tono",
+    "dueDateLabel": "Fecha de Entrega (Opcional)",
+    "useAsIs": "Usar tu contenido tal como está",
+    "aiGenPro": "La IA genera contenido profesional",
+    "pasteExisting": "Pega un cuestionario existente",
+    "aiGeneratesQuiz": "La IA genera preguntas",
+    "aiGeneratesEngaging": "La IA genera preguntas atractivas",
+    "writeYourself": "Escríbelo tú mismo",
+    "aiWritesForYou": "La IA lo escribe por ti"
+  },
+  "tone": {
+    "formal": "Formal",
+    "professional": "Profesional",
+    "balanced": "Equilibrado",
+    "friendly": "Amigable",
+    "casual": "Informal"
+  },
+  "quiz": {
+    "titleLabel": "Título del Cuestionario",
+    "questionsLabel": "Preguntas del Cuestionario (Pega preguntas formateadas)",
+    "topicLabel": "Tema / Título del Cuestionario",
+    "descLabel": "Descripción e Instrucciones del Cuestionario",
+    "gradeLevelLabel": "Nivel Educativo",
+    "numQuestionsLabel": "Número de Preguntas",
+    "questionTypesLabel": "Tipos de Preguntas",
+    "multipleChoice": "Opción Múltiple",
+    "trueFalse": "Verdadero/Falso",
+    "difficultyLabel": "Dificultad",
+    "easy": "Fácil",
+    "medium": "Medio",
+    "hard": "Difícil"
+  },
+  "ann": {
+    "yourAnn": "Tu Anuncio",
+    "topicLabel": "Tema del Anuncio",
+    "detailsLabel": "Detalles Adicionales (Opcional)",
+    "writeYourself": "Escríbelo tú mismo",
+    "aiWritesForYou": "La IA lo escribe por ti"
+  },
+  "assign": {
+    "titleLabel": "Título de la Tarea",
+    "descLabel": "Descripción / Instrucciones",
+    "pointsLabel": "Puntos",
+    "topicLabel": "Tema / Título de la Tarea",
+    "typeLabel": "Tipo de Tarea",
+    "reqLabel": "¿Qué deben hacer los estudiantes? (Descripción breve)"
+  },
+  "page": {
+    "titleLabel": "Título de la Página",
+    "contentLabel": "Contenido de la Página (Se acepta HTML)",
+    "topicLabel": "Título / Tema de la Página",
+    "typeLabel": "Tipo de Página",
+    "descLabel": "¿Qué debe cubrir esta página? (Descripción breve)",
+    "objectivesLabel": "Objetivos de Aprendizaje (Opcional)"
+  },
+  "disc": {
+    "topicLabel": "Tema de Discusión",
+    "messageLabel": "Mensaje / Pregunta de Discusión"
   },
   "sidebar": {
     "generations": "Generaciones",

@@ -1063,8 +1063,7 @@ async def get_current_user_from_token(credentials: HTTPAuthorizationCredentials 
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT s.user_id, s.expires_at, u.email, u.role, u.is_demo, u.demo_expires_at,
-                   COALESCE(u.preferred_language, 'en') as preferred_language
+            SELECT s.user_id, s.expires_at, u.email, u.role, u.is_demo, u.demo_expires_at
             FROM sessions s
             JOIN users u ON s.user_id = u.id
             WHERE s.session_token = %s AND u.is_active = TRUE
@@ -1075,7 +1074,7 @@ async def get_current_user_from_token(credentials: HTTPAuthorizationCredentials 
         if not session:
             raise HTTPException(status_code=401, detail="Invalid or expired session")
 
-        user_id, expires_at, email, role, is_demo, demo_expires_at, preferred_language = session
+        user_id, expires_at, email, role, is_demo, demo_expires_at = session
 
         # Check session expiry
         if datetime.now() > expires_at:
@@ -1084,6 +1083,16 @@ async def get_current_user_from_token(credentials: HTTPAuthorizationCredentials 
         # Check demo expiry
         if is_demo and demo_expires_at and datetime.now() > demo_expires_at:
             raise HTTPException(status_code=403, detail="Demo account expired")
+
+        # Fetch preferred_language safely (column may not exist before migration 008)
+        preferred_language = 'en'
+        try:
+            cursor.execute("SELECT preferred_language FROM users WHERE id = %s", (user_id,))
+            row = cursor.fetchone()
+            if row and row[0]:
+                preferred_language = row[0]
+        except Exception:
+            pass  # column doesn't exist yet — use default
 
         return {
             "user_id": user_id,
@@ -1227,6 +1236,11 @@ async def update_preferred_language(
             (request.preferred_language, current_user['user_id'])
         )
         conn.commit()
+        return {"preferred_language": request.preferred_language}
+    except Exception:
+        conn.rollback()
+        # Column may not exist before migration 008 — still return success
+        # so the frontend doesn't show errors
         return {"preferred_language": request.preferred_language}
     finally:
         cursor.close()

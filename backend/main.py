@@ -117,6 +117,17 @@ if os.getenv("ANTHROPIC_API_KEY"):
     except Exception as e:
         print(f"⚠️  Anthropic initialization failed: {e}")
 
+# Initialize Gemini (mid-tier: discussions, pages, accessibility, Flash-Lite routing)
+gemini_client = None
+if os.getenv("GEMINI_API_KEY"):
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        gemini_client = genai
+        print("✅ Gemini client initialized (Gemini 2.5 Flash + Flash-Lite)")
+    except Exception as e:
+        print(f"⚠️  Gemini initialization failed: {e}")
+
 if not openai_client and not groq_client and not anthropic_client:
     print("⚠️  No AI API keys found. AI features will not work.")
     print("   Set one of: OPENAI_API_KEY, GROQ_API_KEY, or ANTHROPIC_API_KEY")
@@ -1024,6 +1035,103 @@ def log_model_usage(user_id: int, task_type: str, model: str, provider: str,
     finally:
         cursor.close()
         conn.close()
+
+
+async def call_ai(task_type: str, system_prompt: str, user_prompt: str, user_id: int = None) -> str:
+    """
+    Route-aware AI call using model_router.
+    Selects Groq / Gemini Flash / Gemini Flash-Lite / Sonnet based on task_type.
+    Logs usage to model_usage_log automatically. Returns response text.
+    """
+    config = get_model_config(task_type)
+    provider = config["provider"]
+    model = config["model"]
+    max_tokens = config["max_tokens"]
+    temperature = config["temperature"]
+    text = None
+    input_tokens = 0
+    output_tokens = 0
+
+    try:
+        if provider == "groq" and groq_client:
+            response = groq_client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            text = response.choices[0].message.content
+            if response.usage:
+                input_tokens = response.usage.prompt_tokens
+                output_tokens = response.usage.completion_tokens
+
+        elif provider == "gemini" and gemini_client:
+            gmodel = gemini_client.GenerativeModel(model)
+            response = gmodel.generate_content(
+                f"System: {system_prompt}\n\nUser: {user_prompt}"
+            )
+            text = response.text
+            try:
+                input_tokens = response.usage_metadata.prompt_token_count
+                output_tokens = response.usage_metadata.candidates_token_count
+            except Exception:
+                pass
+
+        elif provider == "anthropic" and anthropic_client:
+            response = anthropic_client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            text = response.content[0].text
+            input_tokens = response.usage.input_tokens
+            output_tokens = response.usage.output_tokens
+
+        else:
+            # No configured provider for this route — fall back to Sonnet
+            if anthropic_client:
+                model = "claude-sonnet-4-6"
+                provider = "anthropic"
+                response = anthropic_client.messages.create(
+                    model=model,
+                    max_tokens=max_tokens,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_prompt}],
+                )
+                text = response.content[0].text
+                input_tokens = response.usage.input_tokens
+                output_tokens = response.usage.output_tokens
+            else:
+                raise Exception(f"No AI provider available for task_type={task_type}")
+
+    except Exception as e:
+        print(f"⚠️  call_ai [{task_type}] primary failed: {e}")
+        # Emergency fallback to Anthropic Sonnet
+        if anthropic_client and provider != "anthropic":
+            model = "claude-sonnet-4-6"
+            provider = "anthropic"
+            response = anthropic_client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            text = response.content[0].text
+            input_tokens = response.usage.input_tokens
+            output_tokens = response.usage.output_tokens
+        else:
+            raise
+
+    cost = calculate_cost(model, input_tokens, output_tokens)
+    print(f"✅ call_ai [{task_type}] via {provider}/{model} (cost: ${cost:.4f})")
+    if user_id:
+        log_model_usage(user_id, task_type, model, provider, input_tokens, output_tokens, cost)
+    return text
 
 
 def record_time_saved(user_id: int, asset_type: str, asset_id: int = None, semester_tag: str = None):
@@ -2174,7 +2282,7 @@ Instructions:
 - Format in HTML for Canvas
 
 Return just the HTML content, no markdown code blocks."""
-            announcement_html, _ = bonita.call_haiku(prompt, system)
+            announcement_html = await call_ai('announcement_generation', system, prompt, user_id=user_id)
         else:
             # AI Generate: write the full announcement from topic
             print(f"📢 Generating announcement on: {request.topic}")
@@ -2193,7 +2301,7 @@ Make it:
 - Formatted in HTML for Canvas
 
 Return just the HTML content, no markdown code blocks."""
-            announcement_html, _ = bonita.call_haiku(prompt, system)
+            announcement_html = await call_ai('announcement_generation', system, prompt, user_id=user_id)
 
         # Upload to Canvas
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
@@ -2402,11 +2510,9 @@ Format in HTML for Canvas:
 
 Do NOT include the page title as a heading (Canvas adds it automatically)."""
 
-        # Study guides need more output tokens to render all sections fully
-        sonnet_max_tokens = 4096 if request.page_type == "study_guide" else 4000
-
         # Generate with Claude Sonnet 4.6 (page_full route per model router)
-        generated_content, cost = bonita.call_sonnet(prompt, system, max_tokens=sonnet_max_tokens)
+        generated_content = await call_ai('page_full', system, prompt, user_id=user_id)
+        cost = 0.0
 
         asset_id = save_asset(
             user_id, 'page', request.title or "Course Page",
@@ -2548,10 +2654,11 @@ Format in HTML for Canvas:
 
 Do NOT include the assignment title as a heading. Be practical, specific, and actionable."""
 
-        # Generate with Claude Haiku 4.5 (natural, course-specific content)
-        generated_content, cost = bonita.call_haiku(prompt, system)
+        # Generate with model router (assignment_full → Sonnet)
+        generated_content = await call_ai('assignment_full', system, prompt, user_id=user_id)
+        cost = 0.0
 
-        print(f"✅ Assignment generated (cost: ${cost:.4f})")
+        print(f"✅ Assignment generated")
 
         return {
             "status": "success",
@@ -2600,7 +2707,7 @@ Include:
 
 Format in HTML for Canvas."""
 
-            description, _ = bonita.call_sonnet(prompt, system, max_tokens=4000)
+            description = await call_ai('assignment_full', system, prompt, user_id=user_id)
 
         # Upload to Canvas
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
@@ -2764,7 +2871,7 @@ Create an engaging discussion post that:
 
 Keep it concise but meaningful."""
 
-        discussion_html, _ = bonita.call_claude(prompt, system)
+        discussion_html = await call_ai('discussion_standard', system, prompt, user_id=user_id)
 
         # Upload to Canvas
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
@@ -3063,15 +3170,15 @@ Include:
 
 Format in HTML for Canvas. Be direct and engaging — students should know exactly what to discuss."""
 
-        content, cost = bonita.call_haiku(prompt, system)
+        content = await call_ai('discussion_standard', system, prompt, user_id=user_id)
 
         asset_id = save_asset(
             user_id, 'discussion', f"Discussion: {request.topic}",
             content, course_name=request.course_name
         )
 
-        print(f"✅ Discussion generated (cost: ${cost:.4f})")
-        return {"status": "success", "generated_content": content, "asset_id": asset_id, "cost": cost}
+        print(f"✅ Discussion generated")
+        return {"status": "success", "generated_content": content, "asset_id": asset_id, "cost": 0.0}
     except HTTPException:
         raise
     except Exception as e:
@@ -3123,15 +3230,15 @@ Format in HTML for Canvas:
 Be specific, practical, and student-friendly. No filler."""
 
         # Syllabus uses Sonnet (syllabus_full route per model router)
-        content, cost = bonita.call_sonnet(prompt, system, max_tokens=6000)
+        content = await call_ai('syllabus_full', system, prompt, user_id=user_id)
 
         asset_id = save_asset(
             user_id, 'syllabus', f"Syllabus: {request.course_name}",
             content, course_name=request.course_name
         )
 
-        print(f"✅ Syllabus generated (cost: ${cost:.4f})")
-        return {"status": "success", "generated_content": content, "asset_id": asset_id, "cost": cost}
+        print(f"✅ Syllabus generated")
+        return {"status": "success", "generated_content": content, "asset_id": asset_id, "cost": 0.0}
     except HTTPException:
         raise
     except Exception as e:
@@ -4575,14 +4682,11 @@ Instructions:
 
 Return ONLY the bullet points or the word null. No preamble."""
 
-    suggestion_text, cost = bonita.call_haiku(prompt, system, max_tokens=400)
+    suggestion_text = await call_ai('enhance_mode_suggestion', system, prompt, user_id=current_user['user_id'])
     suggestion_text = suggestion_text.strip()
 
     if suggestion_text.lower() in ("null", "none", ""):
         return {"suggestion": None}
-
-    log_model_usage(current_user['user_id'], "enhance_mode_suggestion",
-                    "claude-haiku-4-5-20251001", "anthropic", cost_usd=cost)
 
     return {"suggestion": suggestion_text}
 

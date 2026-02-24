@@ -11,7 +11,23 @@
     "login": "Log In",
     "signup": "Sign Up",
     "dashboard": "Dashboard",
-    "logout": "Log Out"
+    "logout": "Log Out",
+    "courses": "My Courses",
+    "aiGrader": "AI Grader",
+    "setupGrading": "Setup Grading",
+    "createQuiz": "Create Quiz",
+    "announcement": "Announcement",
+    "assignment": "Assignment",
+    "page": "Page",
+    "discussion": "Discussion",
+    "modules": "Modules",
+    "syllabus": "Syllabus",
+    "referenceMatl": "Reference Materials",
+    "gettingStarted": "Getting Started",
+    "faq": "FAQ",
+    "inviteColleague": "Invite a Colleague",
+    "library": "Content Library",
+    "account": "Account"
   },
   "hero": {
     "title": "Your LMS organized and ready in days.",
@@ -81,7 +97,8 @@
     "demoButton": "Try Demo Account"
   },
   "dashboard": {
-    "welcome": "Welcome back, {{name}}",
+    "welcome": "Welcome to ReadySetClass",
+    "tagline": "Less time setting up. More time teaching.",
     "createContent": "Create Content",
     "assignments": "Assignments",
     "quizzes": "Quizzes",
@@ -93,7 +110,57 @@
     "selectCourse": "Select Course",
     "recentActivity": "Recent Activity",
     "aiGenerations": "AI Generations",
-    "generationsUsed": "{{used}} / {{total}} used this month"
+    "generationsUsed": "{{used}} / {{total}} used this month",
+    "yourCourses": "Your Courses"
+  },
+  "canvas": {
+    "title": "Canvas Connection",
+    "notConnected": "Not Connected",
+    "connected": "Connected",
+    "connectPrompt": "Connect your Canvas account to get started.",
+    "urlLabel": "Canvas URL",
+    "tokenLabel": "Canvas API Token",
+    "howToToken": "How to get your Canvas API token:",
+    "connectBtn": "Connect Canvas",
+    "disconnect": "Disconnect",
+    "openSettings": "Open Canvas Settings"
+  },
+  "section": {
+    "createQuiz": "Create Quiz",
+    "createAnnouncement": "Create Announcement",
+    "createAssignment": "Create Assignment",
+    "createPage": "Create Course Page",
+    "createDiscussion": "Create Discussion Topic",
+    "modules": "Course Modules",
+    "createSyllabus": "Create Course Syllabus",
+    "reference": "Reference Materials",
+    "gradingSetup": "Grading Setup Wizard",
+    "aiQuizPreview": "AI-Generated Quiz Preview",
+    "aiAssignmentPreview": "AI-Generated Assignment Preview",
+    "uploadedMaterials": "Your Uploaded Materials"
+  },
+  "btn": {
+    "generateQuiz": "Generate Quiz with AI",
+    "generateAssignment": "Generate Assignment with AI",
+    "generateAnnouncement": "Generate Announcement with AI",
+    "generatePage": "Generate Page with AI",
+    "generateDiscussion": "Generate Discussion with AI",
+    "generateSyllabus": "Generate Syllabus with AI",
+    "sendToCanvas": "Send to Canvas",
+    "postToCanvas": "Post to Canvas",
+    "generate": "Generate with AI",
+    "cancel": "Cancel",
+    "save": "Save",
+    "preview": "Preview",
+    "edit": "Edit",
+    "delete": "Delete",
+    "close": "Close",
+    "account": "Account"
+  },
+  "sidebar": {
+    "generations": "Generations",
+    "timeSaved": "Time Saved",
+    "thisSemester": "this semester"
   },
   "common": {
     "loading": "Loading...",

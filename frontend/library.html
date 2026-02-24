@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Content Library — ReadySetClass</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy: #1B2A5E;
+            --gold: #C9A84C;
+            --gold-light: #f5e8c0;
+            --bg: #f4f6fb;
+            --white: #ffffff;
+            --text: #1a202c;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --radius: 12px;
+            --shadow: 0 2px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 8px 32px rgba(0,0,0,0.14);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ── Top Bar ─────────────────────────────────── */
+        .topbar {
+            background: var(--navy);
+            color: white;
+            padding: 0 32px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .topbar-logo {
+            height: 32px;
+            width: auto;
+        }
+        .topbar-title {
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: -0.2px;
+        }
+        .topbar-back {
+            margin-left: auto;
+            background: rgba(255,255,255,0.12);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 8px;
+            padding: 7px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.15s;
+        }
+        .topbar-back:hover { background: rgba(255,255,255,0.22); }
+
+        /* ── Page layout ─────────────────────────────── */
+        .page-wrap {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 32px 24px 64px;
+        }
+
+        .page-header {
+            margin-bottom: 28px;
+        }
+        .page-header h1 {
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--navy);
+            margin-bottom: 4px;
+        }
+        .page-header p {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        /* ── Search + filters ────────────────────────── */
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 24px;
+            align-items: center;
+        }
+        .search-wrap {
+            position: relative;
+            flex: 1;
+            min-width: 220px;
+            max-width: 400px;
+        }
+        .search-wrap input {
+            width: 100%;
+            padding: 10px 16px 10px 40px;
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            background: white;
+            color: var(--text);
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .search-wrap input:focus { border-color: var(--navy); }
+        .search-icon {
+            position: absolute;
+            left: 13px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 15px;
+            pointer-events: none;
+        }
+
+        .filter-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .pill {
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1.5px solid var(--border);
+            background: white;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+        .pill:hover { border-color: var(--navy); color: var(--navy); }
+        .pill.active {
+            background: var(--navy);
+            border-color: var(--navy);
+            color: white;
+        }
+        .pill.status-pill.active {
+            background: var(--gold);
+            border-color: var(--gold);
+            color: var(--navy);
+        }
+
+        /* ── Stats bar ───────────────────────────────── */
+        .stats-bar {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .stats-bar strong { color: var(--navy); }
+
+        /* ── Asset grid ──────────────────────────────── */
+        .asset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .asset-card {
+            background: white;
+            border-radius: var(--radius);
+            border: 1.5px solid var(--border);
+            padding: 20px;
+            cursor: pointer;
+            transition: box-shadow 0.15s, border-color 0.15s, transform 0.1s;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .asset-card:hover {
+            box-shadow: var(--shadow-lg);
+            border-color: var(--navy);
+            transform: translateY(-2px);
+        }
+        .asset-card-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .type-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+        .type-badge.assignment  { background: #dbeafe; color: #1e40af; }
+        .type-badge.quiz        { background: #f3e8ff; color: #7c3aed; }
+        .type-badge.syllabus    { background: #dcfce7; color: #15803d; }
+        .type-badge.page        { background: #fef9c3; color: #854d0e; }
+        .type-badge.discussion  { background: #ffedd5; color: #c2410c; }
+        .type-badge.announcement { background: #e0f2fe; color: #0369a1; }
+
+        .pub-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+        .pub-badge.published { background: #dcfce7; color: #15803d; }
+        .pub-badge.draft     { background: #f1f5f9; color: #64748b; }
+
+        .asset-card-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--navy);
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .asset-card-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .asset-card-meta span { display: flex; align-items: center; gap: 4px; }
+
+        /* ── Empty state ─────────────────────────────── */
+        .empty-state {
+            text-align: center;
+            padding: 64px 24px;
+            grid-column: 1 / -1;
+        }
+        .empty-icon { font-size: 48px; margin-bottom: 16px; }
+        .empty-state h2 { font-size: 20px; color: var(--navy); margin-bottom: 8px; }
+        .empty-state p { font-size: 14px; color: var(--text-muted); max-width: 340px; margin: 0 auto 24px; }
+        .empty-cta {
+            display: inline-block;
+            background: var(--navy);
+            color: white;
+            border-radius: 10px;
+            padding: 12px 28px;
+            font-weight: 700;
+            font-size: 14px;
+            text-decoration: none;
+            font-family: inherit;
+        }
+
+        /* ── Load more ───────────────────────────────── */
+        .load-more-wrap {
+            text-align: center;
+            margin-top: 32px;
+        }
+        .load-more-btn {
+            background: white;
+            border: 1.5px solid var(--navy);
+            color: var(--navy);
+            border-radius: 10px;
+            padding: 10px 28px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.15s;
+        }
+        .load-more-btn:hover { background: var(--navy); color: white; }
+        .load-more-btn:disabled { opacity: 0.5; cursor: default; }
+
+        /* ── Skeleton loader ─────────────────────────── */
+        .skeleton-card {
+            background: white;
+            border-radius: var(--radius);
+            border: 1.5px solid var(--border);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .skel {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: skel-anim 1.4s ease-in-out infinite;
+            border-radius: 6px;
+        }
+        @keyframes skel-anim { 0%{background-position:200%} 100%{background-position:-200%} }
+
+        /* ── Asset detail drawer ─────────────────────── */
+        .drawer-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 200;
+        }
+        .drawer-overlay.open { display: block; }
+
+        .drawer {
+            position: fixed;
+            top: 0;
+            right: -640px;
+            width: 100%;
+            max-width: 620px;
+            height: 100vh;
+            background: white;
+            z-index: 201;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -8px 0 40px rgba(0,0,0,0.18);
+            transition: right 0.28s cubic-bezier(0.4,0,0.2,1);
+            overflow: hidden;
+        }
+        .drawer.open { right: 0; }
+
+        .drawer-topbar {
+            background: var(--navy);
+            color: white;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+        .drawer-type-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.2);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .drawer-title {
+            flex: 1;
+            font-size: 16px;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+        .drawer-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.4rem;
+            cursor: pointer;
+            line-height: 1;
+            padding: 4px;
+            opacity: 0.8;
+        }
+        .drawer-close:hover { opacity: 1; }
+
+        .drawer-meta {
+            padding: 14px 24px;
+            background: #f8fafc;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            font-size: 12px;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .drawer-meta span { display: flex; align-items: center; gap: 5px; }
+
+        .drawer-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            font-family: 'Lato', sans-serif;
+            font-size: 15px;
+            line-height: 1.7;
+            color: #2d3748;
+            white-space: pre-wrap;
+        }
+        .drawer-content h1 { font-size: 1.5rem; font-weight: 700; margin: 0 0 14px; color: #1a202c; }
+        .drawer-content h2 { font-size: 1.2rem; font-weight: 700; margin: 20px 0 10px; color: #1a202c; border-bottom: 2px solid var(--border); padding-bottom: 5px; }
+        .drawer-content h3 { font-size: 1.05rem; font-weight: 600; margin: 16px 0 8px; }
+        .drawer-content p  { margin: 0 0 12px; }
+        .drawer-content ul, .drawer-content ol { margin: 0 0 12px 22px; }
+        .drawer-content li { margin-bottom: 5px; }
+        .drawer-content strong { font-weight: 700; }
+
+        .drawer-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border);
+            background: #fafafa;
+            display: flex;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        .btn-use {
+            flex: 1;
+            background: var(--navy);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.15s;
+        }
+        .btn-use:hover { background: #263a78; }
+        .btn-delete {
+            background: white;
+            color: #dc2626;
+            border: 1.5px solid #fca5a5;
+            border-radius: 10px;
+            padding: 12px 18px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.15s;
+        }
+        .btn-delete:hover { background: #fef2f2; border-color: #dc2626; }
+
+        /* ── Toast ───────────────────────────────────── */
+        #toast {
+            position: fixed;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: var(--navy);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s;
+            z-index: 500;
+            white-space: nowrap;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+        }
+        #toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* ── Delete confirm dialog ───────────────────── */
+        #deleteConfirmOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 300;
+            align-items: center;
+            justify-content: center;
+        }
+        #deleteConfirmOverlay.show { display: flex; }
+        .delete-dialog {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 420px;
+            width: 90%;
+            text-align: center;
+            box-shadow: var(--shadow-lg);
+        }
+        .delete-dialog h3 { font-size: 18px; color: var(--navy); margin-bottom: 12px; }
+        .delete-dialog p { font-size: 14px; color: var(--text-muted); margin-bottom: 24px; line-height: 1.5; }
+        .delete-dialog-btns { display: flex; gap: 12px; justify-content: center; }
+        .btn-cancel {
+            background: white;
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            color: var(--text);
+        }
+        .btn-confirm-delete {
+            background: #dc2626;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 24px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        @media (max-width: 600px) {
+            .page-wrap { padding: 20px 16px 48px; }
+            .topbar { padding: 0 16px; }
+            .drawer { max-width: 100%; }
+            .asset-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top bar -->
+    <header class="topbar">
+        <img src="/assets/ReadySetClass_alpha_full.png" alt="ReadySetClass" class="topbar-logo" onerror="this.style.display='none'">
+        <span class="topbar-title">Content Library</span>
+        <a href="/dashboard-v2.html" class="topbar-back">← Back to Dashboard</a>
+    </header>
+
+    <!-- Main content -->
+    <div class="page-wrap">
+        <div class="page-header">
+            <h1>Your Content Library</h1>
+            <p>All AI-generated content — organized, searchable, ready to reuse.</p>
+        </div>
+
+        <!-- Toolbar: search + type filters + status filters -->
+        <div class="toolbar">
+            <div class="search-wrap">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" placeholder="Search by title or content…" autocomplete="off">
+            </div>
+        </div>
+        <div class="toolbar" style="margin-top:-8px;">
+            <div class="filter-pills" id="typeFilters">
+                <button class="pill active" data-type="">All Types</button>
+                <button class="pill" data-type="assignment">Assignment</button>
+                <button class="pill" data-type="quiz">Quiz</button>
+                <button class="pill" data-type="syllabus">Syllabus</button>
+                <button class="pill" data-type="page">Page</button>
+                <button class="pill" data-type="discussion">Discussion</button>
+                <button class="pill" data-type="announcement">Announcement</button>
+            </div>
+            <div class="filter-pills" id="statusFilters">
+                <button class="pill status-pill" data-status="">All Status</button>
+                <button class="pill status-pill" data-status="published">Published</button>
+                <button class="pill status-pill" data-status="draft">Drafts</button>
+            </div>
+        </div>
+
+        <!-- Result stats -->
+        <div class="stats-bar" id="statsBar" style="display:none;">
+            Showing <strong id="statsCount">0</strong> items
+            <span id="statsFilter" style="color:var(--text-muted);"></span>
+        </div>
+
+        <!-- Asset grid -->
+        <div class="asset-grid" id="assetGrid">
+            <!-- Skeleton placeholder while loading -->
+            <div class="skeleton-card" id="skel1">
+                <div class="skel" style="height:18px;width:70%;"></div>
+                <div class="skel" style="height:14px;width:90%;"></div>
+                <div class="skel" style="height:12px;width:50%;"></div>
+            </div>
+            <div class="skeleton-card" id="skel2">
+                <div class="skel" style="height:18px;width:60%;"></div>
+                <div class="skel" style="height:14px;width:85%;"></div>
+                <div class="skel" style="height:12px;width:45%;"></div>
+            </div>
+            <div class="skeleton-card" id="skel3">
+                <div class="skel" style="height:18px;width:75%;"></div>
+                <div class="skel" style="height:14px;width:80%;"></div>
+                <div class="skel" style="height:12px;width:55%;"></div>
+            </div>
+        </div>
+
+        <!-- Load more -->
+        <div class="load-more-wrap" id="loadMoreWrap" style="display:none;">
+            <button class="load-more-btn" id="loadMoreBtn" onclick="loadMore()">Load More</button>
+        </div>
+    </div>
+
+    <!-- Asset detail drawer overlay -->
+    <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+
+    <!-- Asset detail drawer -->
+    <div class="drawer" id="assetDrawer">
+        <div class="drawer-topbar">
+            <span class="drawer-type-badge" id="drawerTypeBadge"></span>
+            <span class="drawer-title" id="drawerTitle"></span>
+            <button class="drawer-close" onclick="closeDrawer()" title="Close">&times;</button>
+        </div>
+        <div class="drawer-meta" id="drawerMeta"></div>
+        <div class="drawer-content" id="drawerContent"></div>
+        <div class="drawer-footer">
+            <button class="btn-use" onclick="useInDashboard()">Use in Dashboard →</button>
+            <button class="btn-delete" onclick="confirmDelete()">Delete</button>
+        </div>
+    </div>
+
+    <!-- Delete confirmation dialog -->
+    <div id="deleteConfirmOverlay">
+        <div class="delete-dialog">
+            <h3>Delete this content?</h3>
+            <p>This will permanently remove the item from your library. This action cannot be undone.</p>
+            <div class="delete-dialog-btns">
+                <button class="btn-cancel" onclick="cancelDelete()">Cancel</button>
+                <button class="btn-confirm-delete" onclick="executeDelete()">Yes, Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notification -->
+    <div id="toast"></div>
+
+    <script>
+        // ── Config ───────────────────────────────────────────────
+        const API_URL = 'https://facultyflow-production.up.railway.app';
+        const authToken = localStorage.getItem('auth_token');
+
+        // Redirect to login if no token
+        if (!authToken) { window.location.href = '/login.html'; }
+
+        // ── State ─────────────────────────────────────────────────
+        var _assets = [];
+        var _offset = 0;
+        var _limit = 24;
+        var _total = 0;
+        var _activeType = '';
+        var _activeStatus = '';
+        var _searchQuery = '';
+        var _searchTimer = null;
+        var _openAsset = null;    // full asset object for open drawer
+        var _pendingDeleteId = null;
+
+        // ── Fetch helpers ─────────────────────────────────────────
+        function authHeaders() {
+            return { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' };
+        }
+
+        async function fetchAssets(reset) {
+            if (reset) { _offset = 0; _assets = []; }
+            var params = new URLSearchParams({ limit: _limit, offset: _offset });
+            if (_searchQuery) params.set('query', _searchQuery);
+            if (_activeType)  params.set('asset_type', _activeType);
+            if (_activeStatus === 'published') params.set('is_published', 'true');
+            if (_activeStatus === 'draft')     params.set('is_published', 'false');
+
+            try {
+                var resp = await fetch(API_URL + '/api/v2/assets?' + params.toString(), {
+                    headers: authHeaders()
+                });
+                if (!resp.ok) throw new Error('Fetch failed');
+                var data = await resp.json();
+                _total = data.total || data.assets.length;
+                if (reset) {
+                    _assets = data.assets;
+                } else {
+                    _assets = _assets.concat(data.assets);
+                }
+                _offset += data.assets.length;
+                return data.assets;
+            } catch (e) {
+                showToast('Could not load your library. Check your connection.');
+                return [];
+            }
+        }
+
+        async function fetchAssetDetail(id) {
+            var resp = await fetch(API_URL + '/api/v2/assets/' + id, { headers: authHeaders() });
+            if (!resp.ok) throw new Error('Not found');
+            return resp.json();
+        }
+
+        async function deleteAsset(id) {
+            var resp = await fetch(API_URL + '/api/v2/assets/' + id, {
+                method: 'DELETE',
+                headers: authHeaders()
+            });
+            if (!resp.ok) throw new Error('Delete failed');
+            return resp.json();
+        }
+
+        // ── Render ────────────────────────────────────────────────
+        function renderGrid(assets, reset) {
+            var grid = document.getElementById('assetGrid');
+            if (reset) grid.innerHTML = '';
+
+            if (reset && assets.length === 0) {
+                grid.innerHTML = '<div class="empty-state">' +
+                    '<div class="empty-icon">📂</div>' +
+                    '<h2>No content yet</h2>' +
+                    '<p>Generate your first assignment, quiz, or syllabus to see it here.</p>' +
+                    '<a href="/dashboard-v2.html" class="empty-cta">Go to Dashboard</a>' +
+                    '</div>';
+                document.getElementById('statsBar').style.display = 'none';
+                document.getElementById('loadMoreWrap').style.display = 'none';
+                return;
+            }
+
+            assets.forEach(function(a) {
+                var card = document.createElement('div');
+                card.className = 'asset-card';
+                card.setAttribute('data-id', a.id);
+                card.onclick = function() { openDrawer(a.id); };
+
+                var pubLabel = a.is_published ? 'Published' : 'Draft';
+                var pubClass = a.is_published ? 'published' : 'draft';
+                var typeClass = (a.asset_type || 'content').toLowerCase();
+                var date = a.updated_at ? new Date(a.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
+                card.innerHTML =
+                    '<div class="asset-card-top">' +
+                        '<span class="type-badge ' + typeClass + '">' + _capitalize(a.asset_type || 'Content') + '</span>' +
+                        '<span class="pub-badge ' + pubClass + '">' + pubLabel + '</span>' +
+                    '</div>' +
+                    '<div class="asset-card-title">' + _esc(a.title || 'Untitled') + '</div>' +
+                    '<div class="asset-card-meta">' +
+                        (a.course_name ? '<span>📚 ' + _esc(a.course_name) + '</span>' : '') +
+                        (a.week_number  ? '<span>Week ' + a.week_number + '</span>' : '') +
+                        (date           ? '<span>🗓 ' + date + '</span>' : '') +
+                        (a.reuse_count  ? '<span>♻ Used ' + a.reuse_count + 'x</span>' : '') +
+                    '</div>';
+
+                grid.appendChild(card);
+            });
+
+            // Stats bar
+            var statsBar = document.getElementById('statsBar');
+            var statsCount = document.getElementById('statsCount');
+            var statsFilter = document.getElementById('statsFilter');
+            statsBar.style.display = 'flex';
+            statsCount.textContent = _assets.length + (_assets.length < _total ? '+' : '');
+            var filterParts = [];
+            if (_activeType) filterParts.push(_capitalize(_activeType));
+            if (_activeStatus) filterParts.push(_activeStatus === 'published' ? 'Published only' : 'Drafts only');
+            if (_searchQuery) filterParts.push('matching "' + _esc(_searchQuery) + '"');
+            statsFilter.textContent = filterParts.length ? '— ' + filterParts.join(', ') : '';
+
+            // Load more button
+            var lmWrap = document.getElementById('loadMoreWrap');
+            lmWrap.style.display = (_assets.length < _total) ? 'block' : 'none';
+        }
+
+        function _capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+        function _esc(s) {
+            return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        // ── Load & reload ─────────────────────────────────────────
+        async function load(reset) {
+            if (reset) {
+                // Show skeletons
+                document.getElementById('assetGrid').innerHTML =
+                    '<div class="skeleton-card"><div class="skel" style="height:18px;width:70%;margin-bottom:10px;"></div><div class="skel" style="height:14px;width:90%;margin-bottom:8px;"></div><div class="skel" style="height:12px;width:50%;"></div></div>' +
+                    '<div class="skeleton-card"><div class="skel" style="height:18px;width:60%;margin-bottom:10px;"></div><div class="skel" style="height:14px;width:85%;margin-bottom:8px;"></div><div class="skel" style="height:12px;width:45%;"></div></div>' +
+                    '<div class="skeleton-card"><div class="skel" style="height:18px;width:75%;margin-bottom:10px;"></div><div class="skel" style="height:14px;width:80%;margin-bottom:8px;"></div><div class="skel" style="height:12px;width:55%;"></div></div>';
+            }
+            var assets = await fetchAssets(reset !== false);
+            renderGrid(assets, reset !== false);
+        }
+
+        async function loadMore() {
+            var btn = document.getElementById('loadMoreBtn');
+            btn.disabled = true;
+            btn.textContent = 'Loading…';
+            var assets = await fetchAssets(false);
+            renderGrid(assets, false);
+            btn.disabled = false;
+            btn.textContent = 'Load More';
+        }
+
+        // ── Drawer ────────────────────────────────────────────────
+        async function openDrawer(id) {
+            // Show drawer with loading state
+            document.getElementById('drawerTitle').textContent = 'Loading…';
+            document.getElementById('drawerTypeBadge').textContent = '';
+            document.getElementById('drawerMeta').innerHTML = '';
+            document.getElementById('drawerContent').innerHTML = '<p style="color:#999;font-style:italic;">Loading content…</p>';
+            document.getElementById('drawerOverlay').classList.add('open');
+            document.getElementById('assetDrawer').classList.add('open');
+
+            try {
+                var asset = await fetchAssetDetail(id);
+                _openAsset = asset;
+
+                var typeClass = (asset.asset_type || 'content').toLowerCase();
+                document.getElementById('drawerTypeBadge').textContent = _capitalize(asset.asset_type || 'Content');
+                document.getElementById('drawerTitle').textContent = asset.title || 'Untitled';
+
+                // Meta row
+                var meta = [];
+                if (asset.course_name) meta.push('<span>📚 ' + _esc(asset.course_name) + '</span>');
+                if (asset.week_number)  meta.push('<span>📅 Week ' + asset.week_number + '</span>');
+                if (asset.semester_tag) meta.push('<span>🎓 ' + _esc(asset.semester_tag) + '</span>');
+                if (asset.is_published) meta.push('<span style="color:#15803d;">✓ Published to Canvas</span>');
+                else                    meta.push('<span>Draft</span>');
+                if (asset.created_at) {
+                    var d = new Date(asset.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    meta.push('<span>Created ' + d + '</span>');
+                }
+                document.getElementById('drawerMeta').innerHTML = meta.join('');
+
+                // Content — render markdown if not already HTML
+                var content = asset.content || '';
+                document.getElementById('drawerContent').innerHTML = _renderContent(content);
+
+            } catch (e) {
+                document.getElementById('drawerContent').innerHTML = '<p style="color:#dc2626;">Could not load content. Please try again.</p>';
+            }
+        }
+
+        function closeDrawer() {
+            document.getElementById('drawerOverlay').classList.remove('open');
+            document.getElementById('assetDrawer').classList.remove('open');
+            _openAsset = null;
+        }
+
+        function _renderContent(text) {
+            if (!text) return '<p style="color:#999;font-style:italic;">No content.</p>';
+            if (/<[a-z][^>]*>/i.test(text)) return text;
+            // Lightweight markdown render
+            return text
+                .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+                .replace(/^### (.+)$/gm,  '<h3>$1</h3>')
+                .replace(/^## (.+)$/gm,   '<h2>$1</h2>')
+                .replace(/^# (.+)$/gm,    '<h1>$1</h1>')
+                .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/^---+$/gm, '<hr>')
+                .replace(/((?:^- .+$\n?)+)/gm, function(b) {
+                    return '<ul>' + b.trim().split('\n').map(function(l){ return '<li>' + l.replace(/^- /,'') + '</li>'; }).join('') + '</ul>\n';
+                })
+                .replace(/((?:^\d+\. .+$\n?)+)/gm, function(b) {
+                    return '<ol>' + b.trim().split('\n').map(function(l){ return '<li>' + l.replace(/^\d+\. /,'') + '</li>'; }).join('') + '</ol>\n';
+                })
+                .replace(/\n\n+/g, '</p><p>')
+                .replace(/\n/g, '<br>');
+        }
+
+        // ── Use in Dashboard ──────────────────────────────────────
+        function useInDashboard() {
+            if (!_openAsset) return;
+            // Store draft asset in sessionStorage for dashboard to pick up
+            var draft = {
+                asset_id:   _openAsset.id,
+                asset_type: _openAsset.asset_type,
+                title:      _openAsset.title,
+                content:    _openAsset.content,
+                course_id:  _openAsset.course_id,
+                week_number: _openAsset.week_number
+            };
+            sessionStorage.setItem('rsc_draft_asset', JSON.stringify(draft));
+            window.location.href = '/dashboard-v2.html';
+        }
+
+        // ── Delete ────────────────────────────────────────────────
+        function confirmDelete() {
+            if (!_openAsset) return;
+            _pendingDeleteId = _openAsset.id;
+            document.getElementById('deleteConfirmOverlay').classList.add('show');
+        }
+
+        function cancelDelete() {
+            _pendingDeleteId = null;
+            document.getElementById('deleteConfirmOverlay').classList.remove('show');
+        }
+
+        async function executeDelete() {
+            var id = _pendingDeleteId;
+            cancelDelete();
+            if (!id) return;
+            try {
+                await deleteAsset(id);
+                closeDrawer();
+                // Remove from local list and re-render
+                _assets = _assets.filter(function(a) { return a.id !== id; });
+                _total = Math.max(0, _total - 1);
+                renderGrid([], false);
+                // Re-render all from current _assets (reset grid)
+                document.getElementById('assetGrid').innerHTML = '';
+                renderGrid(_assets, true);
+                showToast('Content deleted.');
+            } catch (e) {
+                showToast('Could not delete. Please try again.');
+            }
+        }
+
+        // ── Toast ─────────────────────────────────────────────────
+        var _toastTimer = null;
+        function showToast(msg) {
+            var el = document.getElementById('toast');
+            el.textContent = msg;
+            el.classList.add('show');
+            clearTimeout(_toastTimer);
+            _toastTimer = setTimeout(function() { el.classList.remove('show'); }, 3000);
+        }
+
+        // ── Filter wiring ─────────────────────────────────────────
+        document.getElementById('typeFilters').addEventListener('click', function(e) {
+            if (!e.target.classList.contains('pill')) return;
+            document.querySelectorAll('#typeFilters .pill').forEach(function(p){ p.classList.remove('active'); });
+            e.target.classList.add('active');
+            _activeType = e.target.dataset.type || '';
+            load(true);
+        });
+
+        document.getElementById('statusFilters').addEventListener('click', function(e) {
+            if (!e.target.classList.contains('pill')) return;
+            document.querySelectorAll('#statusFilters .pill').forEach(function(p){ p.classList.remove('active'); });
+            e.target.classList.add('active');
+            _activeStatus = e.target.dataset.status || '';
+            load(true);
+        });
+
+        document.getElementById('searchInput').addEventListener('input', function() {
+            clearTimeout(_searchTimer);
+            var val = this.value.trim();
+            _searchTimer = setTimeout(function() {
+                _searchQuery = val;
+                load(true);
+            }, 380);
+        });
+
+        // ── Boot ──────────────────────────────────────────────────
+        load(true);
+    </script>
+</body>
+</html>

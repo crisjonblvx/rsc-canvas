@@ -11,7 +11,23 @@
     "login": "Iniciar Sesión",
     "signup": "Registrarse",
     "dashboard": "Panel de Control",
-    "logout": "Cerrar Sesión"
+    "logout": "Cerrar Sesión",
+    "courses": "Mis Cursos",
+    "aiGrader": "Calificador IA",
+    "setupGrading": "Configurar Calificaciones",
+    "createQuiz": "Crear Cuestionario",
+    "announcement": "Anuncio",
+    "assignment": "Tarea",
+    "page": "Página",
+    "discussion": "Discusión",
+    "modules": "Módulos",
+    "syllabus": "Programa de Estudios",
+    "referenceMatl": "Materiales de Referencia",
+    "gettingStarted": "Primeros Pasos",
+    "faq": "Preguntas Frecuentes",
+    "inviteColleague": "Invitar a un Colega",
+    "library": "Biblioteca de Contenido",
+    "account": "Cuenta"
   },
   "hero": {
     "title": "Tu LMS organizado y listo en días.",
@@ -81,7 +97,8 @@
     "demoButton": "Probar Cuenta Demo"
   },
   "dashboard": {
-    "welcome": "Bienvenido de nuevo, {{name}}",
+    "welcome": "Bienvenido a ReadySetClass",
+    "tagline": "Menos tiempo configurando. Más tiempo enseñando.",
     "createContent": "Crear Contenido",
     "assignments": "Tareas",
     "quizzes": "Cuestionarios",
@@ -93,7 +110,57 @@
     "selectCourse": "Seleccionar Curso",
     "recentActivity": "Actividad Reciente",
     "aiGenerations": "Generaciones con IA",
-    "generationsUsed": "{{used}} / {{total}} usadas este mes"
+    "generationsUsed": "{{used}} / {{total}} usadas este mes",
+    "yourCourses": "Tus Cursos"
+  },
+  "canvas": {
+    "title": "Conexión de Canvas",
+    "notConnected": "No Conectado",
+    "connected": "Conectado",
+    "connectPrompt": "Conecta tu cuenta de Canvas para comenzar.",
+    "urlLabel": "URL de Canvas",
+    "tokenLabel": "Token API de Canvas",
+    "howToToken": "Cómo obtener tu token API de Canvas:",
+    "connectBtn": "Conectar Canvas",
+    "disconnect": "Desconectar",
+    "openSettings": "Abrir Configuración de Canvas"
+  },
+  "section": {
+    "createQuiz": "Crear Cuestionario",
+    "createAnnouncement": "Crear Anuncio",
+    "createAssignment": "Crear Tarea",
+    "createPage": "Crear Página del Curso",
+    "createDiscussion": "Crear Tema de Discusión",
+    "modules": "Módulos del Curso",
+    "createSyllabus": "Crear Programa de Estudios",
+    "reference": "Materiales de Referencia",
+    "gradingSetup": "Asistente de Configuración de Calificaciones",
+    "aiQuizPreview": "Vista Previa del Cuestionario con IA",
+    "aiAssignmentPreview": "Vista Previa de la Tarea con IA",
+    "uploadedMaterials": "Tus Materiales Subidos"
+  },
+  "btn": {
+    "generateQuiz": "Generar Cuestionario con IA",
+    "generateAssignment": "Generar Tarea con IA",
+    "generateAnnouncement": "Generar Anuncio con IA",
+    "generatePage": "Generar Página con IA",
+    "generateDiscussion": "Generar Discusión con IA",
+    "generateSyllabus": "Generar Programa de Estudios con IA",
+    "sendToCanvas": "Enviar a Canvas",
+    "postToCanvas": "Publicar en Canvas",
+    "generate": "Generar con IA",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "preview": "Vista Previa",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "close": "Cerrar",
+    "account": "Cuenta"
+  },
+  "sidebar": {
+    "generations": "Generaciones",
+    "timeSaved": "Tiempo Ahorrado",
+    "thisSemester": "este semestre"
   },
   "common": {
     "loading": "Cargando...",

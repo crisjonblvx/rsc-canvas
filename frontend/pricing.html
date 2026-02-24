@@ -219,55 +219,6 @@
             color: var(--navy);
         }
 
-        /* Billing Toggle */
-        .billing-toggle-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 16px;
-            margin-bottom: 48px;
-        }
-
-        .billing-label {
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--charcoal);
-        }
-
-        .billing-label.active {
-            color: var(--navy);
-        }
-
-        .toggle-switch {
-            position: relative;
-            width: 60px;
-            height: 32px;
-            background: var(--light-gray);
-            border-radius: 16px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-
-        .toggle-switch.yearly {
-            background: var(--navy);
-        }
-
-        .toggle-slider {
-            position: absolute;
-            top: 4px;
-            left: 4px;
-            width: 24px;
-            height: 24px;
-            background: var(--white);
-            border-radius: 50%;
-            transition: transform 0.3s;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .toggle-switch.yearly .toggle-slider {
-            transform: translateX(28px);
-        }
-
         .savings-badge {
             position: absolute;
             top: -12px;
@@ -351,139 +302,124 @@
     </div>
 
     <div class="hero">
-        <h1 class="campaign-line" data-i18n="hero.headline">Reclaim your time.</h1>
-        <h2 class="brand-promise" data-i18n="hero.tagline">Less time setting up. More time teaching.</h2>
+        <h1 class="campaign-line">30 hours of Canvas setup.<br>40 minutes with RSC.</h1>
+        <h2 class="brand-promise">Do the math.</h2>
 
-        <p class="hero-description" data-i18n="hero.description">
-            Teachers spend 15 hours/week on Canvas busywork.
-            Get that time back. Your weekends. Your evenings. Your life.
+        <p class="hero-description">
+            A 16-week course built from scratch takes up to 30 hours. ReadySetClass gets it done in under an hour.
+            At $50/hr, that's $1,500 saved per course — at $24.99/mo, that's a 53x return on your annual plan.
         </p>
 
-        <!-- Billing Toggle -->
-        <div class="billing-toggle-container">
-            <span class="billing-label active" id="monthlyLabel">Monthly</span>
-            <div class="toggle-switch" id="billingToggle" onclick="toggleBilling()">
-                <div class="toggle-slider"></div>
-            </div>
-            <span class="billing-label" id="yearlyLabel">Yearly</span>
-        </div>
+        <p style="font-size: 15px; color: #888; margin-bottom: 0;">
+            Try free — no account required. 5 AI generations on us before you decide.
+        </p>
     </div>
 
     <div class="pricing-container">
-        <!-- Educator Plan -->
+        <!-- Monthly Plan -->
         <div class="pricing-card">
-            <div class="plan-name" data-i18n="plans.educator.name">Educator</div>
-            <div class="plan-target" data-i18n="plans.educator.target">K-12 teachers, adjuncts</div>
+            <div class="plan-name">Monthly</div>
+            <div class="plan-target">For faculty getting started</div>
 
-            <!-- Monthly Price -->
-            <div class="price monthly-price">
-                <span class="price-amount">$9.99</span>
-                <span class="price-period" data-i18n="plans.educator.period_monthly">/ month</span>
-            </div>
-
-            <!-- Yearly Price -->
-            <div class="price yearly-price" style="display: none;">
-                <span class="savings-badge" data-i18n="badge.save_educator">Save $20/year</span>
-                <span class="price-amount">$99</span>
-                <span class="price-period" data-i18n="plans.educator.period_yearly">/ year</span>
+            <div class="price">
+                <span class="price-amount">$24.99</span>
+                <span class="price-period">/ month</span>
             </div>
 
             <ul class="features">
-                <li><span class="checkmark">✓</span> <span data-i18n="features.three_courses">Up to 3 courses</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.ai_content">AI-generated content</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.canvas_upload">Canvas upload</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.ai_grader">AI Grader</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.email_support">Email support</span></li>
+                <li><span class="checkmark">✓</span> 2 active course slots</li>
+                <li><span class="checkmark">✓</span> 25 AI generations / month</li>
+                <li><span class="checkmark">✓</span> Assignments, quizzes, discussions, announcements, pages, syllabi</li>
+                <li><span class="checkmark">✓</span> Direct Canvas publish</li>
+                <li><span class="checkmark">✓</span> Image credits available (add-on)</li>
+                <li><span class="checkmark">✓</span> Email support</li>
             </ul>
 
-            <button class="cta-button monthly-button" onclick="subscribe('educator-monthly')" data-i18n="cta.sign_up">
-                Sign Up Today
-            </button>
-            <button class="cta-button yearly-button" style="display: none;" onclick="subscribe('educator-yearly')" data-i18n="cta.sign_up">
-                Sign Up Today
+            <button class="cta-button" onclick="subscribe('monthly')">
+                Get Started
             </button>
         </div>
 
-        <!-- Pro Plan (Featured) -->
+        <!-- Pro Monthly Plan (Featured) -->
         <div class="pricing-card featured">
-            <div class="featured-badge" data-i18n="badge.popular">Most Popular</div>
-            <div class="plan-name" data-i18n="plans.pro.name">Pro</div>
-            <div class="plan-target" data-i18n="plans.pro.target">College faculty</div>
+            <div class="featured-badge">Most Popular</div>
+            <div class="plan-name">Pro Monthly</div>
+            <div class="plan-target">For active faculty with multiple courses</div>
 
-            <!-- Monthly Price -->
-            <div class="price monthly-price">
-                <span class="price-amount">$29</span>
-                <span class="price-period" data-i18n="plans.pro.period_monthly">/ month</span>
-            </div>
-
-            <!-- Yearly Price -->
-            <div class="price yearly-price" style="display: none;">
-                <span class="savings-badge" data-i18n="badge.save_pro">Save $58/year</span>
-                <span class="price-amount">$290</span>
-                <span class="price-period" data-i18n="plans.pro.period_yearly">/ year</span>
+            <div class="price">
+                <span class="price-amount">$44.99</span>
+                <span class="price-period">/ month</span>
             </div>
 
             <ul class="features">
-                <li><span class="checkmark">✓</span> <span data-i18n="features.everything_educator">Everything in Educator</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.unlimited_courses">Unlimited courses</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.priority_support">Priority support</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.onboarding">Dedicated onboarding</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.early_access">Early access to new features</span></li>
+                <li><span class="checkmark">✓</span> 5 active course slots</li>
+                <li><span class="checkmark">✓</span> 75 AI generations / month</li>
+                <li><span class="checkmark">✓</span> Everything in Monthly</li>
+                <li><span class="checkmark">✓</span> Swap courses anytime</li>
+                <li><span class="checkmark">✓</span> Image credits available (add-on)</li>
+                <li><span class="checkmark">✓</span> Priority support</li>
             </ul>
 
-            <button class="cta-button monthly-button" onclick="subscribe('pro-monthly')" data-i18n="cta.sign_up">
-                Sign Up Today
-            </button>
-            <button class="cta-button yearly-button" style="display: none;" onclick="subscribe('pro-yearly')" data-i18n="cta.sign_up">
-                Sign Up Today
+            <button class="cta-button" onclick="subscribe('pro-monthly')">
+                Get Started
             </button>
         </div>
 
-        <!-- School Plan -->
-        <div class="pricing-card" style="display: none;">
-            <div class="plan-name" data-i18n="plans.school.name">School</div>
-            <div class="plan-target" data-i18n="plans.school.target">Small departments (up to 50 teachers)</div>
+        <!-- Annual Plan -->
+        <div class="pricing-card">
+            <div class="savings-badge" style="position: absolute; top: -12px; right: 16px;">Save $210/year vs Pro Monthly</div>
+            <div class="plan-name">Annual</div>
+            <div class="plan-target">For faculty who run courses year-round</div>
 
             <div class="price">
-                <span class="price-amount">$1,999</span>
-                <span class="price-period" data-i18n="plans.school.period">/ year</span>
+                <span class="price-amount">$329</span>
+                <span class="price-period">/ year</span>
             </div>
 
             <ul class="features">
-                <li><span class="checkmark">✓</span> <span data-i18n="features.everything_pro">Everything in Pro</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.fifty_seats">50 teacher seats</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.shared_templates">Shared templates</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.team_collaboration">Team collaboration</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.admin_dashboard">Admin dashboard</span></li>
+                <li><span class="checkmark">✓</span> Unlimited active courses</li>
+                <li><span class="checkmark">✓</span> 150 AI generations / month</li>
+                <li><span class="checkmark">✓</span> Everything in Pro Monthly</li>
+                <li><span class="checkmark">✓</span> Image credits available (add-on)</li>
+                <li><span class="checkmark">✓</span> Priority support</li>
+                <li><span class="checkmark">✓</span> Early access to new features</li>
             </ul>
 
-            <button class="cta-button secondary" onclick="subscribe('school')" data-i18n="cta.contact_sales">
+            <button class="cta-button" onclick="subscribe('annual')">
+                Get Started
+            </button>
+        </div>
+
+        <!-- Institutional Plan -->
+        <div class="pricing-card">
+            <div class="plan-name">Institutional</div>
+            <div class="plan-target">Departments &amp; MSIs — 5 seats minimum</div>
+
+            <div class="price">
+                <span class="price-amount">$149</span>
+                <span class="price-period">/ seat / year</span>
+            </div>
+
+            <div class="trial-note" style="font-size: 13px;">
+                Volume discounts: 10+ seats $139 · 25+ seats $129 · 50+ seats $119
+            </div>
+
+            <ul class="features">
+                <li><span class="checkmark">✓</span> Unlimited courses per seat</li>
+                <li><span class="checkmark">✓</span> 100 AI generations / seat / month</li>
+                <li><span class="checkmark">✓</span> Image credit blocks available</li>
+                <li><span class="checkmark">✓</span> Annual commitment only</li>
+                <li><span class="checkmark">✓</span> Dedicated account support</li>
+            </ul>
+
+            <button class="cta-button secondary" onclick="contactSales()">
                 Contact Sales
             </button>
         </div>
+    </div>
 
-        <!-- District Plan -->
-        <div class="pricing-card" style="display: none;">
-            <div class="plan-name" data-i18n="plans.district.name">District</div>
-            <div class="plan-target" data-i18n="plans.district.target">Large districts (50-500 teachers)</div>
-
-            <div class="price">
-                <span class="price-amount">$9,999</span>
-                <span class="price-period" data-i18n="plans.district.period">/ year</span>
-            </div>
-
-            <ul class="features">
-                <li><span class="checkmark">✓</span> <span data-i18n="features.everything_school">Everything in School</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.unlimited_seats">Unlimited seats</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.white_label">White-label option</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.dedicated_support">Dedicated support</span></li>
-                <li><span class="checkmark">✓</span> <span data-i18n="features.custom_integrations">Custom integrations</span></li>
-            </ul>
-
-            <button class="cta-button secondary" onclick="subscribe('district')" data-i18n="cta.contact_sales">
-                Contact Sales
-            </button>
-        </div>
+    <div style="text-align: center; padding: 16px 20px 40px; color: #888; font-size: 14px;">
+        Image generation is never included in any subscription tier — available as separate credit packs for all paid plans.
     </div>
 
     <div class="footer">
@@ -493,39 +429,8 @@
     <script>
         const API_URL = 'https://facultyflow-production.up.railway.app';
 
-        function startTrial() {
-            window.location.href = '/login.html?action=signup';
-        }
-
-        // Billing toggle function
-        function toggleBilling() {
-            const toggle = document.getElementById('billingToggle');
-            const monthlyLabel = document.getElementById('monthlyLabel');
-            const yearlyLabel = document.getElementById('yearlyLabel');
-            const monthlyPrices = document.querySelectorAll('.monthly-price');
-            const yearlyPrices = document.querySelectorAll('.yearly-price');
-            const monthlyButtons = document.querySelectorAll('.monthly-button');
-            const yearlyButtons = document.querySelectorAll('.yearly-button');
-
-            toggle.classList.toggle('yearly');
-
-            if (toggle.classList.contains('yearly')) {
-                // Show yearly
-                monthlyLabel.classList.remove('active');
-                yearlyLabel.classList.add('active');
-                monthlyPrices.forEach(el => el.style.display = 'none');
-                yearlyPrices.forEach(el => el.style.display = 'block');
-                monthlyButtons.forEach(el => el.style.display = 'none');
-                yearlyButtons.forEach(el => el.style.display = 'block');
-            } else {
-                // Show monthly
-                monthlyLabel.classList.add('active');
-                yearlyLabel.classList.remove('active');
-                monthlyPrices.forEach(el => el.style.display = 'block');
-                yearlyPrices.forEach(el => el.style.display = 'none');
-                monthlyButtons.forEach(el => el.style.display = 'block');
-                yearlyButtons.forEach(el => el.style.display = 'none');
-            }
+        function contactSales() {
+            window.location.href = 'mailto:hello@readysetclass.app?subject=Institutional%20Pricing%20Inquiry&body=Hi%2C%20I%27m%20interested%20in%20institutional%20pricing%20for%20ReadySetClass.%0A%0AInstitution%3A%0ANumber%20of%20seats%3A%0AContact%20name%3A%0A';
         }
 
         async function subscribe(plan) {
@@ -537,14 +442,12 @@
                 return;
             }
 
-            // Get Stripe price ID based on plan
+            // Stripe price IDs — NOTE: B2 (Revised Pricing in Stripe) will update these
+            // to match the displayed prices once live Stripe products are created.
             const priceIds = {
-                'educator-monthly': 'price_1T0FFFGKcotGCnJDC4jShxqY',
-                'educator-yearly': 'price_1T0FJnGKcotGCnJDGuf6bhAv',
+                'monthly':     'price_1T0FFFGKcotGCnJDC4jShxqY',
                 'pro-monthly': 'price_1T0FLtGKcotGCnJDTKbwtYHu',
-                'pro-yearly': 'price_1T0FQXGKcotGCnJDIRJygEV0',
-                'school': 'price_1T0FrdGKcotGCnJDLCLHZxhK',
-                'district': 'price_1T0FbKGKcotGCnJDVrqbHUHu'
+                'annual':      'price_1T0FQXGKcotGCnJDIRJygEV0',
             };
 
             try {

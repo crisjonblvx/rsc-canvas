@@ -33,6 +33,7 @@ from database import init_db, get_db, CanvasCredentials, UserCourse
 from canvas_client import CanvasClient
 from canvas_auth import CanvasAuth, encrypt_token, decrypt_token
 from grading_setup import GradingSetupService, GRADING_TEMPLATES, get_template
+from model_router import get_model_config, calculate_cost, get_tier_limits
 
 # Initialize FastAPI
 app = FastAPI(
@@ -339,10 +340,10 @@ class BonitaEngine:
             except Exception as e:
                 print(f"⚠️  OpenAI failed: {e}, falling back to Claude...")
 
-        # Last resort: Claude (most expensive)
+        # Last resort: Claude Sonnet (highest quality)
         if self.anthropic_client:
             response = self.anthropic_client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=2048,
                 system=system,
                 messages=[{"role": "user", "content": prompt}]
@@ -380,6 +381,23 @@ class BonitaEngine:
                 print(f"⚠️  Haiku failed: {e}, falling back to Groq...")
         return self.call_ai(prompt, system)
     
+    def call_sonnet(self, prompt: str, system: str = "", max_tokens: int = 4000) -> tuple[str, float]:
+        """Use Claude Sonnet 4.6 — primary model for all professor-facing outputs."""
+        if self.anthropic_client:
+            try:
+                response = self.anthropic_client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=max_tokens,
+                    system=system,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                cost = calculate_cost("claude-sonnet-4-6", response.usage.input_tokens, response.usage.output_tokens)
+                print(f"✅ Sonnet 4.6 response (cost: ${cost:.4f})")
+                return response.content[0].text, cost
+            except Exception as e:
+                print(f"⚠️  Sonnet failed: {e}, falling back to Haiku...")
+        return self.call_haiku(prompt, system, max_tokens)
+
     def call_qwen_local(self, prompt: str) -> tuple[str, float]:
         """Use Qwen local for structured content (FREE!)"""
         try:
@@ -855,6 +873,187 @@ def get_db_connection():
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
     return psycopg2.connect(DATABASE_URL)
 
+
+# ============================================================================
+# GENERATION LIMIT HELPERS
+# ============================================================================
+
+def check_and_increment_generation(user_id: int) -> dict:
+    """
+    Check generation limits and increment counter.
+    Returns: {"allowed": bool, "demo_count": int, "tier": str, "used": int, "limit": int}
+    Raises HTTPException with user-friendly message if blocked.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT subscription_tier, generations_used_this_cycle, monthly_generation_limit,
+                   billing_cycle_start, total_demo_generations, is_demo
+            FROM users WHERE id = %s
+        """, (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        tier, used, limit, cycle_start, demo_gens, is_demo = row
+        tier = tier or "demo"
+
+        # Reset monthly counter if billing cycle rolled over
+        if cycle_start:
+            now = datetime.utcnow()
+            cycle_dt = cycle_start if isinstance(cycle_start, datetime) else datetime.fromisoformat(str(cycle_start))
+            if (now - cycle_dt).days >= 30:
+                cursor.execute("""
+                    UPDATE users SET generations_used_this_cycle = 0, billing_cycle_start = NOW()
+                    WHERE id = %s
+                """, (user_id,))
+                used = 0
+
+        tier_info = get_tier_limits(tier)
+        monthly_limit = tier_info["monthly_gens"]
+
+        # Demo / trial users: enforce total_demo_generations limit of 5
+        if tier in ("demo", "trial") or is_demo:
+            demo_count = demo_gens or 0
+            if demo_count >= 5:
+                raise HTTPException(
+                    status_code=402,
+                    detail={
+                        "code": "DEMO_LIMIT_REACHED",
+                        "message": "You've used all 5 free generations.",
+                        "demo_count": demo_count
+                    }
+                )
+            cursor.execute(
+                "UPDATE users SET total_demo_generations = total_demo_generations + 1 WHERE id = %s",
+                (user_id,)
+            )
+            conn.commit()
+            return {"allowed": True, "demo_count": demo_count + 1, "tier": tier, "used": demo_count + 1, "limit": 5}
+
+        # Paid users: enforce monthly generation limit
+        if monthly_limit and used >= monthly_limit:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "code": "MONTHLY_LIMIT_REACHED",
+                    "message": f"You've used all {monthly_limit} generations this month. Upgrade your plan to continue.",
+                    "used": used,
+                    "limit": monthly_limit,
+                    "tier": tier
+                }
+            )
+
+        cursor.execute("""
+            UPDATE users
+            SET generations_used_this_cycle = generations_used_this_cycle + 1,
+                ai_generations_count = ai_generations_count + 1,
+                billing_cycle_start = COALESCE(billing_cycle_start, NOW())
+            WHERE id = %s
+        """, (user_id,))
+        conn.commit()
+        return {"allowed": True, "tier": tier, "used": (used or 0) + 1, "limit": monthly_limit}
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def save_asset(user_id: int, asset_type: str, title: str, content: str,
+               course_id: int = None, course_name: str = None,
+               week_number: int = None, semester_tag: str = None,
+               generation_params: dict = None, is_published: bool = False) -> int:
+    """Auto-save generated content to assets table. Returns asset_id."""
+    import json
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO assets
+                (user_id, course_id, course_name, asset_type, title, content,
+                 week_number, semester_tag, generation_params, is_published)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            user_id, course_id, course_name, asset_type, title, content,
+            week_number, semester_tag,
+            json.dumps(generation_params) if generation_params else None,
+            is_published
+        ))
+        asset_id = cursor.fetchone()[0]
+        conn.commit()
+        return asset_id
+    except Exception as e:
+        print(f"⚠️  Asset save failed: {e}")
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def mark_asset_published(asset_id: int):
+    """Mark an asset as published to Canvas."""
+    if not asset_id:
+        return
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE assets SET is_published = TRUE, updated_at = NOW() WHERE id = %s", (asset_id,))
+        conn.commit()
+    except Exception as e:
+        print(f"⚠️  Asset publish mark failed: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def log_model_usage(user_id: int, task_type: str, model: str, provider: str,
+                    input_tokens: int = 0, output_tokens: int = 0, cost_usd: float = 0.0):
+    """Log a model usage event to model_usage_log."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO model_usage_log (user_id, task_type, model_used, provider, input_tokens, output_tokens, cost_usd)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (user_id, task_type, model, provider, input_tokens, output_tokens, cost_usd))
+        conn.commit()
+    except Exception as e:
+        print(f"⚠️  Model usage log failed: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def record_time_saved(user_id: int, asset_type: str, asset_id: int = None, semester_tag: str = None):
+    """Log time saved after a Canvas push."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT value FROM app_config WHERE key = 'time_savings_minutes'")
+        row = cursor.fetchone()
+        if row:
+            import json
+            config = row[0] if isinstance(row[0], dict) else json.loads(row[0])
+            minutes = config.get(asset_type, 20)
+        else:
+            minutes = {"assignment": 45, "quiz": 30, "discussion": 20,
+                       "announcement": 10, "page": 60, "syllabus": 60}.get(asset_type, 20)
+
+        cursor.execute("""
+            INSERT INTO time_savings (user_id, asset_id, asset_type, minutes_saved, semester_tag)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (user_id, asset_id, asset_type, minutes, semester_tag))
+        conn.commit()
+        return minutes
+    except Exception as e:
+        print(f"⚠️  Time savings log failed: {e}")
+        return 0
+    finally:
+        cursor.close()
+        conn.close()
+
 async def get_current_user_from_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Get current user from session token"""
     token = credentials.credentials
@@ -864,7 +1063,8 @@ async def get_current_user_from_token(credentials: HTTPAuthorizationCredentials 
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT s.user_id, s.expires_at, u.email, u.role, u.is_demo, u.demo_expires_at
+            SELECT s.user_id, s.expires_at, u.email, u.role, u.is_demo, u.demo_expires_at,
+                   COALESCE(u.preferred_language, 'en') as preferred_language
             FROM sessions s
             JOIN users u ON s.user_id = u.id
             WHERE s.session_token = %s AND u.is_active = TRUE
@@ -875,7 +1075,7 @@ async def get_current_user_from_token(credentials: HTTPAuthorizationCredentials 
         if not session:
             raise HTTPException(status_code=401, detail="Invalid or expired session")
 
-        user_id, expires_at, email, role, is_demo, demo_expires_at = session
+        user_id, expires_at, email, role, is_demo, demo_expires_at, preferred_language = session
 
         # Check session expiry
         if datetime.now() > expires_at:
@@ -889,7 +1089,8 @@ async def get_current_user_from_token(credentials: HTTPAuthorizationCredentials 
             "user_id": user_id,
             "email": email,
             "role": role,
-            "is_demo": is_demo
+            "is_demo": is_demo,
+            "preferred_language": preferred_language
         }
 
     except HTTPException:
@@ -1003,6 +1204,33 @@ async def logout(current_user = Depends(get_current_user_from_token)):
 async def get_current_user_info(current_user = Depends(get_current_user_from_token)):
     """Get current user info"""
     return current_user
+
+
+class LanguageUpdateRequest(BaseModel):
+    preferred_language: str
+
+_SUPPORTED_LANGS = {'en', 'es', 'fr', 'pt', 'ar', 'zh'}
+
+@app.patch("/api/v2/user/language")
+async def update_preferred_language(
+    request: LanguageUpdateRequest,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Persist the user's preferred UI language."""
+    if request.preferred_language not in _SUPPORTED_LANGS:
+        raise HTTPException(status_code=400, detail=f"Unsupported language code. Supported: {', '.join(sorted(_SUPPORTED_LANGS))}")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE users SET preferred_language = %s WHERE id = %s",
+            (request.preferred_language, current_user['user_id'])
+        )
+        conn.commit()
+        return {"preferred_language": request.preferred_language}
+    finally:
+        cursor.close()
+        conn.close()
 
 # ============================================================================
 # STRIPE SUBSCRIPTION ENDPOINTS
@@ -1485,10 +1713,12 @@ async def generate_quiz_questions(
     Returns questions for user to review before uploading
     """
     try:
+        user_id = current_user['user_id']
+        check_and_increment_generation(user_id)
         print(f"🧠 Generating {request.grade_level} quiz questions: {request.topic}")
 
         # Enrich description with user's reference materials (filtered to selected course)
-        reference_context = get_user_reference_context(current_user['user_id'], db, course_name=request.course_name)
+        reference_context = get_user_reference_context(user_id, db, course_name=request.course_name)
         enriched_description = request.description
         if reference_context:
             enriched_description += f"\n\nCourse reference materials (use specific topics and concepts from here):\n{reference_context}"
@@ -1504,14 +1734,25 @@ async def generate_quiz_questions(
             tone=request.tone
         )
 
+        questions = quiz_data.get("questions", [])
+        import json as _json
+        asset_id = save_asset(
+            user_id, 'quiz', f"Quiz: {request.topic}",
+            _json.dumps(questions, indent=2),
+            course_name=request.course_name
+        )
+
         return {
             "status": "success",
             "topic": request.topic,
-            "questions": quiz_data.get("questions", []),
-            "num_questions": len(quiz_data.get("questions", [])),
+            "questions": questions,
+            "num_questions": len(questions),
+            "asset_id": asset_id,
             "message": "Quiz questions generated! Review and upload to Canvas."
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ Error generating quiz: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1547,6 +1788,8 @@ async def upload_quiz_to_canvas(
         canvas_client = CanvasClient(credentials.canvas_url, decrypted_token)
 
         quiz_title = f"Quiz: {request.topic}"
+        # Calculate total points from individual questions, fallback to num_questions * 10
+        calc_points = sum(q.get("points", 10) for q in request.questions) if request.questions else request.num_questions * 10
         quiz_id = canvas_client.create_quiz(
             course_id=request.course_id,
             quiz_data={
@@ -1554,7 +1797,7 @@ async def upload_quiz_to_canvas(
                 "quiz_type": "assignment",
                 "time_limit": 20,
                 "allowed_attempts": 1,
-                "points_possible": request.num_questions * 10,
+                "points_possible": calc_points,
                 "due_at": request.due_date
             }
         )
@@ -1562,23 +1805,39 @@ async def upload_quiz_to_canvas(
         if not quiz_id:
             raise HTTPException(status_code=500, detail="Failed to create quiz in Canvas")
 
-        # Add questions to Canvas quiz
+        # Add questions to Canvas quiz (supports MCQ, T/F, essay, matching, short answer)
+        total_points = 0
         for i, question in enumerate(request.questions, 1):
+            q_type = question.get("question_type", "multiple_choice_question")
+            q_points = question.get("points", 10)
+            total_points += q_points
+
+            # Build answers based on question type
+            q_answers = []
+            if q_type == "matching_question":
+                q_answers = [
+                    {"answer_match_left": ans.get("match_left", ans.get("text", "")),
+                     "answer_match_right": ans.get("match_right", "")}
+                    for ans in question.get("answers", [])
+                ]
+            elif q_type == "essay_question":
+                q_answers = []  # no answers for essay
+            else:
+                q_answers = [
+                    {"answer_text": ans["text"],
+                     "answer_weight": 100 if ans.get("correct") else 0}
+                    for ans in question.get("answers", [])
+                ]
+
             canvas_client.add_quiz_question(
                 course_id=request.course_id,
                 quiz_id=quiz_id,
                 question_data={
                     "name": f"Question {i}",
                     "text": question["question_text"],
-                    "type": "multiple_choice_question",
-                    "points": 10,
-                    "answers": [
-                        {
-                            "answer_text": ans["text"],
-                            "answer_weight": 100 if ans.get("correct") else 0
-                        }
-                        for ans in question["answers"]
-                    ]
+                    "type": q_type,
+                    "points": q_points,
+                    "answers": q_answers
                 }
             )
 
@@ -1939,12 +2198,24 @@ Return just the HTML content, no markdown code blocks."""
 
         preview_url = f"{credentials.canvas_url}/courses/{request.course_id}/discussion_topics/{result['id']}"
 
+        # Auto-save to asset bank + record time saved
+        asset_id = save_asset(
+            user_id=current_user['user_id'], asset_type="announcement",
+            title=request.topic, content=announcement_html,
+            course_id=request.course_id,
+            generation_params={"topic": request.topic},
+            is_published=True
+        )
+        record_time_saved(current_user['user_id'], "announcement", asset_id)
+
         return {
             "status": "success",
             "announcement_id": result["id"],
+            "asset_id": asset_id,
             "title": request.topic,
             "preview_url": preview_url,
-            "message": "Announcement posted successfully!"
+            "message": "Announcement posted successfully!",
+            "minutes_saved": 10
         }
 
     except HTTPException:
@@ -1964,6 +2235,8 @@ async def generate_ai_page(
     Returns professional page content with proper structure
     """
     try:
+        user_id = current_user['user_id']
+        check_and_increment_generation(user_id)
         print(f"🤖 Generating AI page: {request.title}")
 
         # Map page types to better descriptions
@@ -2116,19 +2389,27 @@ Format in HTML for Canvas:
 Do NOT include the page title as a heading (Canvas adds it automatically)."""
 
         # Study guides need more output tokens to render all sections fully
-        haiku_max_tokens = 4096 if request.page_type == "study_guide" else 2048
+        sonnet_max_tokens = 4096 if request.page_type == "study_guide" else 4000
 
-        # Generate with Claude Haiku 4.5 (natural, course-specific content)
-        generated_content, cost = bonita.call_haiku(prompt, system, max_tokens=haiku_max_tokens)
+        # Generate with Claude Sonnet 4.6 (page_full route per model router)
+        generated_content, cost = bonita.call_sonnet(prompt, system, max_tokens=sonnet_max_tokens)
+
+        asset_id = save_asset(
+            user_id, 'page', request.title or "Course Page",
+            generated_content, course_name=request.course_name
+        )
 
         print(f"✅ Page generated (cost: ${cost:.4f})")
 
         return {
             "status": "success",
             "generated_content": generated_content,
+            "asset_id": asset_id,
             "cost": cost
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ Error generating page: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2196,6 +2477,7 @@ async def generate_ai_assignment(
     Returns professional assignment description with instructions, objectives, rubric
     """
     try:
+        check_and_increment_generation(current_user['user_id'])
         print(f"🤖 Generating AI assignment: {request.topic}")
 
         # Map assignment types to better descriptions
@@ -2304,7 +2586,7 @@ Include:
 
 Format in HTML for Canvas."""
 
-            description, _ = bonita.call_claude(prompt, system)
+            description, _ = bonita.call_sonnet(prompt, system, max_tokens=4000)
 
         # Upload to Canvas
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
@@ -2325,13 +2607,25 @@ Format in HTML for Canvas."""
 
         preview_url = f"{credentials.canvas_url}/courses/{request.course_id}/assignments/{result['id']}"
 
+        # Auto-save to asset bank + record time saved
+        asset_id = save_asset(
+            user_id=current_user['user_id'], asset_type="assignment",
+            title=request.title, content=description,
+            course_id=request.course_id,
+            generation_params={"topic": request.title, "assignment_type": getattr(request, 'assignment_type', None)},
+            is_published=True
+        )
+        record_time_saved(current_user['user_id'], "assignment", asset_id)
+
         return {
             "status": "success",
             "assignment_id": result["id"],
+            "asset_id": asset_id,
             "title": request.title,
             "points": request.points,
             "preview_url": preview_url,
-            "message": "Assignment created successfully! Review and publish in Canvas."
+            "message": "Assignment created successfully! Review and publish in Canvas.",
+            "minutes_saved": 45
         }
 
     except HTTPException:
@@ -2723,6 +3017,8 @@ async def generate_ai_discussion(
 ):
     """Generate AI-enhanced discussion topic"""
     try:
+        user_id = current_user['user_id']
+        check_and_increment_generation(user_id)
         print(f"🤖 Generating AI discussion: {request.topic}")
 
         language_name = LANGUAGE_MAP.get(request.language, "English")
@@ -2754,8 +3050,16 @@ Include:
 Format in HTML for Canvas. Be direct and engaging — students should know exactly what to discuss."""
 
         content, cost = bonita.call_haiku(prompt, system)
+
+        asset_id = save_asset(
+            user_id, 'discussion', f"Discussion: {request.topic}",
+            content, course_name=request.course_name
+        )
+
         print(f"✅ Discussion generated (cost: ${cost:.4f})")
-        return {"status": "success", "generated_content": content, "cost": cost}
+        return {"status": "success", "generated_content": content, "asset_id": asset_id, "cost": cost}
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2769,6 +3073,8 @@ async def generate_ai_syllabus(
 ):
     """Generate AI-enhanced course syllabus"""
     try:
+        user_id = current_user['user_id']
+        check_and_increment_generation(user_id)
         print(f"🤖 Generating AI syllabus: {request.course_name}")
 
         language_name = LANGUAGE_MAP.get(request.language, "English")
@@ -2802,9 +3108,18 @@ Format in HTML for Canvas:
 
 Be specific, practical, and student-friendly. No filler."""
 
-        content, cost = bonita.call_haiku(prompt, system)
+        # Syllabus uses Sonnet (syllabus_full route per model router)
+        content, cost = bonita.call_sonnet(prompt, system, max_tokens=6000)
+
+        asset_id = save_asset(
+            user_id, 'syllabus', f"Syllabus: {request.course_name}",
+            content, course_name=request.course_name
+        )
+
         print(f"✅ Syllabus generated (cost: ${cost:.4f})")
-        return {"status": "success", "generated_content": content, "cost": cost}
+        return {"status": "success", "generated_content": content, "asset_id": asset_id, "cost": cost}
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -3961,6 +4276,552 @@ async def update_referral_tier(
     except Exception as e:
         print(f"Admin tier update error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================================
+# NEW RSC FEATURE ENDPOINTS
+# ============================================================================
+
+# --- Onboarding ---
+
+@app.post("/api/v2/onboarding/complete")
+async def complete_onboarding(current_user=Depends(get_current_user_from_token)):
+    """Mark onboarding as complete for the current user."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE users SET onboarding_completed = TRUE WHERE id = %s", (current_user['user_id'],))
+        conn.commit()
+        return {"status": "ok"}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/v2/onboarding/status")
+async def get_onboarding_status(current_user=Depends(get_current_user_from_token)):
+    """Return onboarding completion status."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT onboarding_completed FROM users WHERE id = %s", (current_user['user_id'],))
+        row = cursor.fetchone()
+        completed = bool(row[0]) if row else False
+        return {"onboarding_completed": completed}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- Generation Status / Limits ---
+
+@app.get("/api/v2/generation/status")
+async def get_generation_status(current_user=Depends(get_current_user_from_token)):
+    """Return current generation usage for the dashboard counter widget."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT subscription_tier, generations_used_this_cycle,
+                   monthly_generation_limit, total_demo_generations,
+                   is_demo, image_credits_balance
+            FROM users WHERE id = %s
+        """, (current_user['user_id'],))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="User not found")
+        tier, used, limit, demo_gens, is_demo, img_credits = row
+        tier = tier or "demo"
+        tier_info = get_tier_limits(tier)
+        monthly_limit = tier_info["monthly_gens"]
+        if tier in ("demo", "trial") or is_demo:
+            return {
+                "tier": tier, "used": demo_gens or 0, "limit": 5,
+                "image_credits": 0, "is_demo": True
+            }
+        return {
+            "tier": tier,
+            "used": used or 0,
+            "limit": monthly_limit,
+            "image_credits": img_credits or 0,
+            "is_demo": False,
+            "percent": round((used or 0) / monthly_limit * 100) if monthly_limit else 0
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- Content Asset Bank (D2) ---
+
+class AssetSearchParams(BaseModel):
+    query: Optional[str] = None
+    asset_type: Optional[str] = None
+    course_id: Optional[int] = None
+    is_published: Optional[bool] = None
+    limit: int = 50
+    offset: int = 0
+
+
+@app.get("/api/v2/assets")
+async def list_assets(
+    query: Optional[str] = None,
+    asset_type: Optional[str] = None,
+    course_id: Optional[int] = None,
+    is_published: Optional[bool] = None,
+    limit: int = 50,
+    offset: int = 0,
+    current_user=Depends(get_current_user_from_token)
+):
+    """List assets for the current user with optional filtering and search."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        import json as _json
+        conditions = ["user_id = %s"]
+        params = [current_user['user_id']]
+
+        if asset_type:
+            conditions.append("asset_type = %s")
+            params.append(asset_type)
+        if course_id:
+            conditions.append("course_id = %s")
+            params.append(course_id)
+        if is_published is not None:
+            conditions.append("is_published = %s")
+            params.append(is_published)
+        if query:
+            conditions.append("to_tsvector('english', title || ' ' || content) @@ plainto_tsquery('english', %s)")
+            params.append(query)
+
+        where = " AND ".join(conditions)
+        params += [limit, offset]
+
+        cursor.execute(f"""
+            SELECT id, asset_type, title, course_name, week_number, semester_tag,
+                   is_published, reuse_count, created_at, updated_at
+            FROM assets
+            WHERE {where}
+            ORDER BY updated_at DESC
+            LIMIT %s OFFSET %s
+        """, params)
+
+        assets = []
+        for row in cursor.fetchall():
+            assets.append({
+                "id": row[0], "asset_type": row[1], "title": row[2],
+                "course_name": row[3], "week_number": row[4], "semester_tag": row[5],
+                "is_published": row[6], "reuse_count": row[7],
+                "created_at": row[8].isoformat() if row[8] else None,
+                "updated_at": row[9].isoformat() if row[9] else None
+            })
+
+        return {"assets": assets, "total": len(assets)}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/v2/assets/{asset_id}")
+async def get_asset(asset_id: int, current_user=Depends(get_current_user_from_token)):
+    """Get full asset content."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT id, asset_type, title, content, course_id, course_name,
+                   week_number, semester_tag, is_published, reuse_count,
+                   bonita_opt_in, created_at
+            FROM assets WHERE id = %s AND user_id = %s
+        """, (asset_id, current_user['user_id']))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Asset not found")
+        return {
+            "id": row[0], "asset_type": row[1], "title": row[2], "content": row[3],
+            "course_id": row[4], "course_name": row[5], "week_number": row[6],
+            "semester_tag": row[7], "is_published": row[8], "reuse_count": row[9],
+            "bonita_opt_in": row[10],
+            "created_at": row[11].isoformat() if row[11] else None
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.delete("/api/v2/assets/{asset_id}")
+async def delete_asset(asset_id: int, current_user=Depends(get_current_user_from_token)):
+    """Delete an asset (soft — removes from user's library)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM assets WHERE id = %s AND user_id = %s RETURNING id", (asset_id, current_user['user_id']))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Asset not found")
+        conn.commit()
+        return {"status": "deleted"}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- Time Saved Counter (D1) ---
+
+@app.get("/api/v2/time-savings")
+async def get_time_savings(current_user=Depends(get_current_user_from_token)):
+    """Return total and semester-to-date time saved."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT hourly_rate_preference FROM users WHERE id = %s", (current_user['user_id'],))
+        rate_row = cursor.fetchone()
+        hourly_rate = float(rate_row[0]) if rate_row and rate_row[0] else 50.0
+
+        cursor.execute("""
+            SELECT SUM(minutes_saved) FROM time_savings WHERE user_id = %s
+        """, (current_user['user_id'],))
+        total_minutes = cursor.fetchone()[0] or 0
+
+        # Current semester = last 6 months approximation
+        cursor.execute("""
+            SELECT SUM(minutes_saved) FROM time_savings
+            WHERE user_id = %s AND created_at >= NOW() - INTERVAL '6 months'
+        """, (current_user['user_id'],))
+        semester_minutes = cursor.fetchone()[0] or 0
+
+        cursor.execute("""
+            SELECT asset_type, SUM(minutes_saved) FROM time_savings
+            WHERE user_id = %s GROUP BY asset_type
+        """, (current_user['user_id'],))
+        by_type = {row[0]: int(row[1]) for row in cursor.fetchall()}
+
+        total_hours = round(total_minutes / 60, 1)
+        semester_hours = round(semester_minutes / 60, 1)
+        dollar_value = round(total_hours * hourly_rate, 0)
+
+        return {
+            "total_minutes": int(total_minutes),
+            "total_hours": total_hours,
+            "semester_hours": semester_hours,
+            "dollar_value": dollar_value,
+            "hourly_rate": hourly_rate,
+            "by_type": by_type
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- Enhance Mode (C3) ---
+
+class EnhanceSuggestionRequest(BaseModel):
+    generated_content: str
+    asset_type: str
+    reference_context: Optional[str] = None
+
+
+@app.post("/api/v2/enhance-suggestion")
+async def get_enhance_suggestion(
+    request: EnhanceSuggestionRequest,
+    current_user=Depends(get_current_user_from_token)
+):
+    """
+    Secondary Haiku 4.5 call — returns 1-2 specific enhancement suggestions
+    for already-generated content. Returns null if no strong suggestions.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT enhance_mode_enabled FROM users WHERE id = %s", (current_user['user_id'],))
+        row = cursor.fetchone()
+        if row and row[0] is False:
+            return {"suggestion": None, "reason": "enhance_mode_disabled"}
+    finally:
+        cursor.close()
+        conn.close()
+
+    bonita = BonitaEngine()
+    ref_section = f"\n\nReference materials from this instructor:\n{request.reference_context[:2000]}" if request.reference_context else ""
+
+    system = "You are Bonita, reviewing AI-generated course content for potential improvements."
+    prompt = f"""Review this {request.asset_type} and suggest 1-2 specific improvements.{ref_section}
+
+GENERATED CONTENT:
+{request.generated_content[:3000]}
+
+Instructions:
+- Only suggest meaningful improvements that would genuinely strengthen the content
+- Be specific and brief — name exactly what to add or change
+- If no strong suggestions exist, return exactly: null
+- If you have suggestions, format as 1-2 bullet points
+- Do not rewrite the content — just suggest what could be added or improved
+
+Return ONLY the bullet points or the word null. No preamble."""
+
+    suggestion_text, cost = bonita.call_haiku(prompt, system, max_tokens=400)
+    suggestion_text = suggestion_text.strip()
+
+    if suggestion_text.lower() in ("null", "none", ""):
+        return {"suggestion": None}
+
+    log_model_usage(current_user['user_id'], "enhance_mode_suggestion",
+                    "claude-haiku-4-5-20251001", "anthropic", cost_usd=cost)
+
+    return {"suggestion": suggestion_text}
+
+
+# --- Bonita Opt-In (F1) ---
+
+class BonitaOptInRequest(BaseModel):
+    opt_in: bool  # True = consent, False = withdraw
+
+
+@app.post("/api/v2/bonita/consent")
+async def set_bonita_consent(request: BonitaOptInRequest, current_user=Depends(get_current_user_from_token)):
+    """Grant or revoke Bonita data pipeline consent."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        user_id = current_user['user_id']
+        if request.opt_in:
+            cursor.execute("""
+                UPDATE users SET bonita_consent_granted_at = NOW(), bonita_consent_revoked_at = NULL
+                WHERE id = %s
+            """, (user_id,))
+        else:
+            cursor.execute("""
+                UPDATE users SET bonita_consent_revoked_at = NOW()
+                WHERE id = %s
+            """, (user_id,))
+            # Set all assets bonita_opt_in = false
+            cursor.execute("UPDATE assets SET bonita_opt_in = FALSE WHERE user_id = %s", (user_id,))
+            # Queue deletion requests for previously exported assets
+            cursor.execute("""
+                INSERT INTO deletion_requests (asset_id)
+                SELECT bpe.asset_id FROM bonita_pipeline_exports bpe
+                JOIN assets a ON bpe.asset_id = a.id
+                WHERE a.user_id = %s AND bpe.fulfilled_at IS NULL
+                ON CONFLICT DO NOTHING
+            """, (user_id,))
+        conn.commit()
+        return {"status": "ok", "opted_in": request.opt_in}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/v2/bonita/consent")
+async def get_bonita_consent(current_user=Depends(get_current_user_from_token)):
+    """Get current Bonita consent status."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT bonita_consent_granted_at, bonita_consent_revoked_at,
+                   COUNT(a.id) FILTER (WHERE a.bonita_opt_in = TRUE)
+            FROM users u
+            LEFT JOIN assets a ON a.user_id = u.id
+            WHERE u.id = %s
+            GROUP BY u.bonita_consent_granted_at, u.bonita_consent_revoked_at
+        """, (current_user['user_id'],))
+        row = cursor.fetchone()
+        if not row:
+            return {"opted_in": False, "granted_at": None, "asset_count": 0}
+        granted, revoked, count = row
+        opted_in = granted is not None and (revoked is None or granted > revoked)
+        return {
+            "opted_in": opted_in,
+            "granted_at": granted.isoformat() if granted else None,
+            "asset_count": count or 0
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- Course Activations (B1 Dual Limiter) ---
+
+class CourseActivationRequest(BaseModel):
+    course_id: int
+    course_name: Optional[str] = None
+
+
+@app.post("/api/v2/courses/activate")
+async def activate_course(request: CourseActivationRequest, current_user=Depends(get_current_user_from_token)):
+    """Activate a course slot for the current user."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        user_id = current_user['user_id']
+
+        # Get tier limits
+        cursor.execute("SELECT subscription_tier, active_course_slots FROM users WHERE id = %s", (user_id,))
+        row = cursor.fetchone()
+        tier = (row[0] if row else "demo") or "demo"
+        tier_info = get_tier_limits(tier)
+        slot_limit = tier_info["slots"]
+
+        # Count currently active slots
+        cursor.execute("""
+            SELECT COUNT(*) FROM course_activations
+            WHERE user_id = %s AND deactivated_at IS NULL
+        """, (user_id,))
+        active_count = cursor.fetchone()[0]
+
+        if active_count >= slot_limit:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "code": "SLOT_LIMIT_REACHED",
+                    "message": f"Your {tier} plan allows {slot_limit} active course{'s' if slot_limit != 1 else ''}. Deactivate a course or upgrade to add more.",
+                    "active_count": active_count,
+                    "limit": slot_limit
+                }
+            )
+
+        # Check if already active
+        cursor.execute("""
+            SELECT id FROM course_activations
+            WHERE user_id = %s AND course_id = %s AND deactivated_at IS NULL
+        """, (user_id, request.course_id))
+        if cursor.fetchone():
+            return {"status": "already_active"}
+
+        cursor.execute("""
+            INSERT INTO course_activations (user_id, course_id, course_name)
+            VALUES (%s, %s, %s) RETURNING id
+        """, (user_id, request.course_id, request.course_name))
+        conn.commit()
+        return {"status": "activated", "course_id": request.course_id}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/v2/courses/deactivate")
+async def deactivate_course(request: CourseActivationRequest, current_user=Depends(get_current_user_from_token)):
+    """Deactivate a course slot (swap out)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE course_activations SET deactivated_at = NOW()
+            WHERE user_id = %s AND course_id = %s AND deactivated_at IS NULL
+        """, (current_user['user_id'], request.course_id))
+        conn.commit()
+        return {"status": "deactivated"}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/v2/courses/active")
+async def get_active_courses(current_user=Depends(get_current_user_from_token)):
+    """Return list of currently active course IDs."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT course_id, course_name, activated_at FROM course_activations
+            WHERE user_id = %s AND deactivated_at IS NULL
+            ORDER BY activated_at DESC
+        """, (current_user['user_id'],))
+        active = [{"course_id": r[0], "course_name": r[1], "activated_at": r[2].isoformat() if r[2] else None}
+                  for r in cursor.fetchall()]
+
+        cursor.execute("SELECT subscription_tier FROM users WHERE id = %s", (current_user['user_id'],))
+        row = cursor.fetchone()
+        tier = (row[0] if row else "demo") or "demo"
+        tier_info = get_tier_limits(tier)
+
+        return {"active_courses": active, "slot_limit": tier_info["slots"], "slots_used": len(active)}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- Referral Invite (E3 UI support) ---
+
+@app.get("/api/v2/referral/invite-info")
+async def get_referral_invite_info(current_user=Depends(get_current_user_from_token)):
+    """Get referral link + pre-written invite copy for the "Invite a Colleague" modal."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        user_id = current_user['user_id']
+        cursor.execute("SELECT referral_code, full_name FROM users WHERE id = %s", (user_id,))
+        row = cursor.fetchone()
+        code = row[0] if row else None
+        name = row[1] if row else "A colleague"
+
+        # Generate code if none exists
+        if not code:
+            import re
+            nm = (row[1] or "RSC").upper()
+            letters = re.sub(r'[^A-Z]', '', nm)[:3].ljust(3, 'X')
+            import random
+            code = letters + ''.join(random.choices('ABCDEFGHJKMNPQRSTUVWXYZ23456789', k=6))
+            cursor.execute("UPDATE users SET referral_code = %s WHERE id = %s", (code, user_id))
+            conn.commit()
+
+        link = f"https://readysetclass.app/join?ref={code}"
+        subject = "Save hours every semester — try ReadySetClass"
+        body = f"""{name} thought you'd find this useful.
+
+ReadySetClass is an AI assistant built specifically for faculty — not generic AI. It connects to your Canvas account and generates assignments, quizzes, discussions, syllabi, and pages in minutes. Built for professors, at HBCUs and MSIs in particular.
+
+Your free trial link (no credit card): {link}
+
+Not hype. Just help."""
+
+        return {
+            "code": code,
+            "link": link,
+            "invite_subject": subject,
+            "invite_body": body
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- Admin: Model Usage Dashboard ---
+
+@app.get("/api/admin/model-usage")
+async def get_model_usage_stats(
+    days: int = 7,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Admin view of model usage costs by model and task type."""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT model_used, provider, task_type,
+                   COUNT(*) as calls,
+                   SUM(input_tokens) as total_input,
+                   SUM(output_tokens) as total_output,
+                   SUM(cost_usd) as total_cost
+            FROM model_usage_log
+            WHERE created_at >= NOW() - INTERVAL '%s days'
+            GROUP BY model_used, provider, task_type
+            ORDER BY total_cost DESC
+        """, (days,))
+        rows = cursor.fetchall()
+        return {
+            "period_days": days,
+            "rows": [
+                {"model": r[0], "provider": r[1], "task_type": r[2],
+                 "calls": r[3], "input_tokens": r[4], "output_tokens": r[5],
+                 "total_cost_usd": float(r[6] or 0)}
+                for r in rows
+            ]
+        }
     finally:
         cursor.close()
         conn.close()

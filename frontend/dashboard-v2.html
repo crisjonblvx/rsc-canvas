@@ -813,9 +813,636 @@
                 gap: 0.75rem;
             }
         }
+
+        /* ============================================================
+           GENERATION STATE UI (Addendum §2 UX Bug Fix)
+           ============================================================ */
+
+        /* Sticky generation banner — always top of viewport */
+        #genBanner {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 9999;
+            padding: 14px 24px;
+            font-family: var(--font-body);
+            font-size: 15px;
+            font-weight: 600;
+            text-align: center;
+            transition: background 0.4s, color 0.4s;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+        #genBanner.hidden { display: none !important; }
+        #genBanner.generating {
+            background: var(--accent-gold);
+            color: var(--primary-navy);
+            display: flex;
+        }
+        #genBanner.complete {
+            background: var(--primary-navy);
+            color: white;
+            display: flex;
+        }
+        #genBanner.error {
+            background: #dc2626;
+            color: white;
+            display: flex;
+        }
+        #genBanner .gen-pulse {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: var(--primary-navy);
+            animation: genPulse 1s infinite;
+        }
+        #genBanner.complete .gen-pulse,
+        #genBanner.error .gen-pulse { display: none; }
+        @keyframes genPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(1.3); }
+        }
+        /* Page dim overlay during generation */
+        #genOverlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.15);
+            z-index: 9990;
+            pointer-events: none;
+        }
+        #genOverlay.active { display: block; }
+
+        /* Floating Canvas push button */
+        #canvasFAB {
+            display: none;
+            position: fixed;
+            bottom: 32px;
+            right: 32px;
+            z-index: 9998;
+            padding: 16px 28px;
+            background: #059669;
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-family: var(--font-body);
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(5,150,105,0.45);
+            transition: transform 0.2s, box-shadow 0.2s;
+            min-height: 56px;
+        }
+        #canvasFAB.visible { display: block; animation: fabPulse 2s 3; }
+        #canvasFAB:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(5,150,105,0.5); }
+        @keyframes fabPulse {
+            0%, 100% { box-shadow: 0 4px 20px rgba(5,150,105,0.45); }
+            50% { box-shadow: 0 4px 32px rgba(5,150,105,0.75); }
+        }
+
+        /* Full-area success moment */
+        #successMoment {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: white;
+            z-index: 9997;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            text-align: center;
+        }
+        #successMoment.visible { display: flex; }
+        #successMoment .success-check {
+            font-size: 72px;
+            margin-bottom: 24px;
+            animation: successPop 0.5s ease-out;
+        }
+        @keyframes successPop {
+            0% { transform: scale(0); opacity: 0; }
+            80% { transform: scale(1.15); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        #successMoment h2 {
+            font-family: var(--font-display);
+            font-size: 2rem;
+            color: var(--primary-navy);
+            margin-bottom: 12px;
+        }
+        #successMoment .time-toast {
+            background: #f0fdf4;
+            color: #065f46;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 15px;
+            margin: 16px 0 32px;
+        }
+        .whats-next-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            max-width: 720px;
+            width: 100%;
+        }
+        .whats-next-card {
+            background: var(--light-gray);
+            border: 2px solid transparent;
+            border-radius: 12px;
+            padding: 20px 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .whats-next-card:hover {
+            border-color: var(--primary-navy);
+            background: white;
+            transform: translateY(-2px);
+        }
+        .whats-next-card .card-icon { font-size: 28px; margin-bottom: 8px; }
+        .whats-next-card .card-label { font-weight: 700; color: var(--primary-navy); font-size: 14px; }
+        .whats-next-card .card-desc { color: #666; font-size: 12px; margin-top: 4px; }
+
+        /* Generation counter widget in header */
+        #genCounterWidget {
+            background: var(--light-gray);
+            border: 1.5px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--primary-navy);
+            white-space: nowrap;
+        }
+        #genCounterWidget.warning { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+        #genCounterWidget.full { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
+
+        /* Course completeness sidebar widget */
+        .course-completeness {
+            margin: 1rem 1.5rem;
+            padding: 14px;
+            background: linear-gradient(135deg, rgba(30,58,95,0.06), rgba(201,169,97,0.08));
+            border-radius: 10px;
+            border: 1px solid rgba(30,58,95,0.1);
+        }
+        .completeness-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #888;
+            margin-bottom: 6px;
+        }
+        .completeness-bar-wrap {
+            background: #e5e7eb;
+            border-radius: 4px;
+            height: 6px;
+            margin-bottom: 8px;
+        }
+        .completeness-bar-fill {
+            height: 6px;
+            border-radius: 4px;
+            background: linear-gradient(90deg, var(--primary-navy), var(--accent-gold));
+            transition: width 0.6s ease;
+        }
+        .completeness-nudge {
+            font-size: 12px;
+            color: var(--primary-navy);
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .completeness-nudge:hover { text-decoration: underline; }
+
+        /* Time saved sidebar widget */
+        .time-saved-sidebar {
+            margin: 0.5rem 1.5rem 1rem;
+            padding: 12px 14px;
+            background: rgba(16,185,129,0.07);
+            border-radius: 10px;
+            border: 1px solid rgba(16,185,129,0.2);
+        }
+        .time-saved-sidebar .label {
+            font-size: 11px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.5px; color: #065f46; margin-bottom: 4px;
+        }
+        .time-saved-sidebar .value {
+            font-size: 20px; font-weight: 800; color: var(--primary-navy);
+        }
+        .time-saved-sidebar .sub {
+            font-size: 11px; color: #888;
+        }
+
+        /* Referral button in sidebar */
+        .sidebar-referral-btn {
+            margin: 0.5rem 1.5rem;
+            padding: 10px 14px;
+            background: var(--primary-navy);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-family: var(--font-body);
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            width: calc(100% - 3rem);
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .sidebar-referral-btn:hover { background: #152A43; }
+
+        /* Onboarding modal */
+        #onboardingModal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+        #onboardingModal.visible { display: flex; }
+        .ob-card {
+            background: var(--primary-navy);
+            color: white;
+            border-radius: 20px;
+            padding: 48px 40px;
+            max-width: 520px;
+            width: 90%;
+            text-align: center;
+            position: relative;
+        }
+        .ob-progress { display: flex; gap: 8px; justify-content: center; margin-bottom: 32px; }
+        .ob-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.3); transition: background 0.3s; }
+        .ob-dot.active { background: var(--accent-gold); }
+        .ob-card h2 { font-family: var(--font-display); font-size: 1.6rem; margin-bottom: 16px; color: var(--accent-gold); }
+        .ob-card p { line-height: 1.7; color: rgba(255,255,255,0.88); font-size: 15px; }
+        .ob-nav { display: flex; gap: 12px; margin-top: 32px; justify-content: center; align-items: center; }
+        .ob-btn {
+            padding: 12px 28px; border-radius: 10px; font-weight: 700;
+            font-family: var(--font-body); cursor: pointer; border: none; font-size: 15px;
+        }
+        .ob-btn-primary { background: var(--accent-gold); color: var(--primary-navy); }
+        .ob-btn-back { background: rgba(255,255,255,0.15); color: white; }
+        .ob-btn-skip { background: none; color: rgba(255,255,255,0.5); font-size: 13px; padding: 8px; }
+
+        /* Referral modal */
+        #referralModal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+        #referralModal.visible { display: flex; }
+        .referral-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            position: relative;
+        }
+        .referral-card h2 { font-family: var(--font-display); color: var(--primary-navy); margin-bottom: 8px; }
+        .referral-link-box {
+            background: var(--light-gray);
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--primary-navy);
+            word-break: break-all;
+            margin: 16px 0;
+        }
+        .referral-stats { display: flex; gap: 16px; margin: 16px 0; }
+        .referral-stat { flex: 1; text-align: center; background: var(--light-gray); padding: 12px; border-radius: 10px; }
+        .referral-stat .rstat-val { font-size: 1.5rem; font-weight: 800; color: var(--primary-navy); }
+        .referral-stat .rstat-lbl { font-size: 11px; color: #888; }
+
+        /* Bonita opt-in modal */
+        #bonitaModal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.65);
+            z-index: 10001;
+            align-items: center;
+            justify-content: center;
+        }
+        #bonitaModal.visible { display: flex; }
+        .bonita-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 560px;
+            width: 92%;
+        }
+        .bonita-card h2 { font-family: var(--font-display); font-size: 1.4rem; color: var(--primary-navy); margin-bottom: 16px; }
+        .bonita-card p { font-size: 14px; line-height: 1.75; color: #444; margin-bottom: 12px; }
+        .bonita-card .bonita-btns { display: flex; gap: 12px; margin-top: 28px; }
+        .bonita-btn-yes {
+            flex: 1; padding: 14px; background: var(--primary-navy); color: white;
+            border: none; border-radius: 10px; font-weight: 700; font-size: 15px;
+            cursor: pointer; font-family: var(--font-body);
+        }
+        .bonita-btn-not-now {
+            padding: 14px 20px; background: white; color: #888;
+            border: 2px solid #e0e0e0; border-radius: 10px; font-weight: 600;
+            cursor: pointer; font-family: var(--font-body); font-size: 14px;
+        }
+
+        /* Enhance Mode suggestion panel */
+        #enhancePanel {
+            display: none;
+            background: #fffbeb;
+            border: 2px solid var(--accent-gold);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-top: 16px;
+        }
+        #enhancePanel.visible { display: block; }
+        #enhancePanel .ep-header {
+            font-weight: 700; color: var(--primary-navy); margin-bottom: 8px; font-size: 14px;
+        }
+        #enhancePanel .ep-text { font-size: 14px; color: #555; line-height: 1.6; }
+        #enhancePanel .ep-btns { display: flex; gap: 10px; margin-top: 12px; }
+
+        /* Accessibility check panel */
+        #accessibilityPanel {
+            display: none;
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin-top: 14px;
+        }
+        #accessibilityPanel.visible { display: block; }
+        #accessibilityPanel.ok { background: #f0fdf4; border: 1.5px solid #86efac; }
+        #accessibilityPanel.warn { background: #fffbeb; border: 1.5px solid var(--accent-gold); }
+        .a11y-item { font-size: 13px; padding: 6px 0; border-bottom: 1px solid rgba(0,0,0,0.06); }
+        .a11y-item:last-child { border-bottom: none; }
+
+        /* Paywall modal backdrop */
+        #paywallModal.show { display: flex !important; }
+
+        /* ── D3: Canvas Preview Before Publish ────────────────── */
+        #canvasPreviewModal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 10010;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 24px 16px;
+            overflow-y: auto;
+        }
+        #canvasPreviewModal.show { display: flex; }
+        .preview-shell {
+            background: white;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 860px;
+            min-height: 60vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 24px 64px rgba(0,0,0,0.3);
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .preview-topbar {
+            background: var(--primary-navy);
+            color: white;
+            padding: 14px 24px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .preview-topbar strong { font-size: 14px; }
+        .preview-canvas-area {
+            padding: 32px 40px;
+            flex: 1;
+            overflow-y: auto;
+            font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
+            font-size: 16px;
+            line-height: 1.7;
+            color: #2d3748;
+        }
+        /* Canvas LMS standard content styles */
+        .preview-canvas-area h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 16px; color: #1a202c; }
+        .preview-canvas-area h2 { font-size: 1.4rem; font-weight: 700; margin: 24px 0 12px; color: #1a202c; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; }
+        .preview-canvas-area h3 { font-size: 1.15rem; font-weight: 600; margin: 20px 0 8px; color: #2d3748; }
+        .preview-canvas-area h4 { font-size: 1rem; font-weight: 600; margin: 16px 0 6px; color: #4a5568; }
+        .preview-canvas-area p { margin: 0 0 14px; }
+        .preview-canvas-area ul, .preview-canvas-area ol { margin: 0 0 14px 24px; }
+        .preview-canvas-area li { margin-bottom: 6px; }
+        .preview-canvas-area table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        .preview-canvas-area th { background: #e2e8f0; font-weight: 600; text-align: left; }
+        .preview-canvas-area th, .preview-canvas-area td { border: 1px solid #cbd5e0; padding: 10px 14px; }
+        .preview-canvas-area a { color: #0070d2; }
+        .preview-canvas-area strong { font-weight: 700; }
+        /* Validation flags */
+        .validation-panel {
+            background: #fffbeb;
+            border-top: 2px solid var(--accent-gold);
+            padding: 16px 24px;
+        }
+        .validation-panel-head {
+            font-weight: 700;
+            font-size: 13px;
+            color: var(--primary-navy);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .val-item {
+            font-size: 13px;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.07);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        .val-item:last-child { border-bottom: none; }
+        .val-item-text { flex: 1; color: #555; line-height: 1.5; }
+        .val-fix-btn {
+            background: var(--primary-navy);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            font-family: var(--font-body);
+        }
+        .preview-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            background: #fafafa;
+        }
+        .preview-publish-btn {
+            background: var(--primary-navy);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 12px 28px;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+            font-family: var(--font-body);
+        }
+        .preview-edit-btn {
+            background: white;
+            color: var(--primary-navy);
+            border: 2px solid var(--primary-navy);
+            border-radius: 10px;
+            padding: 12px 24px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            font-family: var(--font-body);
+        }
     </style>
 </head>
 <body>
+
+    <!-- ============================================================
+         GENERATION STATE UI — Addendum §2 UX Bug Fix
+         ============================================================ -->
+
+    <!-- Sticky generation banner (fixed top, z-9999) -->
+    <div id="genBanner" class="hidden">
+        <span class="gen-pulse"></span>
+        <span id="genBannerText">Generating...</span>
+        <button onclick="dismissBanner()" style="position:absolute;right:16px;background:none;border:none;cursor:pointer;color:inherit;font-size:1.4rem;line-height:1;opacity:0.7;" title="Dismiss">×</button>
+    </div>
+
+    <!-- Page dim overlay during generation -->
+    <div id="genOverlay"></div>
+
+    <!-- Floating "Send to Canvas" FAB (bottom-right) -->
+    <button id="canvasFAB" onclick="triggerCanvasPush()"><span data-i18n="btn.sendToCanvas">Send to Canvas</span> →</button>
+
+    <!-- Full-screen success moment (shows after Canvas push) -->
+    <div id="successMoment">
+        <div class="success-check">✓</div>
+        <h2 id="successTitle">Content Published!</h2>
+        <div class="time-toast" id="successToast"></div>
+        <p style="color:#666;font-size:15px;margin-bottom:28px;">What do you want to build next?</p>
+        <div class="whats-next-grid">
+            <div class="whats-next-card" onclick="dismissSuccessMoment();showSection('assignment')">
+                <div class="card-icon">📋</div>
+                <div class="card-label">Assignment</div>
+                <div class="card-desc">Rubric-ready</div>
+            </div>
+            <div class="whats-next-card" onclick="dismissSuccessMoment();showSection('quiz')">
+                <div class="card-icon">📝</div>
+                <div class="card-label">Quiz</div>
+                <div class="card-desc">MCQ &amp; T/F</div>
+            </div>
+            <div class="whats-next-card" onclick="dismissSuccessMoment();showSection('discussion')">
+                <div class="card-icon">💬</div>
+                <div class="card-label">Discussion</div>
+                <div class="card-desc">Starter prompts</div>
+            </div>
+            <div class="whats-next-card" onclick="dismissSuccessMoment();showSection('syllabus')">
+                <div class="card-icon">📋</div>
+                <div class="card-label">Syllabus</div>
+                <div class="card-desc">Full draft</div>
+            </div>
+        </div>
+        <button onclick="dismissSuccessMoment()" style="margin-top:32px;padding:14px 32px;background:var(--primary-navy);color:white;border:none;border-radius:10px;font-family:var(--font-body);font-size:16px;font-weight:700;cursor:pointer;">Keep Building →</button>
+    </div>
+
+    <!-- Referral Modal -->
+    <div id="referralModal">
+        <div class="referral-card">
+            <button onclick="closeReferralModal()" style="position:absolute;top:16px;right:20px;background:none;border:none;font-size:1.5rem;cursor:pointer;color:#999;line-height:1;">×</button>
+            <h2>Invite a Colleague</h2>
+            <p style="color:#666;font-size:14px;margin-bottom:16px;">Share ReadySetClass — when they subscribe, you both benefit.</p>
+            <div class="referral-link-box" id="referralLinkText">Loading your invite link...</div>
+            <button onclick="copyReferralLink()" id="copyLinkBtn" style="width:100%;padding:10px;background:var(--primary-navy);color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-family:var(--font-body);margin-bottom:12px;">Copy Invite Link</button>
+            <textarea id="referralMessageBox" rows="5" style="width:100%;border:1px solid #e0e0e0;border-radius:8px;padding:12px;font-size:13px;resize:none;font-family:var(--font-body);color:#333;"></textarea>
+            <button onclick="openEmailInvite()" style="margin-top:10px;width:100%;padding:12px;background:var(--accent-gold);color:var(--primary-navy);border:none;border-radius:8px;font-weight:700;font-size:15px;cursor:pointer;font-family:var(--font-body);">Send Email Invite</button>
+        </div>
+    </div>
+
+    <!-- Generation Limit Paywall (Demo / Monthly tier limit) -->
+    <div id="paywallModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10002;align-items:center;justify-content:center;padding:1rem;">
+        <div style="background:white;border-radius:20px;max-width:480px;width:100%;padding:40px;text-align:center;font-family:var(--font-body);">
+            <div style="font-size:2.5rem;margin-bottom:12px;">🔒</div>
+            <h2 style="font-family:var(--font-display);color:var(--primary-navy);font-size:1.5rem;margin-bottom:8px;">You've reached your limit</h2>
+            <p id="paywallMessage" style="color:#555;font-size:15px;line-height:1.7;margin-bottom:8px;">You've used all your generations for this period.</p>
+            <p id="paywallSubtext" style="color:#888;font-size:13px;margin-bottom:28px;">Upgrade to keep building — more generations, more courses, more impact.</p>
+            <a href="/pricing.html" style="display:block;padding:14px;background:var(--accent-gold);color:var(--primary-navy);text-decoration:none;border-radius:10px;font-weight:700;font-size:16px;margin-bottom:10px;">View Plans &amp; Upgrade →</a>
+            <button onclick="closePaywall()" style="background:none;border:none;color:#999;cursor:pointer;font-size:14px;font-family:inherit;">Maybe later</button>
+        </div>
+    </div>
+
+    <!-- Accessibility Check Panel (E1) -->
+    <div id="accessibilityPanel" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);width:min(560px,90vw);z-index:9995;border-radius:12px;padding:16px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.15);font-family:var(--font-body);background:white;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <strong style="color:var(--primary-navy);font-size:14px;">Accessibility Check</strong>
+            <button onclick="document.getElementById('accessibilityPanel').style.display='none'" style="background:none;border:none;color:#999;cursor:pointer;font-size:1.2rem;">×</button>
+        </div>
+        <div id="a11yItems" style="font-size:13px;color:#444;line-height:1.8;"></div>
+    </div>
+
+    <!-- Bonita Opt-in Modal (heyBonita.AI — F1 pipeline) APPROVED COPY — DO NOT ALTER WITHOUT CJ'S APPROVAL -->
+    <div id="bonitaModal">
+        <div class="bonita-card">
+            <h2>Help build something that's never existed before.</h2>
+            <p>Most AI systems learned about educators like you from the outside. Bonita is being built differently.</p>
+            <p>heyBonita.AI is a culturally fluent AI assistant being constructed from the inside out — from the voices, the course materials, the assignments, and the teaching philosophy of Black and brown educators who have always known how to reach their students.</p>
+            <p>If you choose to contribute, your anonymized course content — the assignments you create, the discussions you build, the quizzes you design — becomes part of Bonita's foundation. Not scraped. Not borrowed. Built by people like you, for students like yours.</p>
+            <p style="font-size:13px;color:#666;">Your personal information is never shared. Your content is fully anonymized before it is used. You can withdraw your contribution at any time.</p>
+            <p style="font-size:13px;color:#666;">This is optional. But if you choose to participate, you're not just saving time on your own courses. You're helping build something your students' students will benefit from.</p>
+            <div class="bonita-btns">
+                <button class="bonita-btn-yes" onclick="grantBonitaConsent()">Yes — I want to help build Bonita</button>
+                <button class="bonita-btn-not-now" onclick="closeBonitaModal()">Not right now</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- D3: Canvas Preview Before Publish -->
+    <div id="canvasPreviewModal">
+        <div class="preview-shell">
+            <div class="preview-topbar">
+                <span>🖥</span>
+                <strong>Canvas Preview</strong>
+                <span style="opacity:0.7;margin-left:4px;">— Close simulation of how your content will appear in Canvas.</span>
+                <button onclick="closeCanvasPreview()" style="margin-left:auto;background:none;border:none;color:white;font-size:1.4rem;cursor:pointer;line-height:1;padding:0;" title="Close">&times;</button>
+            </div>
+            <div class="preview-canvas-area" id="previewCanvasBody"></div>
+            <div id="validationPanel" class="validation-panel" style="display:none;">
+                <div class="validation-panel-head">⚠ Suggestions before publishing</div>
+                <div id="validationItems"></div>
+            </div>
+            <div class="preview-footer">
+                <button class="preview-edit-btn" onclick="closeCanvasPreview()">&larr; Edit Before Publishing</button>
+                <button class="preview-publish-btn" id="previewPublishBtn" onclick="executeCanvasPush()">Publish to Canvas &rarr;</button>
+            </div>
+        </div>
+    </div>
+
     <div class="dashboard">
         <!-- Sidebar -->
         <aside class="sidebar">
@@ -823,33 +1450,55 @@
                 <img src="/assets/ReadySetClass_alpha_full.png" alt="ReadySetClass" style="height: 40px; width: auto; margin-top: 2rem;">
             </div>
             <ul class="nav-menu">
-                <li class="nav-item active" onclick="showSection('courses')">📚 My Courses</li>
-                <li class="nav-item" onclick="window.location.href='/grading.html'" style="background: linear-gradient(135deg, rgba(201,169,97,0.15), rgba(30,58,95,0.1)); border-left: 3px solid #C9A961; font-weight: 600;">✨ AI Grader</li>
-                <li class="nav-item" onclick="showSection('grading')">📊 Setup Grading</li>
-                <li class="nav-item" onclick="showSection('quiz')">📝 Create Quiz</li>
-                <li class="nav-item" onclick="showSection('announcement')">📢 Announcement</li>
-                <li class="nav-item" onclick="showSection('assignment')">📋 Assignment</li>
-                <li class="nav-item" onclick="showSection('page')">📄 Page</li>
-                <li class="nav-item" onclick="showSection('discussion')">💬 Discussion</li>
-                <li class="nav-item" onclick="showSection('module')">📦 Modules</li>
-                <li class="nav-item" onclick="showSection('syllabus')">📋 Syllabus</li>
-                <li class="nav-item" onclick="showSection('reference')">📚 Reference Materials</li>
-                <li class="nav-item" onclick="openOnboarding()" style="margin-top:1.5rem; border-top:1px solid rgba(0,0,0,0.08); padding-top:1rem; color:#888; font-size:0.88rem;">❓ Getting Started</li>
-                <li class="nav-item" onclick="window.location.href='/faq.html'" style="color:#888; font-size:0.88rem;">📖 FAQ</li>
+                <li class="nav-item active" onclick="showSection('courses')">📚 <span data-i18n="nav.courses">My Courses</span></li>
+                <li class="nav-item" onclick="window.location.href='/grading.html'" style="background: linear-gradient(135deg, rgba(201,169,97,0.15), rgba(30,58,95,0.1)); border-left: 3px solid #C9A961; font-weight: 600;">✨ <span data-i18n="nav.aiGrader">AI Grader</span></li>
+                <li class="nav-item" onclick="showSection('grading')">📊 <span data-i18n="nav.setupGrading">Setup Grading</span></li>
+                <li class="nav-item" onclick="showSection('quiz')">📝 <span data-i18n="nav.createQuiz">Create Quiz</span></li>
+                <li class="nav-item" onclick="showSection('announcement')">📢 <span data-i18n="nav.announcement">Announcement</span></li>
+                <li class="nav-item" onclick="showSection('assignment')">📋 <span data-i18n="nav.assignment">Assignment</span></li>
+                <li class="nav-item" onclick="showSection('page')">📄 <span data-i18n="nav.page">Page</span></li>
+                <li class="nav-item" onclick="showSection('discussion')">💬 <span data-i18n="nav.discussion">Discussion</span></li>
+                <li class="nav-item" onclick="showSection('module')">📦 <span data-i18n="nav.modules">Modules</span></li>
+                <li class="nav-item" onclick="showSection('syllabus')">📋 <span data-i18n="nav.syllabus">Syllabus</span></li>
+                <li class="nav-item" onclick="showSection('reference')">📚 <span data-i18n="nav.referenceMatl">Reference Materials</span></li>
+                <li class="nav-item" onclick="openOnboarding()" style="margin-top:1.5rem; border-top:1px solid rgba(0,0,0,0.08); padding-top:1rem; color:#888; font-size:0.88rem;">❓ <span data-i18n="nav.gettingStarted">Getting Started</span></li>
+                <li class="nav-item" onclick="window.location.href='/faq.html'" style="color:#888; font-size:0.88rem;">📖 <span data-i18n="nav.faq">FAQ</span></li>
                 <li class="nav-item" id="adminNavItem" style="display: none; margin-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 1rem;" onclick="window.location.href='/admin.html'">🛡️ Admin Panel</li>
             </ul>
+
+            <!-- Generation counter widget -->
+            <div id="genCounterWidget" style="display:none;margin:1.25rem 1.5rem 0.5rem;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                    <span data-i18n="sidebar.generations" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;">Generations</span>
+                    <span id="genCountText" style="font-size:13px;font-weight:700;color:var(--primary-navy);">— / —</span>
+                </div>
+                <div style="height:5px;background:#e8e8e8;border-radius:4px;overflow:hidden;">
+                    <div id="genCountBar" style="height:100%;background:var(--primary-navy);border-radius:4px;transition:width 0.6s;width:0%;"></div>
+                </div>
+            </div>
+
+            <!-- Time saved sidebar widget -->
+            <div id="timeSavedWidget" class="time-saved-sidebar" style="display:none;">
+                <div class="label" data-i18n="sidebar.timeSaved">Time Saved</div>
+                <div class="value" id="timeSavedValue">0 min</div>
+                <div class="sub" data-i18n="sidebar.thisSemester">this semester</div>
+            </div>
+
+            <!-- Invite colleague referral button -->
+            <button class="sidebar-referral-btn" onclick="openReferralModal()">🎁 <span data-i18n="nav.inviteColleague">Invite a Colleague</span></button>
+
         </aside>
 
         <!-- Main Content -->
         <main class="main-content">
             <div class="header">
                 <div class="header-content">
-                    <h1>Welcome to ReadySetClass</h1>
-                    <p>Less time setting up. More time teaching.</p>
+                    <h1 data-i18n="dashboard.welcome">Welcome to ReadySetClass</h1>
+                    <p data-i18n="dashboard.tagline">Less time setting up. More time teaching.</p>
                 </div>
                 <div style="display: flex; gap: 1rem; align-items: center;">
                     <div class="language-selector">
-                        <select id="languageSelect" onchange="changeLanguage(this.value)">
+                        <select id="languageSelect" onchange="changeLanguage(this.value)" aria-label="Select language">
                             <option value="en">🇺🇸 English</option>
                             <option value="es">🇪🇸 Español</option>
                             <option value="fr">🇫🇷 Français</option>
@@ -858,22 +1507,22 @@
                             <option value="zh">🇨🇳 中文</option>
                         </select>
                     </div>
-                    <button onclick="window.location.href='/account.html'" style="padding: 0.5rem 1rem; background: var(--purple); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: var(--font-body);">⚙️ Account</button>
+                    <button onclick="window.location.href='/account.html'" style="padding: 0.5rem 1rem; background: var(--purple); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: var(--font-body);">⚙️ <span data-i18n="nav.account">Account</span></button>
                 </div>
             </div>
 
             <div class="content-wrapper">
                 <!-- Canvas Connection -->
                 <div id="canvasConnection" class="connection-card">
-                <h2>Canvas Connection <span id="connectionStatus" class="status-badge disconnected">Not Connected</span></h2>
+                <h2><span data-i18n="canvas.title">Canvas Connection</span> <span id="connectionStatus" class="status-badge disconnected" data-i18n="canvas.notConnected">Not Connected</span></h2>
 
                 <div id="connectionForm">
-                    <p style="margin-bottom: 1.5rem; color: var(--gray);">
+                    <p style="margin-bottom: 1.5rem; color: var(--gray);" data-i18n="canvas.connectPrompt">
                         Connect your Canvas account to get started.
                     </p>
 
                     <div class="form-group">
-                        <label for="canvasUrl">Canvas URL</label>
+                        <label for="canvasUrl" data-i18n="canvas.urlLabel">Canvas URL</label>
                         <input type="text" id="canvasUrl" placeholder="https://vuu.instructure.com" value="https://vuu.instructure.com" oninput="updateCanvasInstructions()">
                         <div id="schoolDetection" style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--success); display: none;">
                             ✅ <span id="schoolName"></span> detected!
@@ -881,7 +1530,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="canvasToken">Canvas API Token</label>
+                        <label for="canvasToken" data-i18n="canvas.tokenLabel">Canvas API Token</label>
                         <input type="password" id="canvasToken" placeholder="Paste your Canvas API token here">
 
                         <!-- Dynamic Instructions -->
@@ -903,27 +1552,27 @@
                         </div>
                     </div>
 
-                    <button class="btn btn-primary" onclick="connectCanvas()">Connect Canvas</button>
+                    <button class="btn btn-primary" onclick="connectCanvas()" data-i18n="canvas.connectBtn">Connect Canvas</button>
                 </div>
 
                 <div id="connectedInfo" class="hidden">
                     <p style="color: var(--success); margin-bottom: 1rem;">
                         ✓ Connected to <strong id="connectedUrl"></strong>
                     </p>
-                    <button class="btn btn-secondary" onclick="disconnectCanvas()">Disconnect</button>
+                    <button class="btn btn-secondary" onclick="disconnectCanvas()" data-i18n="canvas.disconnect">Disconnect</button>
                 </div>
             </div>
 
             <!-- Courses Section -->
             <div id="coursesSection" class="courses-section hidden">
-                <h2>Your Courses</h2>
+                <h2 data-i18n="dashboard.yourCourses">Your Courses</h2>
                 <p style="color: var(--gray); margin-bottom: 1rem;">Select a course to get started</p>
                 <div id="coursesGrid" class="courses-grid"></div>
             </div>
 
             <!-- Grading Setup Wizard -->
             <div id="gradingCreator" class="content-creator">
-                <h2>📊 Grading Setup Wizard</h2>
+                <h2>📊 <span data-i18n="section.gradingSetup">Grading Setup Wizard</span></h2>
                 <p style="color: var(--text-light); margin-bottom: 2rem;">
                     Set up your course grading in 2 minutes. We'll handle all the Canvas complexity.
                 </p>
@@ -1073,7 +1722,7 @@
 
             <!-- Quiz Creator -->
             <div id="quizCreator" class="content-creator">
-                <h2>Create Quiz</h2>
+                <h2 data-i18n="section.createQuiz">Create Quiz</h2>
                 <div class="selected-course-info" id="quizCourseInfo"></div>
                 <div id="quizAlert"></div>
 
@@ -1203,13 +1852,13 @@ Students should demonstrate understanding of how technology challenges tradition
                         <label>Due Date (Optional)</label>
                         <input type="datetime-local" id="aiQuizDueDate">
                     </div>
-                    <button class="btn btn-primary" onclick="generateAIQuiz()">✨ Generate Quiz with AI</button>
+                    <button class="btn btn-primary" onclick="generateAIQuiz()">✨ <span data-i18n="btn.generateQuiz">Generate Quiz with AI</span></button>
                 </div>
 
                 <!-- AI Preview -->
                 <div id="aiQuizPreview" style="display: none; margin-top: 1.5rem; background: #f8f9fa; padding: 1.5rem; border-radius: 8px; border: 2px solid var(--purple);">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
-                        <h3 style="margin: 0;">AI-Generated Quiz Preview</h3>
+                        <h3 style="margin: 0;" data-i18n="section.aiQuizPreview">AI-Generated Quiz Preview</h3>
                         <button onclick="regenerateAIQuiz()" class="btn" style="background: var(--coral); color: white; padding: 0.5rem 1rem;">🔄 Regenerate</button>
                     </div>
                     <div id="aiQuizPreviewContent" style="background: white; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; max-height: 400px; overflow-y: auto;">
@@ -1224,7 +1873,7 @@ Students should demonstrate understanding of how technology challenges tradition
 
             <!-- Announcement Creator -->
             <div id="announcementCreator" class="content-creator">
-                <h2>Create Announcement</h2>
+                <h2 data-i18n="section.createAnnouncement">Create Announcement</h2>
                 <div class="selected-course-info" id="announcementCourseInfo"></div>
                 <div id="announcementAlert"></div>
 
@@ -1285,7 +1934,7 @@ Students should demonstrate understanding of how technology challenges tradition
 
             <!-- Assignment Creator -->
             <div id="assignmentCreator" class="content-creator">
-                <h2>Create Assignment</h2>
+                <h2 data-i18n="section.createAssignment">Create Assignment</h2>
                 <div class="selected-course-info" id="assignmentCourseInfo"></div>
                 <div id="assignmentAlert"></div>
 
@@ -1390,7 +2039,7 @@ Students should demonstrate understanding of how technology challenges tradition
                 <!-- AI Preview Area -->
                 <div id="aiAssignmentPreview" style="display: none; margin-top: 1.5rem; background: #f8f9fa; padding: 1.5rem; border-radius: 8px; border: 2px solid var(--purple);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <h3 style="margin: 0; color: var(--dark);">AI-Generated Assignment Preview</h3>
+                        <h3 style="margin: 0; color: var(--dark);" data-i18n="section.aiAssignmentPreview">AI-Generated Assignment Preview</h3>
                         <button onclick="regenerateAIAssignment()" class="btn" style="background: var(--coral); color: white; padding: 0.5rem 1rem;">🔄 Regenerate</button>
                     </div>
 
@@ -1409,7 +2058,7 @@ Students should demonstrate understanding of how technology challenges tradition
 
             <!-- Page Creator -->
             <div id="pageCreator" class="content-creator">
-                <h2>Create Course Page</h2>
+                <h2 data-i18n="section.createPage">Create Course Page</h2>
                 <div class="selected-course-info" id="pageCourseInfo"></div>
                 <div id="pageAlert"></div>
 
@@ -1563,7 +2212,7 @@ Students should demonstrate understanding of how technology challenges tradition
 
             <!-- Discussion Creator -->
             <div id="discussionCreator" class="content-creator">
-                <h2>Create Discussion Topic</h2>
+                <h2 data-i18n="section.createDiscussion">Create Discussion Topic</h2>
                 <div class="selected-course-info" id="discussionCourseInfo"></div>
                 <div id="discussionAlert"></div>
 
@@ -1665,7 +2314,7 @@ Students should demonstrate understanding of how technology challenges tradition
 
             <!-- Module Creator -->
             <div id="moduleCreator" class="content-creator">
-                <h2>Course Modules</h2>
+                <h2 data-i18n="section.modules">Course Modules</h2>
                 <div class="selected-course-info" id="moduleCourseInfo"></div>
                 <div id="moduleAlert"></div>
 
@@ -1689,7 +2338,7 @@ Students should demonstrate understanding of how technology challenges tradition
 
             <!-- Syllabus Creator -->
             <div id="syllabusCreator" class="content-creator">
-                <h2>Create Course Syllabus</h2>
+                <h2 data-i18n="section.createSyllabus">Create Course Syllabus</h2>
                 <div class="selected-course-info" id="syllabusCourseInfo"></div>
                 <div id="syllabusAlert"></div>
 
@@ -1781,7 +2430,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
 
             <!-- Reference Materials Section -->
             <div id="referenceCreator" class="content-creator">
-                <h2>📚 Reference Materials</h2>
+                <h2>📚 <span data-i18n="section.reference">Reference Materials</span></h2>
                 <p style="color: #666; margin-bottom: 2rem;">Upload your existing syllabi and documents to help AI match your teaching style</p>
                 <div id="referenceAlert"></div>
 
@@ -1809,7 +2458,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
 
                 <!-- Uploaded Materials List -->
                 <div style="background: white; padding: 1.5rem; border-radius: 8px; border: 1px solid #e0e0e0;">
-                    <h3>Your Uploaded Materials</h3>
+                    <h3 data-i18n="section.uploadedMaterials">Your Uploaded Materials</h3>
                     <div id="referenceList">
                         <p style="color: #999; text-align: center; padding: 2rem;">No materials uploaded yet. Upload your first syllabus above!</p>
                     </div>
@@ -1867,6 +2516,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         // GLOBAL CONFIGURATION - Must be first!
         // ============================================================================
         const API_URL = 'https://facultyflow-production.up.railway.app';
+        window.API_URL = API_URL; // expose for i18n.js backend persist
         let authToken = localStorage.getItem('auth_token');
         let selectedCourse = null;
 
@@ -1989,12 +2639,28 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             }
         });
 
-        // Initialize language selector on page load
-        window.addEventListener('load', () => {
+        // Initialize language selector on page load + sync from user profile
+        window.addEventListener('load', async () => {
             const currentLang = window.i18n?.getLang() || 'en';
             const selector = document.getElementById('languageSelect');
             if (selector) {
                 selector.value = currentLang;
+            }
+
+            // Sync preferred_language from user profile (API_URL is now available)
+            if (authToken && window.i18n) {
+                try {
+                    const resp = await fetch(API_URL + '/api/auth/me', {
+                        headers: { 'Authorization': 'Bearer ' + authToken }
+                    });
+                    if (resp.ok) {
+                        const user = await resp.json();
+                        if (user.preferred_language && user.preferred_language !== window.i18n.getLang()) {
+                            await window.i18n.setLanguage(user.preferred_language);
+                            if (selector) selector.value = user.preferred_language;
+                        }
+                    }
+                } catch (e) { /* non-critical — localStorage preference used */ }
             }
         });
 
@@ -2463,12 +3129,284 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                 return;
             }
 
-            // Parse the quiz content (simplified parser)
-            // TODO: Add proper quiz parsing and upload to Canvas
-            showAlert('quizAlert', 'info', '📤 Uploading quiz...');
+            // Parse the pasted quiz content into Canvas-ready question format
+            const parsed = parseQuizText(content);
 
-            // For now, show message that Quick Input needs backend support
-            showAlert('quizAlert', 'warning', '⚠️ Quick Input quiz parsing coming soon! Use AI-Enhanced mode for now.');
+            if (parsed.length === 0) {
+                showAlert('quizAlert', 'error', '❌ Could not parse any questions. Check the formatting and try again.');
+                return;
+            }
+
+            showAlert('quizAlert', 'info', `📤 Uploading ${parsed.length} questions to Canvas...`);
+
+            try {
+                const response = await fetch(`${API_URL}/api/v2/canvas/quiz/upload`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        course_id: selectedCourse.id,
+                        topic: title,
+                        questions: parsed,
+                        num_questions: parsed.length,
+                        due_date: document.getElementById('quickQuizDueDate')?.value || null
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showAlert('quizAlert', 'success', `
+                        ✅ ${result.message}<br>
+                        <strong>${result.questions_added} questions</strong> uploaded to Canvas<br>
+                        <a href="${result.preview_url}" target="_blank" style="color: var(--purple); text-decoration: underline; font-weight: 600; margin-top: 0.5rem; display: inline-block;">
+                            🔗 Open Quiz in Canvas →
+                        </a>
+                    `);
+                    // Reset form
+                    document.getElementById('quickQuizTitle').value = '';
+                    document.getElementById('quickQuizContent').value = '';
+                } else {
+                    showAlert('quizAlert', 'error', '❌ Upload failed: ' + (result.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Quick quiz upload error:', error);
+                showAlert('quizAlert', 'error', '❌ Error uploading quiz: ' + error.message);
+            }
+        }
+
+        /**
+         * Parse pasted quiz text into Canvas-ready question objects.
+         * Handles: MCQ, True/False, Fill-in-blank, Essay/Short Response, Matching.
+         * Returns: [{question_text, question_type, points, answers: [{text, correct}]}]
+         */
+        function parseQuizText(text) {
+            var questions = [];
+
+            // Normalize line endings and split into blocks by separators
+            text = text.replace(/\r\n/g, '\n');
+
+            // Split by ⸻, --- , or "Question N" headers (when preceded by blank line)
+            var blocks = text.split(/(?:^⸻$|^-{3,}$)/m).map(function(b) { return b.trim(); }).filter(Boolean);
+
+            for (var bi = 0; bi < blocks.length; bi++) {
+                var block = blocks[bi];
+
+                // Skip section headers like "🔹 SECTION 1: ..."
+                if (/^🔹|^SECTION\s+\d|^GRADING\s+BREAKDOWN/i.test(block)) continue;
+                // Skip preamble / title blocks with no question content
+                if (/^(?:Studio|Format|Time Limit|Open|Points):/m.test(block) && !/^Question\s+\d/mi.test(block)) continue;
+
+                // Try to find individual questions within the block
+                // Some blocks contain multiple numbered items (e.g. fill-in-blank sections)
+                var subQuestions = splitBlockIntoQuestions(block);
+                for (var si = 0; si < subQuestions.length; si++) {
+                    var q = parseSingleQuestion(subQuestions[si]);
+                    if (q) questions.push(q);
+                }
+            }
+
+            return questions;
+        }
+
+        function splitBlockIntoQuestions(block) {
+            // Check if block has multiple "Question N" or numbered items
+            var parts = block.split(/(?=^(?:Question\s+\d|Q\d+[\.:]))/mi);
+            if (parts.length > 1) return parts.map(function(p) { return p.trim(); }).filter(Boolean);
+
+            // Check for fill-in-blank numbered pattern: "26. The space..."
+            var fibParts = block.split(/(?=^\s*\d+[\.\)]\s+.+________)/m);
+            if (fibParts.length > 1) return fibParts.map(function(p) { return p.trim(); }).filter(Boolean);
+
+            // Check for sequential numbered items "26. ... Answer: ..."
+            var numberedParts = block.split(/(?=^\s*\d+[\.\)]\s+(?:The|A|An|Which|What|Who|Where|When|How|If|In|Low|High|This))/mi);
+            if (numberedParts.length > 1) return numberedParts.map(function(p) { return p.trim(); }).filter(Boolean);
+
+            return [block];
+        }
+
+        function parseSingleQuestion(block) {
+            if (!block || block.length < 10) return null;
+            var lines = block.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+            if (lines.length === 0) return null;
+
+            // Extract points from header like "Question 1 (2 pts)" or "(10 pts)"
+            var ptsMatch = block.match(/\((\d+)\s*pts?\)/i);
+            var points = ptsMatch ? parseInt(ptsMatch[1]) : 10;
+
+            // Detect question type from header
+            var headerLine = lines[0];
+            var isTF = /true\s*[\/\\]\s*false/i.test(block) && /Correct\s*Answer:\s*(True|False)/i.test(block);
+            var isMatching = /matching/i.test(headerLine);
+            var isFITB = /________/.test(block);
+            var isEssay = /short\s*response|essay|paragraph|sentences?:/i.test(block) && !/^[A-D][\.\)]\s/m.test(block);
+            var hasMCQAnswers = /^[A-D][\.\)]\s/m.test(block);
+
+            // ── True/False ──────────────────────────────
+            if (isTF && !hasMCQAnswers) {
+                var tfText = extractQuestionText(lines);
+                var correctTF = /Correct\s*Answer:\s*True/i.test(block);
+                return {
+                    question_text: tfText,
+                    question_type: 'true_false_question',
+                    points: points,
+                    answers: [
+                        { text: 'True', correct: correctTF },
+                        { text: 'False', correct: !correctTF }
+                    ]
+                };
+            }
+
+            // ── Fill in the blank ────────────────────────
+            if (isFITB) {
+                var fibLine = lines.find(function(l) { return l.includes('________'); });
+                if (!fibLine) return null;
+                // Clean question number prefix
+                fibLine = fibLine.replace(/^\s*\d+[\.\)]\s*/, '');
+                var ansMatch = block.match(/Answer:\s*(.+)/i);
+                var fibAns = ansMatch ? ansMatch[1].trim() : '';
+                // Accept multiple valid answers separated by /
+                var fibAnswers = fibAns.split('/').map(function(a) {
+                    return { text: a.trim(), correct: true };
+                });
+                return {
+                    question_text: fibLine.replace(/________+/g, '[blank]'),
+                    question_type: 'short_answer_question',
+                    points: points,
+                    answers: fibAnswers.length > 0 ? fibAnswers : [{ text: '', correct: true }]
+                };
+            }
+
+            // ── Essay / Short Response ───────────────────
+            if (isEssay || (!hasMCQAnswers && !isTF && !isMatching && points >= 5 && lines.length > 2)) {
+                var essayText = extractQuestionText(lines);
+                if (essayText.length < 15) return null;
+                return {
+                    question_text: essayText,
+                    question_type: 'essay_question',
+                    points: points,
+                    answers: []
+                };
+            }
+
+            // ── Matching ─────────────────────────────────
+            if (isMatching) {
+                return parseMatchingQuestion(block, points);
+            }
+
+            // ── Multiple Choice (default) ────────────────
+            if (hasMCQAnswers) {
+                return parseMCQ(lines, block, points);
+            }
+
+            return null;
+        }
+
+        function extractQuestionText(lines) {
+            // Skip the header line (e.g. "Question 21 (3 pts) – True/False")
+            var textLines = [];
+            var headerSkipped = false;
+            for (var i = 0; i < lines.length; i++) {
+                if (!headerSkipped && /^Question\s+\d|^Q\d+/i.test(lines[i])) {
+                    headerSkipped = true;
+                    continue;
+                }
+                if (/^Correct\s*Answer:/i.test(lines[i])) break;
+                if (/^Answer:/i.test(lines[i])) break;
+                if (/^[A-D][\.\)]\s/.test(lines[i])) break;
+                if (/^\(Grade\s+based/i.test(lines[i])) break;
+                textLines.push(lines[i]);
+            }
+            return textLines.join('\n').trim();
+        }
+
+        function parseMCQ(lines, block, points) {
+            var questionText = '';
+            var answers = [];
+            var correctLetter = '';
+
+            // Find correct answer letter
+            var caMatch = block.match(/Correct\s*Answer:\s*([A-D])/i);
+            if (caMatch) {
+                correctLetter = caMatch[1].toUpperCase();
+            }
+
+            // Build question text (everything before answers)
+            var textParts = [];
+            var inAnswers = false;
+            for (var i = 0; i < lines.length; i++) {
+                if (/^Question\s+\d|^Q\d+[\.:]/i.test(lines[i]) && i === 0) continue; // skip header
+                if (/^[A-D][\.\)]\s/.test(lines[i])) {
+                    inAnswers = true;
+                    var letter = lines[i].charAt(0).toUpperCase();
+                    var ansText = lines[i].replace(/^[A-D][\.\)]\s*/, '').trim();
+                    // Check for (CORRECT) marker
+                    var isCorrectMarker = /\(CORRECT\)/i.test(ansText);
+                    ansText = ansText.replace(/\s*\(CORRECT\)\s*/gi, '').trim();
+                    var isCorrect = isCorrectMarker || letter === correctLetter;
+                    answers.push({ text: ansText, correct: isCorrect });
+                    continue;
+                }
+                if (/^Correct\s*Answer:/i.test(lines[i])) continue;
+                if (!inAnswers) textParts.push(lines[i]);
+            }
+
+            questionText = textParts.join('\n').trim();
+            if (!questionText || answers.length < 2) return null;
+
+            return {
+                question_text: questionText,
+                question_type: 'multiple_choice_question',
+                points: points,
+                answers: answers
+            };
+        }
+
+        function parseMatchingQuestion(block, points) {
+            var lines = block.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+            var terms = [];
+            var definitions = {};
+            var answerMap = {};
+            var section = 'header'; // header | terms | definitions | answers
+
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i];
+                if (/^Match\b|^Definitions:|^Answers:/i.test(line)) {
+                    if (/Definitions:/i.test(line)) section = 'definitions';
+                    else if (/Answers:/i.test(line)) section = 'answers';
+                    continue;
+                }
+                if (section === 'header' || section === 'terms') {
+                    var termMatch = line.match(/^\s*(\d+)[\.\)]\s+(.+)/);
+                    if (termMatch) { terms.push({ num: termMatch[1], text: termMatch[2].trim() }); section = 'terms'; }
+                }
+                if (section === 'definitions') {
+                    var defMatch = line.match(/^([A-Z])[\.\)]\s+(.+)/);
+                    if (defMatch) definitions[defMatch[1].toUpperCase()] = defMatch[2].trim();
+                }
+                if (section === 'answers') {
+                    var ansMatch = line.match(/(\d+)\s*[–\-—]\s*([A-Z])/);
+                    if (ansMatch) answerMap[ansMatch[1]] = ansMatch[2].toUpperCase();
+                }
+            }
+
+            if (terms.length === 0) return null;
+
+            // Build matching answers array: [{answer_match_left, answer_match_right}]
+            var matchAnswers = terms.map(function(t) {
+                var letter = answerMap[t.num] || '';
+                var def = definitions[letter] || '';
+                return { text: t.text, correct: true, match_left: t.text, match_right: def };
+            });
+
+            return {
+                question_text: 'Match each term to its correct definition.',
+                question_type: 'matching_question',
+                points: points,
+                answers: matchAnswers
+            };
         }
 
         async function generateAIQuiz() {
@@ -4195,6 +5133,546 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             if (!localStorage.getItem('rsc_onboarding_seen')) {
                 setTimeout(openOnboarding, 800);
             }
+        });
+    </script>
+
+    <!-- ============================================================
+         GENERATION STATE UI — JavaScript (Addendum §2 UX Bug Fix)
+         ============================================================ -->
+    <script>
+        // ── State variables ──────────────────────────────────────────
+        let _bonitaPromptShown = false;
+
+        // ── Banner: show generating state ────────────────────────────
+        function showGenerating(contentType) {
+            const banner = document.getElementById('genBanner');
+            banner.className = 'generating';
+            document.getElementById('genBannerText').textContent = 'Generating your ' + contentType + '...';
+            document.getElementById('genOverlay').classList.add('active');
+            document.getElementById('canvasFAB').classList.remove('visible');
+            document.body.style.paddingTop = '52px';
+        }
+
+        // ── Banner: show content-ready state + FAB ───────────────────
+        function showComplete(contentType) {
+            const banner = document.getElementById('genBanner');
+            banner.className = 'complete';
+            document.getElementById('genBannerText').textContent = contentType + ' ready! Review below, then click Send to Canvas.';
+            document.getElementById('genOverlay').classList.remove('active');
+            document.getElementById('canvasFAB').classList.add('visible');
+            fetchGenStatus();
+        }
+
+        // ── Banner: show error state ─────────────────────────────────
+        function showError(msg) {
+            const banner = document.getElementById('genBanner');
+            banner.className = 'error';
+            document.getElementById('genBannerText').textContent = msg || 'Generation failed. Please try again.';
+            document.getElementById('genOverlay').classList.remove('active');
+            document.getElementById('canvasFAB').classList.remove('visible');
+        }
+
+        // ── Dismiss banner ───────────────────────────────────────────
+        function dismissBanner() {
+            document.getElementById('genBanner').className = 'hidden';
+            document.getElementById('genOverlay').classList.remove('active');
+            document.body.style.paddingTop = '';
+        }
+
+        // ── Full-screen success moment (after Canvas push) ───────────
+        function showSuccess(contentType, minutesSaved, previewUrl) {
+            document.getElementById('successTitle').textContent = contentType + ' Published to Canvas!';
+            var mins = minutesSaved || 0;
+            var timeStr = mins >= 60 ? (mins / 60).toFixed(1) + 'h' : mins + ' min';
+            document.getElementById('successToast').textContent = 'Saved ~' + timeStr + ' of prep work';
+            document.getElementById('successMoment').classList.add('visible');
+            document.getElementById('canvasFAB').classList.remove('visible');
+            dismissBanner();
+            fetchGenStatus();
+            fetchTimeSaved();
+            // Offer Bonita opt-in once per session
+            if (!_bonitaPromptShown) {
+                _bonitaPromptShown = true;
+                setTimeout(openBonitaModal, 2500);
+            }
+        }
+
+        function dismissSuccessMoment() {
+            document.getElementById('successMoment').classList.remove('visible');
+        }
+
+        // ── D3: Canvas Preview Before Publish ────────────────────────
+        var _pendingUploadBtn = null;
+        var _previewContentType = '';
+
+        // FAB click → open preview modal instead of direct push
+        function triggerCanvasPush() {
+            var activeSections = document.querySelectorAll('.section-content');
+            for (var i = 0; i < activeSections.length; i++) {
+                var s = activeSections[i];
+                if (s.style.display !== 'none' && s.offsetParent !== null) {
+                    var btn = s.querySelector('[onclick*="uploadAI"], [onclick*="upload"], [onclick*="post"]');
+                    if (btn && btn.offsetParent !== null && !btn.disabled) {
+                        // Grab generated text from the active section's textarea
+                        var ta = s.querySelector('textarea');
+                        var text = ta ? ta.value : (s.innerText || '');
+                        var contentType = _inferContentType(s.id || '');
+                        openCanvasPreview(text, contentType, btn);
+                        return;
+                    }
+                }
+            }
+        }
+
+        function _inferContentType(sectionId) {
+            if (/syllabus/i.test(sectionId)) return 'Syllabus';
+            if (/assignment/i.test(sectionId)) return 'Assignment';
+            if (/quiz/i.test(sectionId)) return 'Quiz';
+            if (/page/i.test(sectionId)) return 'Page';
+            if (/discussion/i.test(sectionId)) return 'Discussion';
+            if (/announce/i.test(sectionId)) return 'Announcement';
+            return 'Content';
+        }
+
+        function openCanvasPreview(text, contentType, uploadBtn) {
+            _pendingUploadBtn = uploadBtn || null;
+            _previewContentType = contentType || 'Content';
+            // Render content into preview area
+            var body = document.getElementById('previewCanvasBody');
+            body.innerHTML = _markdownToHtml(text);
+            // Run validation checks
+            _runPreviewValidation(text);
+            // Open modal
+            document.getElementById('canvasPreviewModal').classList.add('show');
+            // Scroll preview to top
+            body.scrollTop = 0;
+        }
+
+        function closeCanvasPreview() {
+            document.getElementById('canvasPreviewModal').classList.remove('show');
+            _pendingUploadBtn = null;
+        }
+
+        function executeCanvasPush() {
+            var btn = _pendingUploadBtn;
+            closeCanvasPreview();
+            if (btn) { btn.click(); }
+        }
+
+        // Lightweight markdown → HTML converter for preview rendering
+        function _markdownToHtml(text) {
+            if (!text || !text.trim()) return '<p style="color:#999;font-style:italic;">No content to preview.</p>';
+            // If already HTML, render as-is
+            if (/<[a-z][^>]*>/i.test(text)) return text;
+
+            var html = text
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                // Headers
+                .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+                .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+                // Bold + italic
+                .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                // Horizontal rule
+                .replace(/^---+$/gm, '<hr>')
+                // Unordered lists
+                .replace(/((?:^- .+$\n?)+)/gm, function(block) {
+                    var items = block.trim().split('\n').map(function(l) {
+                        return '<li>' + l.replace(/^- /, '') + '</li>';
+                    }).join('');
+                    return '<ul>' + items + '</ul>\n';
+                })
+                // Ordered lists
+                .replace(/((?:^\d+\. .+$\n?)+)/gm, function(block) {
+                    var items = block.trim().split('\n').map(function(l) {
+                        return '<li>' + l.replace(/^\d+\. /, '') + '</li>';
+                    }).join('');
+                    return '<ol>' + items + '</ol>\n';
+                })
+                // Double newlines → paragraph breaks
+                .replace(/\n\n+/g, '</p><p>')
+                // Single newlines → line break
+                .replace(/\n/g, '<br>');
+
+            return '<p>' + html + '</p>';
+        }
+
+        function _runPreviewValidation(text) {
+            var panel = document.getElementById('validationPanel');
+            var container = document.getElementById('validationItems');
+            if (!panel || !container) return;
+            if (!text || text.trim().length < 20) { panel.style.display = 'none'; return; }
+
+            var items = [];
+
+            // Sentence length
+            var sentences = text.split(/[.!?]+/).filter(function(s) { return s.trim().length > 10; });
+            if (sentences.length > 0) {
+                var avgLen = Math.round(text.split(/\s+/).length / sentences.length);
+                if (avgLen > 25) {
+                    items.push({ text: 'Long sentences detected (avg ~' + avgLen + ' words). Aim for under 20 words for readability.', sev: 'warn' });
+                }
+            }
+
+            // Missing headings in long content
+            var hasHeadings = /^#{1,4} /m.test(text);
+            if (!hasHeadings && text.length > 500) {
+                items.push({ text: 'No section headers found. Add headings so students can navigate the content.', sev: 'warn' });
+            }
+
+            // Bare URLs
+            var rawUrls = (text.match(/https?:\/\/[^\s)>\]]+/g) || []);
+            if (rawUrls.length > 0) {
+                items.push({ text: rawUrls.length + ' raw URL(s) detected. Use hyperlinked text instead of bare URLs for accessibility.', sev: 'info' });
+            }
+
+            // Image refs without alt text mention
+            var imgRefs = (text.match(/\bfigure\b|\bimage\b|\bpicture\b|\bdiagram\b/gi) || []).length;
+            if (imgRefs > 0 && !/alt text|caption/i.test(text)) {
+                items.push({ text: imgRefs + ' image reference(s) detected. Remember to add alt text descriptions when inserting images in Canvas.', sev: 'warn' });
+            }
+
+            // Short content sanity check
+            var wordCount = text.split(/\s+/).filter(function(w) { return w.length > 0; }).length;
+            if (wordCount < 40) {
+                items.push({ text: 'This content is short (' + wordCount + ' words). Confirm it\'s complete before publishing.', sev: 'warn' });
+            }
+
+            if (items.length === 0) { panel.style.display = 'none'; return; }
+
+            container.innerHTML = items.map(function(item) {
+                var icon = item.sev === 'warn' ? '⚠' : 'ℹ';
+                return '<div class="val-item"><span class="val-item-text">' + icon + ' ' + item.text + '</span></div>';
+            }).join('');
+            panel.style.display = 'block';
+        }
+
+        document.getElementById('canvasPreviewModal').addEventListener('click', function(e) {
+            if (e.target === this) closeCanvasPreview();
+        });
+
+        // ── Minutes saved per content type ──────────────────────────
+        function _getMinutesSaved(contentType) {
+            var map = { Syllabus: 90, Assignment: 45, Quiz: 60, Page: 30, Discussion: 20, Announcement: 10 };
+            return map[contentType] || 30;
+        }
+
+        // ── Fetch generation counter from API ────────────────────────
+        async function fetchGenStatus() {
+            if (!authToken) return;
+            try {
+                var resp = await fetch(API_URL + '/api/v2/generation/status', {
+                    headers: { Authorization: 'Bearer ' + authToken }
+                });
+                if (!resp.ok) return;
+                var d = await resp.json();
+                var pct = d.limit > 0 ? Math.min(100, (d.used / d.limit) * 100) : 0;
+                var el = document.getElementById('genCountText');
+                var bar = document.getElementById('genCountBar');
+                var widget = document.getElementById('genCounterWidget');
+                if (el) el.textContent = d.used + ' / ' + d.limit;
+                if (bar) {
+                    bar.style.width = pct + '%';
+                    bar.style.background = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : 'var(--primary-navy)';
+                }
+                if (widget) {
+                    widget.style.display = 'block';
+                    widget.className = pct >= 90 ? 'full' : pct >= 70 ? 'warning' : '';
+                }
+            } catch (e) { /* silent */ }
+        }
+
+        // ── Fetch time-saved from API ────────────────────────────────
+        async function fetchTimeSaved() {
+            if (!authToken) return;
+            try {
+                var resp = await fetch(API_URL + '/api/v2/time-savings', {
+                    headers: { Authorization: 'Bearer ' + authToken }
+                });
+                if (!resp.ok) return;
+                var d = await resp.json();
+                var hrs = parseFloat(d.semester_hours) || 0;
+                if (hrs <= 0) return;
+                var widget = document.getElementById('timeSavedWidget');
+                var val = document.getElementById('timeSavedValue');
+                if (widget && val) {
+                    widget.style.display = 'block';
+                    val.textContent = hrs >= 1 ? hrs.toFixed(1) + 'h' : Math.round(hrs * 60) + ' min';
+                }
+            } catch (e) { /* silent */ }
+        }
+
+        // ── Enhanced showAlert — drives all banner states ────────────
+        // Overrides the earlier showAlert declared in the main script block.
+        var _CONTENT_TYPE_MAP = {
+            syllabusAlert:      'Syllabus',
+            assignmentAlert:    'Assignment',
+            quizAlert:          'Quiz',
+            pageAlert:          'Page',
+            discussionAlert:    'Discussion',
+            announcementAlert:  'Announcement',
+        };
+
+        function showAlert(elementId, type, message) {
+            var alertDiv = document.getElementById(elementId);
+            if (alertDiv) {
+                alertDiv.className = 'alert alert-' + type;
+                alertDiv.innerHTML = message;
+            }
+            var contentType = _CONTENT_TYPE_MAP[elementId];
+            if (!contentType) return;
+
+            if (type === 'info') {
+                // ✨ spark emoji = AI generation starting; 📤 = upload in progress (keep banner as-is)
+                if (/✨/.test(message) && !/📤|Uploading|Posting/.test(message)) {
+                    showGenerating(contentType);
+                }
+            } else if (type === 'success') {
+                if (/View in Canvas|View →|uploaded|Uploaded/i.test(message)) {
+                    // Pushed to Canvas — show success moment
+                    var urlMatch = message.match(/href="([^"]+)"/);
+                    showSuccess(contentType, _getMinutesSaved(contentType), urlMatch ? urlMatch[1] : null);
+                } else {
+                    // AI output ready for review
+                    showComplete(contentType);
+                    // Run accessibility check on the largest visible textarea
+                    setTimeout(function() {
+                        var largest = '';
+                        document.querySelectorAll('textarea').forEach(function(ta) {
+                            if (ta.value.length > largest.length) largest = ta.value;
+                        });
+                        if (largest.length > 100) runAccessibilityCheck(largest);
+                    }, 600);
+                }
+            } else if (type === 'error') {
+                showError(message.replace(/^❌\s*/, '').replace(/<[^>]+>/g, '').substring(0, 100));
+            }
+        }
+
+        // ── Referral Modal ───────────────────────────────────────────
+        async function openReferralModal() {
+            document.getElementById('referralModal').classList.add('visible');
+            if (!authToken) return;
+            try {
+                var resp = await fetch(API_URL + '/api/v2/referral/invite-info', {
+                    headers: { Authorization: 'Bearer ' + authToken }
+                });
+                if (resp.ok) {
+                    var d = await resp.json();
+                    document.getElementById('referralLinkText').textContent = d.invite_url || '';
+                    document.getElementById('referralMessageBox').value = d.invite_copy || '';
+                }
+            } catch (e) { /* silent */ }
+        }
+
+        function closeReferralModal() {
+            document.getElementById('referralModal').classList.remove('visible');
+        }
+
+        function copyReferralLink() {
+            var txt = document.getElementById('referralLinkText').textContent;
+            navigator.clipboard.writeText(txt).then(function() {
+                var btn = document.getElementById('copyLinkBtn');
+                if (btn) { btn.textContent = 'Copied!'; setTimeout(function(){ btn.textContent = 'Copy Invite Link'; }, 2000); }
+            });
+        }
+
+        function openEmailInvite() {
+            var msg = encodeURIComponent(document.getElementById('referralMessageBox').value);
+            window.open('mailto:?subject=Join me on ReadySetClass&body=' + msg, '_blank');
+        }
+
+        document.getElementById('referralModal').addEventListener('click', function(e) {
+            if (e.target === this) closeReferralModal();
+        });
+
+        // ── Bonita Opt-in Modal ──────────────────────────────────────
+        function openBonitaModal() {
+            document.getElementById('bonitaModal').classList.add('visible');
+        }
+
+        function closeBonitaModal() {
+            document.getElementById('bonitaModal').classList.remove('visible');
+        }
+
+        async function grantBonitaConsent() {
+            if (authToken) {
+                try {
+                    await fetch(API_URL + '/api/v2/bonita/consent', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authToken },
+                        body: JSON.stringify({ grant: true })
+                    });
+                } catch (e) { /* silent */ }
+            }
+            closeBonitaModal();
+            // Spec-approved post-opt-in confirmation toast
+            var toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1B2A5E;color:white;padding:16px 24px;border-radius:12px;font-size:14px;line-height:1.6;max-width:480px;text-align:center;z-index:10005;box-shadow:0 8px 24px rgba(0,0,0,0.25);';
+            toast.textContent = 'Thank you. Your contributions are helping construct something meaningful. You can manage your Bonita settings anytime in your profile under My Contributions.';
+            document.body.appendChild(toast);
+            setTimeout(function() { toast.remove(); }, 6000);
+        }
+
+        document.getElementById('bonitaModal').addEventListener('click', function(e) {
+            if (e.target === this) closeBonitaModal();
+        });
+
+        // ── A3: Demo Tier Paywall ────────────────────────────────────
+        function showPaywall(tier, used, limit) {
+            var msg = 'You\'ve used all ' + (limit || 5) + ' free generations.';
+            if (tier === 'demo' || tier === 'trial') {
+                msg = 'You\'ve used all ' + (limit || 5) + ' demo generations.';
+            }
+            document.getElementById('paywallMessage').textContent = msg;
+            document.getElementById('paywallSubtext').textContent =
+                tier === 'demo' || tier === 'trial'
+                ? 'Start a plan to unlock unlimited course building.'
+                : 'Upgrade to a higher tier for more generations this month.';
+            document.getElementById('paywallModal').classList.add('show');
+            dismissBanner();
+        }
+
+        function closePaywall() {
+            document.getElementById('paywallModal').classList.remove('show');
+        }
+
+        document.getElementById('paywallModal').addEventListener('click', function(e) {
+            if (e.target === this) closePaywall();
+        });
+
+        // Intercept all fetch calls to API — catch 402 generation limit errors globally
+        (function() {
+            var _origFetch = window.fetch;
+            window.fetch = async function(url, options) {
+                var resp = await _origFetch.apply(this, arguments);
+                if (resp.status === 402 && typeof url === 'string' && url.indexOf('/api/') !== -1) {
+                    try {
+                        var clone = resp.clone();
+                        var data = await clone.json();
+                        var detail = data && data.detail;
+                        if (detail && (typeof detail === 'object') &&
+                            (detail.code === 'DEMO_LIMIT_REACHED' || detail.code === 'MONTHLY_LIMIT_REACHED' || detail.code === 'generation_limit_reached')) {
+                            showPaywall(detail.tier, detail.used, detail.limit);
+                        }
+                    } catch(e) { /* parse error — let original response propagate */ }
+                }
+                return resp;
+            };
+        })();
+
+        // ── E1: Accessibility Check ──────────────────────────────────
+        function runAccessibilityCheck(text) {
+            if (!text || text.length < 20) return;
+            var items = [];
+            var warnings = 0;
+
+            // Check 1: reading level proxy — avg words per sentence
+            var sentences = text.split(/[.!?]+/).filter(function(s){ return s.trim().length > 10; });
+            if (sentences.length > 0) {
+                var totalWords = text.split(/\s+/).length;
+                var avgLen = totalWords / sentences.length;
+                if (avgLen > 25) {
+                    items.push('⚠️ Long sentences detected (avg ~' + Math.round(avgLen) + ' words). Consider breaking them up for clarity.');
+                    warnings++;
+                } else {
+                    items.push('✅ Sentence length looks good (avg ~' + Math.round(avgLen) + ' words).');
+                }
+            }
+
+            // Check 2: heading structure
+            var hasHeadings = /##|<h[1-6]|[A-Z][A-Z ]{4,}:/m.test(text);
+            if (hasHeadings) {
+                items.push('✅ Heading structure detected — helps screen readers navigate.');
+            } else if (text.length > 400) {
+                items.push('⚠️ No clear headings found. Add section headers to improve navigation.');
+                warnings++;
+            }
+
+            // Check 3: image/figure references without alt text hint
+            var imgRefs = (text.match(/\bfigure\b|\bimage\b|\bpicture\b|\bdiagram\b/gi) || []).length;
+            if (imgRefs > 0 && !/alt text|caption|described/i.test(text)) {
+                items.push('⚠️ ' + imgRefs + ' image reference(s) found. When added to Canvas, include alt text for each.');
+                warnings++;
+            }
+
+            // Check 4: passive voice proxy (basic)
+            var passiveCount = (text.match(/\b(is|are|was|were|be|been|being)\s+\w+ed\b/gi) || []).length;
+            if (passiveCount > 4) {
+                items.push('💡 High passive voice usage (' + passiveCount + ' instances). Active voice is easier to process.');
+            }
+
+            // Check 5: all-caps words (can be harder to read)
+            var capsWords = (text.match(/\b[A-Z]{4,}\b/g) || []).length;
+            if (capsWords > 3) {
+                items.push('⚠️ Multiple ALL-CAPS words (' + capsWords + '). Use bold or title case instead.');
+                warnings++;
+            } else {
+                items.push('✅ No excessive all-caps text detected.');
+            }
+
+            var panel = document.getElementById('accessibilityPanel');
+            document.getElementById('a11yItems').innerHTML = items.map(function(i) {
+                return '<div class="a11y-item">' + i + '</div>';
+            }).join('');
+            panel.style.display = 'block';
+            panel.style.background = warnings > 0 ? '#fffbeb' : '#f0fdf4';
+            panel.style.border = '1.5px solid ' + (warnings > 0 ? 'var(--accent-gold)' : '#86efac');
+        }
+
+        // ── A2: Onboarding — upgrade to API-backed check ─────────────
+        // Override closeOnboarding to also mark complete in DB
+        function closeOnboarding() {
+            document.getElementById('onboarding-overlay').classList.remove('show');
+            localStorage.setItem('rsc_onboarding_seen', '1');
+            // Mark complete in DB (fire-and-forget)
+            if (authToken) {
+                fetch(API_URL + '/api/v2/onboarding/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authToken },
+                    body: JSON.stringify({ completed: true })
+                }).catch(function(){});
+            }
+        }
+
+        // Override auto-show to prefer DB check over localStorage
+        async function checkAndShowOnboarding() {
+            // Fast path: localStorage says already seen
+            if (localStorage.getItem('rsc_onboarding_seen')) return;
+            // DB check when authenticated
+            if (authToken) {
+                try {
+                    var resp = await fetch(API_URL + '/api/v2/onboarding/status', {
+                        headers: { Authorization: 'Bearer ' + authToken }
+                    });
+                    if (resp.ok) {
+                        var d = await resp.json();
+                        if (d.completed) {
+                            localStorage.setItem('rsc_onboarding_seen', '1');
+                            return;
+                        }
+                    }
+                } catch(e) { /* fall through to localStorage check */ }
+            }
+            // Show onboarding
+            setTimeout(openOnboarding, 800);
+        }
+
+        // ── Init: fetch status once auth settles ─────────────────────
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                if (authToken) {
+                    fetchGenStatus();
+                    fetchTimeSaved();
+                    // Use API-backed onboarding check
+                    if (!localStorage.getItem('rsc_onboarding_seen')) {
+                        checkAndShowOnboarding();
+                    }
+                }
+            }, 2000);
         });
     </script>
 </body>

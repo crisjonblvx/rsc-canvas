@@ -1728,18 +1728,18 @@
 
                 <!-- Mode Selection -->
                 <div style="background: #f8f9fa; padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                    <div style="font-weight: 600; margin-bottom: 1rem; color: var(--dark);">Choose Mode:</div>
+                    <div style="font-weight: 600; margin-bottom: 1rem; color: var(--dark);" data-i18n="form.chooseMode">Choose Mode:</div>
                     <div style="display: flex; gap: 1.5rem;">
                         <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
                             <input type="radio" name="quizMode" value="quick" checked onchange="toggleQuizMode()">
                             <span style="margin-left: 0.5rem;">
-                                <strong>Quick Input</strong> — Paste existing quiz
+                                <strong data-i18n="form.quickInput">Quick Input</strong> — Paste existing quiz
                             </span>
                         </label>
                         <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
                             <input type="radio" name="quizMode" value="ai" onchange="toggleQuizMode()">
                             <span style="margin-left: 0.5rem;">
-                                <strong>✨ AI-Enhanced</strong> — AI generates quiz questions
+                                <strong data-i18n="form.aiEnhanced">✨ AI-Enhanced</strong> — AI generates quiz questions
                             </span>
                         </label>
                     </div>
@@ -1748,25 +1748,25 @@
                 <!-- Tone (applies to AI Generate mode) -->
                 <div class="form-group">
                     <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Tone</span>
+                        <span data-i18n="form.tone">Tone</span>
                         <span id="quizToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
                     </label>
                     <input type="range" id="quizTone" min="1" max="5" value="3"
                         oninput="updateToneLabel('quizToneLabel', this.value)"
                         style="width: 100%; accent-color: var(--purple);">
                     <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
-                        <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        <span data-i18n="tone.formal">Formal</span><span data-i18n="tone.professional">Professional</span><span data-i18n="tone.balanced">Balanced</span><span data-i18n="tone.friendly">Friendly</span><span data-i18n="tone.casual">Casual</span>
                     </div>
                 </div>
 
                 <!-- Quick Input Mode -->
                 <div id="quickQuizForm">
                     <div class="form-group">
-                        <label>Quiz Title</label>
+                        <label data-i18n="quiz.titleLabel">Quiz Title</label>
                         <input type="text" id="quickQuizTitle" placeholder="e.g., Week 5 Quiz: Content Creation">
                     </div>
                     <div class="form-group">
-                        <label>Quiz Questions (Paste formatted questions)</label>
+                        <label data-i18n="quiz.questionsLabel">Quiz Questions (Paste formatted questions)</label>
                         <textarea id="quickQuizContent" placeholder="Paste your quiz questions here in this format:
 
 Q1: What is content creation?
@@ -1785,21 +1785,21 @@ Use (CORRECT) to mark the right answer" style="min-height: 300px;"></textarea>
                         <small style="color: #666;">Format: Q1: Question? A) Answer (CORRECT), B) Answer, etc.</small>
                     </div>
                     <div class="form-group">
-                        <label>Due Date (Optional)</label>
+                        <label data-i18n="form.dueDateLabel">Due Date (Optional)</label>
                         <input type="datetime-local" id="quickQuizDueDate">
                     </div>
-                    <button class="btn btn-primary" onclick="uploadQuickQuiz()">📤 Upload to Canvas</button>
+                    <button class="btn btn-primary" onclick="uploadQuickQuiz()">📤 <span data-i18n="btn.uploadToCanvas">Upload to Canvas</span></button>
                 </div>
 
                 <!-- AI-Enhanced Mode -->
                 <div id="aiQuizForm" style="display: none;">
                     <div class="form-group">
-                        <label>Quiz Topic / Title</label>
+                        <label data-i18n="quiz.topicLabel">Quiz Topic / Title</label>
                         <input type="text" id="aiQuizTopic" placeholder="e.g., Week 3: The Illusion (Truth in the Age of AI)" maxlength="255">
                         <small style="color: #666; font-style: italic;">Short title that will appear in Canvas</small>
                     </div>
                     <div class="form-group">
-                        <label>Quiz Description & Instructions</label>
+                        <label data-i18n="quiz.descLabel">Quiz Description & Instructions</label>
                         <textarea id="aiQuizDescription" rows="6" placeholder="Describe what this quiz should cover. Be specific!
 
 Example:
@@ -1813,7 +1813,7 @@ Students should demonstrate understanding of how technology challenges tradition
                         <small style="color: #666; font-style: italic;">The more detail you provide, the better the AI-generated questions will be</small>
                     </div>
                     <div class="form-group">
-                        <label>Grade Level</label>
+                        <label data-i18n="quiz.gradeLevelLabel">Grade Level</label>
                         <select id="aiQuizGradeLevel">
                             <option value="elementary-k2">K-2nd Grade (Ages 5-7)</option>
                             <option value="elementary-35">3rd-5th Grade (Ages 8-10)</option>
@@ -1824,32 +1824,32 @@ Students should demonstrate understanding of how technology challenges tradition
                         <small style="color: #666; font-style: italic;">AI will adjust vocabulary and complexity for this grade level</small>
                     </div>
                     <div class="form-group">
-                        <label>Number of Questions</label>
+                        <label data-i18n="quiz.numQuestionsLabel">Number of Questions</label>
                         <input type="number" id="aiNumQuestions" value="10" min="5" max="20">
                     </div>
                     <div class="form-group">
-                        <label>Question Types</label>
+                        <label data-i18n="quiz.questionTypesLabel">Question Types</label>
                         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
                             <label style="display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" id="typeMultipleChoice" checked>
-                                <span>Multiple Choice</span>
+                                <span data-i18n="quiz.multipleChoice">Multiple Choice</span>
                             </label>
                             <label style="display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" id="typeTrueFalse">
-                                <span>True/False</span>
+                                <span data-i18n="quiz.trueFalse">True/False</span>
                             </label>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>Difficulty</label>
+                        <label data-i18n="quiz.difficultyLabel">Difficulty</label>
                         <select id="aiDifficulty">
-                            <option value="easy">Easy</option>
-                            <option value="medium" selected>Medium</option>
-                            <option value="hard">Hard</option>
+                            <option value="easy" data-i18n="quiz.easy">Easy</option>
+                            <option value="medium" selected data-i18n="quiz.medium">Medium</option>
+                            <option value="hard" data-i18n="quiz.hard">Hard</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Due Date (Optional)</label>
+                        <label data-i18n="form.dueDateLabel">Due Date (Optional)</label>
                         <input type="datetime-local" id="aiQuizDueDate">
                     </div>
                     <button class="btn btn-primary" onclick="generateAIQuiz()">✨ <span data-i18n="btn.generateQuiz">Generate Quiz with AI</span></button>
@@ -1879,15 +1879,15 @@ Students should demonstrate understanding of how technology challenges tradition
 
                 <!-- Mode Selection -->
                 <div style="background: #f8f9fa; padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                    <div style="font-weight: 600; margin-bottom: 1rem; color: var(--dark);">Choose Mode:</div>
+                    <div style="font-weight: 600; margin-bottom: 1rem; color: var(--dark);" data-i18n="form.chooseMode">Choose Mode:</div>
                     <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
                         <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
                             <input type="radio" name="announcementMode" value="quick" checked onchange="toggleAnnouncementMode()">
-                            <span style="margin-left: 0.5rem;"><strong>Quick Input</strong> — Write it yourself</span>
+                            <span style="margin-left: 0.5rem;"><strong data-i18n="form.quickInput">Quick Input</strong> — <span data-i18n="ann.writeYourself">Write it yourself</span></span>
                         </label>
                         <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
                             <input type="radio" name="announcementMode" value="ai" onchange="toggleAnnouncementMode()">
-                            <span style="margin-left: 0.5rem;"><strong>✨ AI Generate</strong> — AI writes it for you</span>
+                            <span style="margin-left: 0.5rem;"><strong data-i18n="form.aiGenerate">✨ AI Generate</strong> — <span data-i18n="ann.aiWritesForYou">AI writes it for you</span></span>
                         </label>
                     </div>
                 </div>
@@ -1895,40 +1895,40 @@ Students should demonstrate understanding of how technology challenges tradition
                 <!-- Tone Slider (always visible) -->
                 <div class="form-group">
                     <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Tone</span>
+                        <span data-i18n="form.tone">Tone</span>
                         <span id="announcementToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
                     </label>
                     <input type="range" id="announcementTone" min="1" max="5" value="3"
                         oninput="updateToneLabel('announcementToneLabel', this.value)"
                         style="width: 100%; accent-color: var(--purple);">
                     <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
-                        <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        <span data-i18n="tone.formal">Formal</span><span data-i18n="tone.professional">Professional</span><span data-i18n="tone.balanced">Balanced</span><span data-i18n="tone.friendly">Friendly</span><span data-i18n="tone.casual">Casual</span>
                     </div>
                 </div>
 
                 <!-- Quick Input Form -->
                 <div id="quickAnnouncementForm">
                     <div class="form-group">
-                        <label>Your Announcement</label>
+                        <label data-i18n="ann.yourAnn">Your Announcement</label>
                         <textarea id="announcementCustomMessage" rows="6" placeholder="Write your announcement here. Separate paragraphs with a blank line."></textarea>
                     </div>
                     <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                        <button class="btn" style="background: #f0f0f0; color: var(--dark);" onclick="postAnnouncementDirect()">Post As-Is</button>
-                        <button class="btn btn-primary" onclick="postAnnouncementPolished()">✨ AI Polish & Post</button>
+                        <button class="btn" style="background: #f0f0f0; color: var(--dark);" onclick="postAnnouncementDirect()" data-i18n="btn.postAsIs">Post As-Is</button>
+                        <button class="btn btn-primary" onclick="postAnnouncementPolished()">✨ <span data-i18n="btn.aiPolish">AI Polish & Post</span></button>
                     </div>
                 </div>
 
                 <!-- AI Generate Form -->
                 <div id="aiAnnouncementForm" style="display: none;">
                     <div class="form-group">
-                        <label>Announcement Topic</label>
+                        <label data-i18n="ann.topicLabel">Announcement Topic</label>
                         <input type="text" id="announcementTopic" placeholder="e.g., Upcoming Assignment Reminder">
                     </div>
                     <div class="form-group">
-                        <label>Additional Details (Optional)</label>
+                        <label data-i18n="ann.detailsLabel">Additional Details (Optional)</label>
                         <textarea id="announcementDetails" placeholder="Any specific details to include..."></textarea>
                     </div>
-                    <button class="btn btn-primary" onclick="createAnnouncement()">Generate & Post Announcement</button>
+                    <button class="btn btn-primary" onclick="createAnnouncement()" data-i18n="btn.generatePost">Generate & Post Announcement</button>
                 </div>
             </div>
 
@@ -1940,18 +1940,18 @@ Students should demonstrate understanding of how technology challenges tradition
 
                 <!-- Mode Selection -->
                 <div style="background: #f8f9fa; padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                    <div style="font-weight: 600; margin-bottom: 1rem; color: var(--dark);">Choose Mode:</div>
+                    <div style="font-weight: 600; margin-bottom: 1rem; color: var(--dark);" data-i18n="form.chooseMode">Choose Mode:</div>
                     <div style="display: flex; gap: 1.5rem;">
                         <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
                             <input type="radio" name="assignmentMode" value="quick" checked onchange="toggleAssignmentMode()">
                             <span style="margin-left: 0.5rem;">
-                                <strong>Quick Input</strong> — Use your content as-is
+                                <strong data-i18n="form.quickInput">Quick Input</strong> — Use your content as-is
                             </span>
                         </label>
                         <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
                             <input type="radio" name="assignmentMode" value="ai" onchange="toggleAssignmentMode()">
                             <span style="margin-left: 0.5rem;">
-                                <strong>✨ AI-Enhanced</strong> — AI generates professional content
+                                <strong data-i18n="form.aiEnhanced">✨ AI-Enhanced</strong> — AI generates professional content
                             </span>
                         </label>
                     </div>
@@ -1960,51 +1960,51 @@ Students should demonstrate understanding of how technology challenges tradition
                 <!-- Tone (applies to AI Generate mode) -->
                 <div class="form-group">
                     <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Tone</span>
+                        <span data-i18n="form.tone">Tone</span>
                         <span id="assignmentToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
                     </label>
                     <input type="range" id="assignmentTone" min="1" max="5" value="3"
                         oninput="updateToneLabel('assignmentToneLabel', this.value)"
                         style="width: 100%; accent-color: var(--purple);">
                     <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
-                        <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        <span data-i18n="tone.formal">Formal</span><span data-i18n="tone.professional">Professional</span><span data-i18n="tone.balanced">Balanced</span><span data-i18n="tone.friendly">Friendly</span><span data-i18n="tone.casual">Casual</span>
                     </div>
                 </div>
 
                 <!-- Quick Input Mode Form -->
                 <div id="quickAssignmentForm">
                     <div class="form-group">
-                        <label>Assignment Title</label>
+                        <label data-i18n="assign.titleLabel">Assignment Title</label>
                         <input type="text" id="assignmentTitle" placeholder="e.g., Social Media Campaign Analysis">
                     </div>
 
                     <div class="form-group">
-                        <label>Description/Instructions</label>
+                        <label data-i18n="assign.descLabel">Description/Instructions</label>
                         <textarea id="assignmentDescription" placeholder="Paste your complete assignment instructions here..." style="min-height: 150px;"></textarea>
                     </div>
 
                     <div class="form-group">
-                        <label>Points</label>
+                        <label data-i18n="assign.pointsLabel">Points</label>
                         <input type="number" id="assignmentPoints" value="100" min="0">
                     </div>
 
                     <div class="form-group">
-                        <label>Due Date (Optional)</label>
+                        <label data-i18n="form.dueDateLabel">Due Date (Optional)</label>
                         <input type="datetime-local" id="assignmentDueDate">
                     </div>
 
-                    <button class="btn btn-primary" onclick="createAssignment()">📤 Upload to Canvas</button>
+                    <button class="btn btn-primary" onclick="createAssignment()">📤 <span data-i18n="btn.uploadToCanvas">Upload to Canvas</span></button>
                 </div>
 
                 <!-- AI-Enhanced Mode Form -->
                 <div id="aiAssignmentForm" style="display: none;">
                     <div class="form-group">
-                        <label>Assignment Topic/Title</label>
+                        <label data-i18n="assign.topicLabel">Assignment Topic/Title</label>
                         <input type="text" id="aiAssignmentTopic" placeholder="e.g., Social Media Marketing Campaign">
                     </div>
 
                     <div class="form-group">
-                        <label>Assignment Type</label>
+                        <label data-i18n="assign.typeLabel">Assignment Type</label>
                         <select id="aiAssignmentType" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem;">
                             <option value="essay">Essay/Paper</option>
                             <option value="discussion">Discussion Post</option>
@@ -2019,17 +2019,17 @@ Students should demonstrate understanding of how technology challenges tradition
                     </div>
 
                     <div class="form-group">
-                        <label>What should students do? (Brief description)</label>
+                        <label data-i18n="assign.reqLabel">What should students do? (Brief description)</label>
                         <textarea id="aiAssignmentRequirements" placeholder="Example: 'Students will analyze a social media campaign, identify strategies used, and propose improvements. Should include research from at least 3 sources.'" style="min-height: 120px;"></textarea>
                     </div>
 
                     <div class="form-group">
-                        <label>Points</label>
+                        <label data-i18n="assign.pointsLabel">Points</label>
                         <input type="number" id="aiAssignmentPoints" value="100" min="0">
                     </div>
 
                     <div class="form-group">
-                        <label>Due Date (Optional)</label>
+                        <label data-i18n="form.dueDateLabel">Due Date (Optional)</label>
                         <input type="datetime-local" id="aiAssignmentDueDate">
                     </div>
 
@@ -2040,7 +2040,7 @@ Students should demonstrate understanding of how technology challenges tradition
                 <div id="aiAssignmentPreview" style="display: none; margin-top: 1.5rem; background: #f8f9fa; padding: 1.5rem; border-radius: 8px; border: 2px solid var(--purple);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                         <h3 style="margin: 0; color: var(--dark);" data-i18n="section.aiAssignmentPreview">AI-Generated Assignment Preview</h3>
-                        <button onclick="regenerateAIAssignment()" class="btn" style="background: var(--coral); color: white; padding: 0.5rem 1rem;">🔄 Regenerate</button>
+                        <button onclick="regenerateAIAssignment()" class="btn" style="background: var(--coral); color: white; padding: 0.5rem 1rem;">🔄 <span data-i18n="btn.regenerate">Regenerate</span></button>
                     </div>
 
                     <div class="form-group">
@@ -2049,7 +2049,7 @@ Students should demonstrate understanding of how technology challenges tradition
                     </div>
 
                     <div style="display: flex; gap: 1rem;">
-                        <button class="btn btn-primary" onclick="uploadAIAssignment()">📤 Upload to Canvas</button>
+                        <button class="btn btn-primary" onclick="uploadAIAssignment()">📤 <span data-i18n="btn.uploadToCanvas">Upload to Canvas</span></button>
                         <button class="btn" onclick="togglePreviewMode('aiGeneratedContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
                         <button class="btn" onclick="cancelAIAssignment()" style="background: #666; color: white;">Cancel</button>
                     </div>
@@ -2064,18 +2064,18 @@ Students should demonstrate understanding of how technology challenges tradition
 
                 <!-- Mode Selection -->
                 <div style="background: #f8f9fa; padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                    <div style="font-weight: 600; margin-bottom: 1rem; color: var(--dark);">Choose Mode:</div>
+                    <div style="font-weight: 600; margin-bottom: 1rem; color: var(--dark);" data-i18n="form.chooseMode">Choose Mode:</div>
                     <div style="display: flex; gap: 1.5rem;">
                         <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
                             <input type="radio" name="pageMode" value="quick" checked onchange="togglePageMode()">
                             <span style="margin-left: 0.5rem;">
-                                <strong>Quick Input</strong> — Use your content as-is
+                                <strong data-i18n="form.quickInput">Quick Input</strong> — Use your content as-is
                             </span>
                         </label>
                         <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
                             <input type="radio" name="pageMode" value="ai" onchange="togglePageMode()">
                             <span style="margin-left: 0.5rem;">
-                                <strong>✨ AI-Enhanced</strong> — AI generates professional content
+                                <strong data-i18n="form.aiEnhanced">✨ AI-Enhanced</strong> — AI generates professional content
                             </span>
                         </label>
                     </div>
@@ -2084,41 +2084,41 @@ Students should demonstrate understanding of how technology challenges tradition
                 <!-- Tone (applies to AI Generate mode) -->
                 <div class="form-group">
                     <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Tone</span>
+                        <span data-i18n="form.tone">Tone</span>
                         <span id="pageToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
                     </label>
                     <input type="range" id="pageTone" min="1" max="5" value="3"
                         oninput="updateToneLabel('pageToneLabel', this.value)"
                         style="width: 100%; accent-color: var(--purple);">
                     <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
-                        <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        <span data-i18n="tone.formal">Formal</span><span data-i18n="tone.professional">Professional</span><span data-i18n="tone.balanced">Balanced</span><span data-i18n="tone.friendly">Friendly</span><span data-i18n="tone.casual">Casual</span>
                     </div>
                 </div>
 
                 <!-- Quick Input Mode Form -->
                 <div id="quickPageForm">
                     <div class="form-group">
-                        <label>Page Title</label>
+                        <label data-i18n="page.titleLabel">Page Title</label>
                         <input type="text" id="pageTitle" placeholder="e.g., Week 1 Overview">
                     </div>
 
                     <div class="form-group">
-                        <label>Page Content (HTML accepted)</label>
+                        <label data-i18n="page.contentLabel">Page Content (HTML accepted)</label>
                         <textarea id="pageContent" placeholder="Paste your page content here..." style="min-height: 200px;"></textarea>
                     </div>
 
-                    <button class="btn btn-primary" onclick="createPage()">📤 Upload to Canvas</button>
+                    <button class="btn btn-primary" onclick="createPage()">📤 <span data-i18n="btn.uploadToCanvas">Upload to Canvas</span></button>
                 </div>
 
                 <!-- AI-Enhanced Mode Form -->
                 <div id="aiPageForm" style="display: none;">
                     <div class="form-group">
-                        <label>Page Title/Topic</label>
+                        <label data-i18n="page.topicLabel">Page Title/Topic</label>
                         <input type="text" id="aiPageTitle" placeholder="e.g., Introduction to Social Media Marketing">
                     </div>
 
                     <div class="form-group">
-                        <label>Page Type</label>
+                        <label data-i18n="page.typeLabel">Page Type</label>
                         <select id="aiPageType" onchange="toggleStudyPackOptions()" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem;">
                             <option value="overview">Course/Unit Overview</option>
                             <option value="resource_list">Resource List</option>
@@ -2131,12 +2131,12 @@ Students should demonstrate understanding of how technology challenges tradition
                     </div>
 
                     <div class="form-group">
-                        <label>What should this page cover? (Brief description)</label>
+                        <label data-i18n="page.descLabel">What should this page cover? (Brief description)</label>
                         <textarea id="aiPageDescription" placeholder="Example: 'Overview of social media marketing strategies, platforms, and best practices. Include examples of successful campaigns.'" style="min-height: 100px;"></textarea>
                     </div>
 
                     <div class="form-group">
-                        <label>Learning Objectives (Optional)</label>
+                        <label data-i18n="page.objectivesLabel">Learning Objectives (Optional)</label>
                         <textarea id="aiPageObjectives" placeholder="What should students learn from this page?" style="min-height: 80px;"></textarea>
                     </div>
 
@@ -2203,7 +2203,7 @@ Students should demonstrate understanding of how technology challenges tradition
                     </div>
 
                     <div style="display: flex; gap: 1rem;">
-                        <button class="btn btn-primary" onclick="uploadAIPage()">📤 Upload to Canvas</button>
+                        <button class="btn btn-primary" onclick="uploadAIPage()">📤 <span data-i18n="btn.uploadToCanvas">Upload to Canvas</span></button>
                         <button class="btn" onclick="togglePreviewMode('aiGeneratedPageContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
                         <button class="btn" onclick="cancelAIPage()" style="background: #666; color: white;">Cancel</button>
                     </div>
@@ -2218,18 +2218,18 @@ Students should demonstrate understanding of how technology challenges tradition
 
                 <!-- Mode Selection -->
                 <div style="background: #f8f9fa; padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                    <div style="font-weight: 600; margin-bottom: 1rem; color: var(--dark);">Choose Mode:</div>
+                    <div style="font-weight: 600; margin-bottom: 1rem; color: var(--dark);" data-i18n="form.chooseMode">Choose Mode:</div>
                     <div style="display: flex; gap: 1.5rem;">
                         <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
                             <input type="radio" name="discussionMode" value="quick" checked onchange="toggleDiscussionMode()">
                             <span style="margin-left: 0.5rem;">
-                                <strong>Quick Input</strong> — Use your content as-is
+                                <strong data-i18n="form.quickInput">Quick Input</strong> — Use your content as-is
                             </span>
                         </label>
                         <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
                             <input type="radio" name="discussionMode" value="ai" onchange="toggleDiscussionMode()">
                             <span style="margin-left: 0.5rem;">
-                                <strong>✨ AI-Enhanced</strong> — AI generates engaging prompts
+                                <strong data-i18n="form.aiEnhanced">✨ AI-Enhanced</strong> — AI generates engaging prompts
                             </span>
                         </label>
                     </div>
@@ -2238,30 +2238,30 @@ Students should demonstrate understanding of how technology challenges tradition
                 <!-- Tone (applies to AI Generate mode) -->
                 <div class="form-group">
                     <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Tone</span>
+                        <span data-i18n="form.tone">Tone</span>
                         <span id="discussionToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
                     </label>
                     <input type="range" id="discussionTone" min="1" max="5" value="3"
                         oninput="updateToneLabel('discussionToneLabel', this.value)"
                         style="width: 100%; accent-color: var(--purple);">
                     <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
-                        <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        <span data-i18n="tone.formal">Formal</span><span data-i18n="tone.professional">Professional</span><span data-i18n="tone.balanced">Balanced</span><span data-i18n="tone.friendly">Friendly</span><span data-i18n="tone.casual">Casual</span>
                     </div>
                 </div>
 
                 <!-- Quick Input Mode Form -->
                 <div id="quickDiscussionForm">
                     <div class="form-group">
-                        <label>Discussion Topic</label>
+                        <label data-i18n="disc.topicLabel">Discussion Topic</label>
                         <input type="text" id="discussionTopic" placeholder="e.g., Ethics in Social Media">
                     </div>
 
                     <div class="form-group">
-                        <label>Discussion Message/Prompt</label>
+                        <label data-i18n="disc.messageLabel">Discussion Message/Prompt</label>
                         <textarea id="discussionMessage" placeholder="Paste your discussion prompt here..." style="min-height: 150px;"></textarea>
                     </div>
 
-                    <button class="btn btn-primary" onclick="createDiscussion()">📤 Upload to Canvas</button>
+                    <button class="btn btn-primary" onclick="createDiscussion()">📤 <span data-i18n="btn.uploadToCanvas">Upload to Canvas</span></button>
                 </div>
 
                 <!-- AI-Enhanced Mode Form -->
@@ -2344,18 +2344,18 @@ Students should demonstrate understanding of how technology challenges tradition
 
                 <!-- Mode Selection -->
                 <div style="background: #f8f9fa; padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                    <div style="font-weight: 600; margin-bottom: 1rem; color: var(--dark);">Choose Mode:</div>
+                    <div style="font-weight: 600; margin-bottom: 1rem; color: var(--dark);" data-i18n="form.chooseMode">Choose Mode:</div>
                     <div style="display: flex; gap: 1.5rem;">
                         <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
                             <input type="radio" name="syllabusMode" value="quick" checked onchange="toggleSyllabusMode()">
                             <span style="margin-left: 0.5rem;">
-                                <strong>Quick Input</strong> — Paste existing syllabus
+                                <strong data-i18n="form.quickInput">Quick Input</strong> — Paste existing syllabus
                             </span>
                         </label>
                         <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.95rem;">
                             <input type="radio" name="syllabusMode" value="ai" onchange="toggleSyllabusMode()">
                             <span style="margin-left: 0.5rem;">
-                                <strong>✨ AI-Enhanced</strong> — AI generates professional syllabus
+                                <strong data-i18n="form.aiEnhanced">✨ AI-Enhanced</strong> — AI generates professional syllabus
                             </span>
                         </label>
                     </div>
@@ -2364,14 +2364,14 @@ Students should demonstrate understanding of how technology challenges tradition
                 <!-- Tone (applies to AI Generate mode) -->
                 <div class="form-group">
                     <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Tone</span>
+                        <span data-i18n="form.tone">Tone</span>
                         <span id="syllabusToneLabel" style="font-weight: 600; color: var(--purple);">Balanced</span>
                     </label>
                     <input type="range" id="syllabusTone" min="1" max="5" value="3"
                         oninput="updateToneLabel('syllabusToneLabel', this.value)"
                         style="width: 100%; accent-color: var(--purple);">
                     <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 0.25rem;">
-                        <span>Formal</span><span>Professional</span><span>Balanced</span><span>Friendly</span><span>Casual</span>
+                        <span data-i18n="tone.formal">Formal</span><span data-i18n="tone.professional">Professional</span><span data-i18n="tone.balanced">Balanced</span><span data-i18n="tone.friendly">Friendly</span><span data-i18n="tone.casual">Casual</span>
                     </div>
                 </div>
 
@@ -3591,10 +3591,11 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             document.getElementById('aiAnnouncementForm').style.display = mode === 'ai' ? 'block' : 'none';
         }
 
-        const _toneLabelMap = { 1: 'Formal', 2: 'Professional', 3: 'Balanced', 4: 'Friendly', 5: 'Casual' };
+        const _toneLabelKeys = { 1: 'tone.formal', 2: 'tone.professional', 3: 'tone.balanced', 4: 'tone.friendly', 5: 'tone.casual' };
+        const _toneLabelFallbacks = { 1: 'Formal', 2: 'Professional', 3: 'Balanced', 4: 'Friendly', 5: 'Casual' };
         function updateToneLabel(labelId, val) {
             const el = document.getElementById(labelId);
-            if (el) el.textContent = _toneLabelMap[val] || 'Balanced';
+            if (el) el.textContent = (window.i18n ? window.i18n.t(_toneLabelKeys[val]) : null) || _toneLabelFallbacks[val] || 'Balanced';
         }
 
         function _getAnnouncementTone() {

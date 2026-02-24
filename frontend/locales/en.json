@@ -155,7 +155,77 @@
     "edit": "Edit",
     "delete": "Delete",
     "close": "Close",
-    "account": "Account"
+    "account": "Account",
+    "uploadToCanvas": "Upload to Canvas",
+    "regenerate": "Regenerate",
+    "postAsIs": "Post As-Is",
+    "aiPolish": "AI Polish & Post",
+    "generatePost": "Generate & Post Announcement",
+    "editSource": "Edit Source"
+  },
+  "form": {
+    "chooseMode": "Choose Mode:",
+    "quickInput": "Quick Input",
+    "aiEnhanced": "✨ AI-Enhanced",
+    "aiGenerate": "✨ AI Generate",
+    "tone": "Tone",
+    "dueDateLabel": "Due Date (Optional)",
+    "useAsIs": "Use your content as-is",
+    "aiGenPro": "AI generates professional content",
+    "pasteExisting": "Paste existing quiz",
+    "aiGeneratesQuiz": "AI generates quiz questions",
+    "aiGeneratesEngaging": "AI generates engaging prompts",
+    "writeYourself": "Write it yourself",
+    "aiWritesForYou": "AI writes it for you"
+  },
+  "tone": {
+    "formal": "Formal",
+    "professional": "Professional",
+    "balanced": "Balanced",
+    "friendly": "Friendly",
+    "casual": "Casual"
+  },
+  "quiz": {
+    "titleLabel": "Quiz Title",
+    "questionsLabel": "Quiz Questions (Paste formatted questions)",
+    "topicLabel": "Quiz Topic / Title",
+    "descLabel": "Quiz Description & Instructions",
+    "gradeLevelLabel": "Grade Level",
+    "numQuestionsLabel": "Number of Questions",
+    "questionTypesLabel": "Question Types",
+    "multipleChoice": "Multiple Choice",
+    "trueFalse": "True/False",
+    "difficultyLabel": "Difficulty",
+    "easy": "Easy",
+    "medium": "Medium",
+    "hard": "Hard"
+  },
+  "ann": {
+    "yourAnn": "Your Announcement",
+    "topicLabel": "Announcement Topic",
+    "detailsLabel": "Additional Details (Optional)",
+    "writeYourself": "Write it yourself",
+    "aiWritesForYou": "AI writes it for you"
+  },
+  "assign": {
+    "titleLabel": "Assignment Title",
+    "descLabel": "Description/Instructions",
+    "pointsLabel": "Points",
+    "topicLabel": "Assignment Topic/Title",
+    "typeLabel": "Assignment Type",
+    "reqLabel": "What should students do? (Brief description)"
+  },
+  "page": {
+    "titleLabel": "Page Title",
+    "contentLabel": "Page Content (HTML accepted)",
+    "topicLabel": "Page Title/Topic",
+    "typeLabel": "Page Type",
+    "descLabel": "What should this page cover? (Brief description)",
+    "objectivesLabel": "Learning Objectives (Optional)"
+  },
+  "disc": {
+    "topicLabel": "Discussion Topic",
+    "messageLabel": "Discussion Message/Prompt"
   },
   "sidebar": {
     "generations": "Generations",

@@ -1326,8 +1326,22 @@ async def get_current_user_info(current_user = Depends(get_current_user_from_tok
 class LanguageUpdateRequest(BaseModel):
     preferred_language: str
 
-_SUPPORTED_LANGS = {'en', 'es', 'fr', 'pt', 'ar', 'zh'}
+_SUPPORTED_LANGS = {'en', 'es', 'fr', 'de', 'pt', 'zh', 'ja', 'ko', 'hi', 'ar'}
 
+# ----------------------------------------------------------
+# GET — read current language preference
+# ----------------------------------------------------------
+@app.get("/api/v2/user/language")
+async def get_preferred_language(
+    current_user=Depends(get_current_user_from_token)
+):
+    """Return the user's saved preferred language."""
+    return {"preferred_language": current_user.get("preferred_language", "en")}
+
+
+# ----------------------------------------------------------
+# PATCH — update language preference
+# ----------------------------------------------------------
 @app.patch("/api/v2/user/language")
 async def update_preferred_language(
     request: LanguageUpdateRequest,
@@ -1335,7 +1349,10 @@ async def update_preferred_language(
 ):
     """Persist the user's preferred UI language."""
     if request.preferred_language not in _SUPPORTED_LANGS:
-        raise HTTPException(status_code=400, detail=f"Unsupported language code. Supported: {', '.join(sorted(_SUPPORTED_LANGS))}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported language code. Supported: {', '.join(sorted(_SUPPORTED_LANGS))}"
+        )
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -1348,7 +1365,6 @@ async def update_preferred_language(
     except Exception:
         conn.rollback()
         # Column may not exist before migration 008 — still return success
-        # so the frontend doesn't show errors
         return {"preferred_language": request.preferred_language}
     finally:
         cursor.close()

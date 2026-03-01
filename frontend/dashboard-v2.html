@@ -2519,6 +2519,10 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         // ============================================================================
         const API_URL = 'https://facultyflow-production.up.railway.app';
         window.API_URL = API_URL; // expose for i18n.js backend persist
+        // Sync language preference from backend (overrides localStorage if different)
+        if (window.i18n && window.i18n.syncFromBackend) {
+            window.i18n.syncFromBackend();
+        }
         let authToken = localStorage.getItem('auth_token');
         let selectedCourse = null;
 

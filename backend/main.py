@@ -53,6 +53,30 @@ async def startup_event():
         print(f"⚠️  Database initialization failed: {e}")
         print("   App will continue but some features may not work")
 
+    # Run incremental SQL migrations (idempotent — safe to re-run)
+    try:
+        import psycopg2, os, pathlib
+        db_url = os.getenv("DATABASE_URL", "")
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+        if db_url:
+            conn = psycopg2.connect(db_url)
+            cursor = conn.cursor()
+            migrations_dir = pathlib.Path(__file__).parent / "migrations"
+            for migration_file in sorted(migrations_dir.glob("*.sql")):
+                try:
+                    sql = migration_file.read_text()
+                    cursor.execute(sql)
+                    conn.commit()
+                    print(f"✅ Migration applied: {migration_file.name}")
+                except Exception as me:
+                    conn.rollback()
+                    print(f"⚠️  Migration {migration_file.name} skipped (already applied or error): {me}")
+            cursor.close()
+            conn.close()
+    except Exception as e:
+        print(f"⚠️  Migration runner failed (non-critical): {e}")
+
 # CORS middleware - Allow readysetclass.app domains only
 app.add_middleware(
     CORSMiddleware,
@@ -611,8 +635,202 @@ Prefer recent (2020+) resources. Cite sources properly."""
         self.cost_tracker["study_packs"] += cost
         return study_pack
 
+    # ── Bonita Learning Signal Methods ─────────────────────────────────────────
+
+    def _infer_course_level(self, course_code: str) -> str:
+        """
+        Infer course level from course code number.
+        Standard higher ed convention:
+          100-199 → intro
+          200-299 → mid
+          300-399 → upper
+          400+    → grad (or advanced undergrad)
+        """
+        import re
+        match = re.search(r'\d+', course_code or '')
+        if not match:
+            return 'unknown'
+        num = int(match.group())
+        if num < 200:  return 'intro'
+        if num < 300:  return 'mid'
+        if num < 400:  return 'upper'
+        return 'grad'
+
+    def _infer_subject_area(self, course_name: str, course_code: str) -> str:
+        """
+        Infer broad subject area from course name/code.
+        Returns normalized subject string for grouping.
+        """
+        name_lower = (course_name or '').lower()
+        code_lower = (course_code or '').lower()
+        combined = name_lower + ' ' + code_lower
+
+        mapping = {
+            'communications': ['comm', 'media', 'journalism', 'broadcast', 'mass comm'],
+            'business':       ['bus', 'mgmt', 'mkt', 'marketing', 'management', 'finance', 'econ'],
+            'stem':           ['math', 'bio', 'chem', 'phys', 'cs', 'eng', 'sci'],
+            'social_science': ['soc', 'psych', 'pols', 'anthro', 'hist'],
+            'humanities':     ['english', 'lit', 'phil', 'art', 'music', 'theatre'],
+            'education':      ['edu', 'educ', 'teach', 'pedagogy'],
+            'health':         ['nurs', 'health', 'kines', 'nutri', 'public health'],
+            'law':            ['law', 'legal', 'crim', 'justice'],
+        }
+
+        for subject, keywords in mapping.items():
+            if any(kw in combined for kw in keywords):
+                return subject
+
+        return 'general'
+
+    def capture_course_signal(
+        self,
+        asset_id: int,
+        user_id: int,
+        course_data: dict,
+        content_mix: dict,
+        bonita_opt_in: bool = False
+    ):
+        """
+        Capture course-level structural signal after a full course build.
+        Fire-and-forget — never raises, never blocks the main flow.
+        """
+        conn = None
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            course_level = self._infer_course_level(course_data.get('course_code', ''))
+            subject_area = self._infer_subject_area(
+                course_data.get('course_name', ''),
+                course_data.get('course_code', '')
+            )
+
+            import json
+            cursor.execute("""
+                INSERT INTO bonita_course_signals (
+                    asset_id, user_id, course_code, subject_area, credit_hours,
+                    course_level, week_count, content_mix, has_rubrics,
+                    has_weighted_grading, learning_objectives_count, bonita_opt_in
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                asset_id,
+                user_id,
+                course_data.get('course_code'),
+                subject_area,
+                course_data.get('credits'),
+                course_level,
+                course_data.get('weeks'),
+                json.dumps(content_mix),
+                content_mix.get('assignments', 0) > 0,
+                course_data.get('weighted_grading', False),
+                len(course_data.get('objectives', [])),
+                bonita_opt_in
+            ))
+            conn.commit()
+            print(f"✅ Bonita course signal captured (asset_id={asset_id})")
+        except Exception as e:
+            print(f"⚠️  Bonita signal capture failed (non-critical): {e}")
+            if conn:
+                try: conn.rollback()
+                except: pass
+        finally:
+            if conn:
+                try: conn.close()
+                except: pass
+
+    def capture_content_signal(
+        self,
+        asset_id: int,
+        user_id: int,
+        content_type: str,
+        course_data: dict,
+        week_number: int = None,
+        word_count: int = 0,
+        has_rubric: bool = False,
+        question_types: dict = None,
+        model_used: str = 'groq',
+        generation_cost: float = 0.0,
+        enhance_applied: bool = False,
+        bonita_opt_in: bool = False
+    ):
+        """
+        Capture individual content piece signal after generation.
+        Fire-and-forget — never raises, never blocks the main flow.
+        """
+        conn = None
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            course_level = self._infer_course_level(course_data.get('course_code', ''))
+            subject_area = self._infer_subject_area(
+                course_data.get('course_name', ''),
+                course_data.get('course_code', '')
+            )
+
+            # Infer difficulty from week position
+            weeks_total = course_data.get('weeks', 16)
+            difficulty = 'foundational'
+            if week_number:
+                pct = week_number / weeks_total
+                if pct > 0.75:   difficulty = 'advanced'
+                elif pct > 0.50: difficulty = 'proficient'
+                elif pct > 0.25: difficulty = 'developing'
+
+            import json
+            cursor.execute("""
+                INSERT INTO bonita_content_signals (
+                    asset_id, user_id, content_type, subject_area, course_level,
+                    week_number, difficulty_level, word_count, has_rubric,
+                    question_types, model_used, generation_cost,
+                    enhance_applied, bonita_opt_in
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                asset_id, user_id, content_type, subject_area, course_level,
+                week_number, difficulty, word_count, has_rubric,
+                json.dumps(question_types or {}), model_used, generation_cost,
+                enhance_applied, bonita_opt_in
+            ))
+            conn.commit()
+        except Exception as e:
+            print(f"⚠️  Bonita content signal capture failed (non-critical): {e}")
+            if conn:
+                try: conn.rollback()
+                except: pass
+        finally:
+            if conn:
+                try: conn.close()
+                except: pass
+
+
 # Initialize Bonita
 bonita = BonitaEngine()
+
+
+def _get_user_bonita_consent(user_id: int) -> bool:
+    """
+    Check if a user has an active Bonita data pipeline consent.
+    Returns False on any error — consent must be explicit, never assumed.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT bonita_consent_granted_at, bonita_consent_revoked_at
+            FROM users WHERE id = %s
+        """, (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            return False
+        granted, revoked = row
+        return granted is not None and (revoked is None or granted > revoked)
+    except Exception:
+        return False
+    finally:
+        if conn:
+            try: conn.close()
+            except: pass
 
 # ============================================================================
 # CANVAS API INTEGRATION
@@ -2779,6 +2997,29 @@ Do NOT include the assignment title as a heading. Be practical, specific, and ac
 
         print(f"✅ Assignment generated")
 
+        # Bonita learning signal — fire-and-forget
+        try:
+            user_id = current_user['user_id']
+            asset_id_sig = save_asset(
+                user_id, 'assignment', f"Assignment: {request.topic}",
+                generated_content, course_name=getattr(request, 'course_name', None)
+            ) if not hasattr(request, '_asset_saved') else None
+            course_dict = {
+                'course_name': getattr(request, 'course_name', ''),
+                'course_code': getattr(request, 'course_code', ''),
+                'weeks': 16,
+            }
+            bonita.capture_content_signal(
+                asset_id=asset_id_sig or 0, user_id=user_id,
+                content_type='assignment', course_data=course_dict,
+                word_count=len(generated_content.split()),
+                has_rubric=True,
+                model_used='claude_sonnet',
+                bonita_opt_in=_get_user_bonita_consent(user_id)
+            )
+        except Exception:
+            pass
+
         return {
             "status": "success",
             "generated_content": generated_content,
@@ -3355,6 +3596,25 @@ Be specific, practical, and student-friendly. No filler."""
             user_id, 'syllabus', f"Syllabus: {request.course_name}",
             content, course_name=request.course_name
         )
+
+        # Bonita learning signal — fire-and-forget, never blocks
+        try:
+            course_dict = {
+                'course_name': request.course_name,
+                'course_code': getattr(request, 'course_code', ''),
+                'credits': getattr(request, 'credits', None),
+                'weeks': getattr(request, 'weeks', 16),
+                'objectives': request.objectives.split('\n') if isinstance(request.objectives, str) else (request.objectives or []),
+            }
+            bonita.capture_content_signal(
+                asset_id=asset_id, user_id=user_id,
+                content_type='syllabus', course_data=course_dict,
+                word_count=len(content.split()),
+                model_used='claude_sonnet',
+                bonita_opt_in=_get_user_bonita_consent(user_id)
+            )
+        except Exception:
+            pass  # Signal capture must never break the response
 
         print(f"✅ Syllabus generated")
         return {"status": "success", "generated_content": content, "asset_id": asset_id, "cost": 0.0}
@@ -4998,6 +5258,15 @@ async def set_bonita_consent(request: BonitaOptInRequest, current_user=Depends(g
             """, (user_id,))
             # Set all assets bonita_opt_in = false
             cursor.execute("UPDATE assets SET bonita_opt_in = FALSE WHERE user_id = %s", (user_id,))
+            # Revoke signal table consent
+            cursor.execute(
+                "UPDATE bonita_course_signals SET bonita_opt_in = FALSE WHERE user_id = %s",
+                (user_id,)
+            )
+            cursor.execute(
+                "UPDATE bonita_content_signals SET bonita_opt_in = FALSE WHERE user_id = %s",
+                (user_id,)
+            )
             # Queue deletion requests for previously exported assets
             cursor.execute("""
                 INSERT INTO deletion_requests (asset_id)
@@ -5037,6 +5306,133 @@ async def get_bonita_consent(current_user=Depends(get_current_user_from_token)):
             "granted_at": granted.isoformat() if granted else None,
             "asset_count": count or 0
         }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ── Bonita Learning Signal Endpoints ──────────────────────────────────────────
+
+@app.get("/api/v2/bonita/patterns")
+async def get_learning_patterns(
+    subject: str = None,
+    level: str = None,
+    current_user=Depends(get_current_user_from_token)
+):
+    """
+    Return aggregated course patterns for a subject/level.
+    Powers the LMS course setup recommendations.
+    Only returns data where sample_size >= 3 (privacy threshold).
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        query = """
+            SELECT
+                subject_area,
+                course_level,
+                COUNT(*) as sample_size,
+                ROUND(AVG(week_count), 1) as avg_weeks,
+                ROUND(AVG(learning_objectives_count), 1) as avg_objectives,
+                ROUND(AVG((content_mix->>'assignments')::int), 1) as avg_assignments,
+                ROUND(AVG((content_mix->>'quizzes')::int), 1) as avg_quizzes,
+                ROUND(AVG((content_mix->>'discussions')::int), 1) as avg_discussions,
+                ROUND(100.0 * SUM(CASE WHEN has_rubrics THEN 1 ELSE 0 END) / COUNT(*), 1) as rubric_rate
+            FROM bonita_course_signals
+            WHERE bonita_opt_in = TRUE
+        """
+        params = []
+        if subject:
+            query += " AND subject_area = %s"
+            params.append(subject)
+        if level:
+            query += " AND course_level = %s"
+            params.append(level)
+
+        query += """
+            GROUP BY subject_area, course_level
+            HAVING COUNT(*) >= 3
+            ORDER BY sample_size DESC
+        """
+
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        cols = ['subject_area', 'course_level', 'sample_size', 'avg_weeks',
+                'avg_objectives', 'avg_assignments', 'avg_quizzes',
+                'avg_discussions', 'rubric_rate']
+        return {"patterns": [dict(zip(cols, row)) for row in rows]}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/v2/bonita/difficulty-curve")
+async def get_difficulty_curve(
+    subject: str,
+    level: str,
+    current_user=Depends(get_current_user_from_token)
+):
+    """
+    Return difficulty distribution by week for a subject/level.
+    Minimum 5 data points per week required to include that week.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT
+                week_number,
+                difficulty_level,
+                COUNT(*) as count
+            FROM bonita_content_signals
+            WHERE bonita_opt_in = TRUE
+              AND subject_area = %s
+              AND course_level = %s
+              AND week_number IS NOT NULL
+            GROUP BY week_number, difficulty_level
+            HAVING COUNT(*) >= 5
+            ORDER BY week_number, difficulty_level
+        """, (subject, level))
+        rows = cursor.fetchall()
+
+        # Shape into {week: {difficulty: count}} for easy frontend consumption
+        curve = {}
+        for week, difficulty, count in rows:
+            if week not in curve:
+                curve[week] = {}
+            curve[week][difficulty] = count
+
+        return {"subject": subject, "level": level, "curve": curve}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/v2/admin/bonita/signals")
+async def get_bonita_signal_stats(
+    current_user=Depends(get_current_user_from_token)
+):
+    """Admin-only view of Bonita signal pipeline health."""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT
+                (SELECT COUNT(*) FROM bonita_course_signals) as total_course_signals,
+                (SELECT COUNT(*) FROM bonita_course_signals WHERE bonita_opt_in = TRUE) as opted_in_course_signals,
+                (SELECT COUNT(*) FROM bonita_content_signals) as total_content_signals,
+                (SELECT COUNT(*) FROM bonita_content_signals WHERE bonita_opt_in = TRUE) as opted_in_content_signals,
+                (SELECT COUNT(DISTINCT subject_area) FROM bonita_course_signals WHERE bonita_opt_in = TRUE) as subject_areas_covered,
+                (SELECT COUNT(*) FROM bonita_learning_patterns) as computed_patterns
+        """)
+        row = cursor.fetchone()
+        cols = ['total_course_signals', 'opted_in_course_signals',
+                'total_content_signals', 'opted_in_content_signals',
+                'subject_areas_covered', 'computed_patterns']
+        return dict(zip(cols, row))
     finally:
         cursor.close()
         conn.close()

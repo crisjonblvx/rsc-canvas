@@ -250,6 +250,50 @@
     "finish": "Finish",
     "preview": "Preview"
   },
+  "onboarding": {
+    "close": "×",
+    "back": "← Back",
+    "next": "Next →",
+    "finish": "Let's Go! 🎉",
+    "step1": {
+      "title": "Welcome to ReadySetClass!",
+      "sub": "You're set up with the AI-powered tool built for educators. Here's what you can do:",
+      "item1": "<strong>Build courses</strong> — generate quizzes, assignments, modules, and syllabi in minutes, not hours.",
+      "item2": "<strong>AI Grading</strong> — let AI grade student submissions against your rubric. You review and approve before anything posts.",
+      "item3": "<strong>Announcements & Discussions</strong> — draft and publish Canvas content without logging into Canvas directly.",
+      "item4": "<strong>Direct Canvas sync</strong> — everything publishes straight to your Canvas course. No copy-paste.",
+      "callout": "Works with <strong>K-12 and university Canvas</strong> accounts — any school using Instructure Canvas LMS."
+    },
+    "step2": {
+      "title": "Connect Your Canvas Account",
+      "sub": "ReadySetClass needs your Canvas URL and an API access token to sync with your courses.",
+      "howTo": "How to get your Canvas API token:",
+      "s1": "Log into your Canvas account at your school's Canvas URL",
+      "s2": "Click your <strong>profile picture</strong> (top right) → <strong>Settings</strong>",
+      "s3": "Scroll down to <strong>Approved Integrations</strong> → click <strong>+ New Access Token</strong>",
+      "s4": "Give it a name like \"ReadySetClass\" → click <strong>Generate Token</strong>",
+      "s5": "Copy the token — <strong>you only see it once!</strong>",
+      "callout": "Your <strong>Canvas URL</strong> looks like: <code>https://yourschool.instructure.com</code>. Check your browser bar when you're logged into Canvas."
+    },
+    "step3": {
+      "title": "AI Grading — How It Works",
+      "sub": "When students submit assignments on Canvas, AI grades them against your rubric in minutes.",
+      "item1": "Supports <strong>PDF, Word (.docx), Excel, and text</strong> submissions",
+      "item2": "Uses your <strong>Canvas rubric</strong> automatically — or you type one in manually",
+      "item3": "You <strong>review every grade</strong> before anything posts to Canvas — AI assists, you decide",
+      "item4": "25 submissions ≈ ~10 hours manual → <strong>~1 hour with AI</strong> (90% faster)",
+      "callout": "Find it in the sidebar: <strong>✨ AI Grader</strong> — select an assignment, confirm the rubric, and start grading."
+    },
+    "step4": {
+      "title": "You're Ready to Go!",
+      "sub": "Here's your quick-start checklist:",
+      "item1": "Connect Canvas (scroll down on this page → Canvas Connection)",
+      "item2": "Select a course from <strong>My Courses</strong>",
+      "item3": "Create something — try <strong>📝 Create Quiz</strong> first, it's the fastest to see results",
+      "item4": "When students submit work → try <strong>✨ AI Grader</strong>",
+      "callout": "Have questions? Click the <strong>?</strong> button anytime to replay this walkthrough."
+    }
+  },
   "footer": {
     "copyright": "© 2026 ReadySetClass. All rights reserved.",
     "trademark": "ReadySetClass™ is a registered trademark.",

@@ -250,6 +250,50 @@
     "finish": "Fertigstellen",
     "preview": "Vorschau"
   },
+  "onboarding": {
+    "close": "×",
+    "back": "← Zurück",
+    "next": "Weiter →",
+    "finish": "Los geht's! 🎉",
+    "step1": {
+      "title": "Willkommen bei ReadySetClass!",
+      "sub": "Sie sind mit dem KI-gestützten Tool für Pädagogen eingerichtet. Folgendes können Sie tun:",
+      "item1": "<strong>Kurse erstellen</strong> — Generieren Sie Quizze, Aufgaben, Module und Lehrpläne in Minuten.",
+      "item2": "<strong>KI-Benotung</strong> — Lassen Sie die KI Einreichungen der Studierenden anhand Ihrer Rubrik bewerten. Sie prüfen und genehmigen vorher.",
+      "item3": "<strong>Ankündigungen & Diskussionen</strong> — Erstellen und veröffentlichen Sie Canvas-Inhalte ohne direkten Canvas-Login.",
+      "item4": "<strong>Direkte Canvas-Synchronisierung</strong> — Alles wird direkt in Ihrem Canvas-Kurs veröffentlicht. Kein Kopieren und Einfügen.",
+      "callout": "Funktioniert mit <strong>K-12- und Hochschul-Canvas</strong>-Konten — jede Schule, die Instructure Canvas LMS verwendet."
+    },
+    "step2": {
+      "title": "Verbinden Sie Ihr Canvas-Konto",
+      "sub": "ReadySetClass benötigt Ihre Canvas-URL und ein API-Zugriffstoken, um mit Ihren Kursen zu synchronisieren.",
+      "howTo": "So erhalten Sie Ihr Canvas-API-Token:",
+      "s1": "Melden Sie sich bei Canvas über die URL Ihrer Schule an",
+      "s2": "Klicken Sie auf Ihr <strong>Profilbild</strong> (oben rechts) → <strong>Einstellungen</strong>",
+      "s3": "Scrollen Sie zu <strong>Genehmigte Integrationen</strong> → klicken Sie auf <strong>+ Neues Zugriffstoken</strong>",
+      "s4": "Geben Sie einen Namen wie „ReadySetClass" ein → klicken Sie auf <strong>Token generieren</strong>",
+      "s5": "Kopieren Sie das Token — <strong>Sie sehen es nur einmal!</strong>",
+      "callout": "Ihre <strong>Canvas-URL</strong> sieht so aus: <code>https://ihreschule.instructure.com</code>. Überprüfen Sie die Adressleiste, wenn Sie in Canvas eingeloggt sind."
+    },
+    "step3": {
+      "title": "KI-Benotung — So funktioniert es",
+      "sub": "Wenn Studierende Aufgaben auf Canvas einreichen, bewertet die KI diese in Minuten anhand Ihrer Rubrik.",
+      "item1": "Unterstützt Einreichungen als <strong>PDF, Word (.docx), Excel und Text</strong>",
+      "item2": "Verwendet Ihre <strong>Canvas-Rubrik</strong> automatisch — oder geben Sie eine manuell ein",
+      "item3": "Sie <strong>überprüfen jede Note</strong>, bevor sie veröffentlicht wird — KI hilft, Sie entscheiden",
+      "item4": "25 Einreichungen ≈ ~10 Stunden manuell → <strong>~1 Stunde mit KI</strong> (90% schneller)",
+      "callout": "In der Seitenleiste: <strong>✨ KI-Benoter</strong> — wählen Sie eine Aufgabe, bestätigen Sie die Rubrik und beginnen Sie."
+    },
+    "step4": {
+      "title": "Sie sind startklar!",
+      "sub": "Ihre Schnellstart-Checkliste:",
+      "item1": "Canvas verbinden (nach unten scrollen → Canvas-Verbindung)",
+      "item2": "Wählen Sie einen Kurs aus <strong>Meine Kurse</strong>",
+      "item3": "Erstellen Sie etwas — probieren Sie zuerst <strong>📝 Quiz erstellen</strong>",
+      "item4": "Wenn Studierende Arbeiten einreichen → probieren Sie <strong>✨ KI-Benoter</strong>",
+      "callout": "Fragen? Klicken Sie jederzeit auf die <strong>?</strong>-Schaltfläche, um diese Einführung erneut anzusehen."
+    }
+  },
   "footer": {
     "copyright": "© 2026 ReadySetClass. Alle Rechte vorbehalten.",
     "trademark": "ReadySetClass™ ist eine eingetragene Marke.",

@@ -250,6 +250,50 @@
     "finish": "समाप्त करें",
     "preview": "पूर्वावलोकन"
   },
+  "onboarding": {
+    "close": "×",
+    "back": "← वापस",
+    "next": "अगला →",
+    "finish": "चलिए शुरू करें! 🎉",
+    "step1": {
+      "title": "ReadySetClass में आपका स्वागत है!",
+      "sub": "आप शिक्षकों के लिए बने AI-संचालित टूल से जुड़ गए हैं। आप यह कर सकते हैं:",
+      "item1": "<strong>कोर्स बनाएं</strong> — मिनटों में क्विज़, असाइनमेंट, मॉड्यूल और सिलेबस तैयार करें।",
+      "item2": "<strong>AI ग्रेडिंग</strong> — AI आपकी रुब्रिक के आधार पर छात्रों की सबमिशन को ग्रेड करे। पोस्ट होने से पहले आप समीक्षा और अनुमोदन करें।",
+      "item3": "<strong>घोषणाएं और चर्चाएं</strong> — सीधे Canvas में लॉगिन किए बिना सामग्री बनाएं और प्रकाशित करें।",
+      "item4": "<strong>सीधे Canvas से सिंक</strong> — सब कुछ सीधे आपके Canvas कोर्स में प्रकाशित होता है। कॉपी-पेस्ट नहीं।",
+      "callout": "<strong>K-12 और विश्वविद्यालय Canvas</strong> खातों के साथ काम करता है — Instructure Canvas LMS उपयोग करने वाले किसी भी स्कूल में।"
+    },
+    "step2": {
+      "title": "अपना Canvas खाता जोड़ें",
+      "sub": "ReadySetClass को आपके कोर्स से सिंक करने के लिए Canvas URL और API एक्सेस टोकन चाहिए।",
+      "howTo": "Canvas API टोकन कैसे प्राप्त करें:",
+      "s1": "अपने स्कूल के Canvas URL पर Canvas खाते में लॉगिन करें",
+      "s2": "अपनी <strong>प्रोफ़ाइल फ़ोटो</strong> (ऊपर दाएं) पर क्लिक करें → <strong>सेटिंग</strong>",
+      "s3": "<strong>Approved Integrations</strong> तक स्क्रॉल करें → <strong>+ New Access Token</strong> पर क्लिक करें",
+      "s4": "\"ReadySetClass\" नाम दें → <strong>Generate Token</strong> पर क्लिक करें",
+      "s5": "टोकन कॉपी करें — <strong>यह केवल एक बार दिखेगा!</strong>",
+      "callout": "आपका <strong>Canvas URL</strong> ऐसा दिखता है: <code>https://yourschool.instructure.com</code>। Canvas में लॉगिन होने पर ब्राउज़र बार देखें।"
+    },
+    "step3": {
+      "title": "AI ग्रेडिंग — कैसे काम करती है",
+      "sub": "जब छात्र Canvas पर असाइनमेंट जमा करते हैं, AI मिनटों में रुब्रिक के आधार पर ग्रेड करती है।",
+      "item1": "<strong>PDF, Word (.docx), Excel और टेक्स्ट</strong> सबमिशन का समर्थन",
+      "item2": "आपकी <strong>Canvas रुब्रिक</strong> स्वचालित रूप से उपयोग — या मैन्युअल रूप से टाइप करें",
+      "item3": "कुछ भी पोस्ट होने से पहले आप <strong>हर ग्रेड की समीक्षा करें</strong> — AI मदद करती है, फैसला आपका",
+      "item4": "25 सबमिशन ≈ मैन्युअल ~10 घंटे → <strong>AI के साथ ~1 घंटा</strong> (90% तेज़)",
+      "callout": "साइडबार में: <strong>✨ AI Grader</strong> — असाइनमेंट चुनें, रुब्रिक की पुष्टि करें और ग्रेडिंग शुरू करें।"
+    },
+    "step4": {
+      "title": "आप तैयार हैं!",
+      "sub": "आपकी त्वरित शुरुआत चेकलिस्ट:",
+      "item1": "Canvas जोड़ें (नीचे स्क्रॉल करें → Canvas Connection)",
+      "item2": "<strong>My Courses</strong> से कोर्स चुनें",
+      "item3": "कुछ बनाएं — पहले <strong>📝 Create Quiz</strong> आज़माएं, सबसे जल्दी परिणाम मिलेगा",
+      "item4": "जब छात्र काम जमा करें → <strong>✨ AI Grader</strong> आज़माएं",
+      "callout": "प्रश्न हैं? इस वॉकथ्रू को दोबारा देखने के लिए कभी भी <strong>?</strong> बटन क्लिक करें।"
+    }
+  },
   "footer": {
     "copyright": "© 2026 ReadySetClass. सर्वाधिकार सुरक्षित।",
     "trademark": "ReadySetClass™ एक पंजीकृत ट्रेडमार्क है।",

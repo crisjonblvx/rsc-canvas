@@ -250,6 +250,50 @@
     "finish": "完成",
     "preview": "预览"
   },
+  "onboarding": {
+    "close": "×",
+    "back": "← 返回",
+    "next": "下一步 →",
+    "finish": "开始吧！🎉",
+    "step1": {
+      "title": "欢迎使用 ReadySetClass！",
+      "sub": "您已配置好这款专为教育者打造的 AI 教学工具。以下是您可以做的事情：",
+      "item1": "<strong>创建课程</strong> — 在几分钟内生成测验、作业、模块和教学大纲。",
+      "item2": "<strong>AI 评分</strong> — 让 AI 根据您的评分标准为学生提交的作业评分。在发布之前由您审核和批准。",
+      "item3": "<strong>公告和讨论</strong> — 无需直接登录 Canvas 即可起草和发布内容。",
+      "item4": "<strong>直接同步 Canvas</strong> — 所有内容直接发布到您的 Canvas 课程，无需复制粘贴。",
+      "callout": "适用于 <strong>K-12 和大学 Canvas</strong> 账户 — 任何使用 Instructure Canvas LMS 的学校。"
+    },
+    "step2": {
+      "title": "连接您的 Canvas 账户",
+      "sub": "ReadySetClass 需要您的 Canvas 网址和 API 访问令牌才能与您的课程同步。",
+      "howTo": "如何获取您的 Canvas API 令牌：",
+      "s1": "通过学校的 Canvas 网址登录您的 Canvas 账户",
+      "s2": "点击您的<strong>个人头像</strong>（右上角）→ <strong>设置</strong>",
+      "s3": "滚动到<strong>已批准的集成</strong> → 点击<strong>+ 新建访问令牌</strong>",
+      "s4": "命名为"ReadySetClass" → 点击<strong>生成令牌</strong>",
+      "s5": "复制令牌 — <strong>您只能看到一次！</strong>",
+      "callout": "您的 <strong>Canvas 网址</strong>格式如下：<code>https://yourschool.instructure.com</code>。登录 Canvas 后查看浏览器地址栏。"
+    },
+    "step3": {
+      "title": "AI 评分 — 工作原理",
+      "sub": "学生在 Canvas 提交作业后，AI 将在几分钟内根据您的评分标准完成评分。",
+      "item1": "支持 <strong>PDF、Word (.docx)、Excel 和文本</strong>格式提交",
+      "item2": "自动使用您的 <strong>Canvas 评分标准</strong> — 或手动输入",
+      "item3": "发布前您<strong>审核每个分数</strong> — AI 辅助，您决定",
+      "item4": "25 份提交 ≈ 手动约 10 小时 → <strong>AI 约 1 小时</strong>（效率提升 90%）",
+      "callout": "在侧边栏找到：<strong>✨ AI 评分器</strong> — 选择作业，确认评分标准，开始评分。"
+    },
+    "step4": {
+      "title": "您已准备好了！",
+      "sub": "快速入门清单：",
+      "item1": "连接 Canvas（向下滚动 → Canvas 连接）",
+      "item2": "从<strong>我的课程</strong>中选择一门课程",
+      "item3": "创建内容 — 先试试<strong>📝 创建测验</strong>，看到效果最快",
+      "item4": "当学生提交作业时 → 试用<strong>✨ AI 评分器</strong>",
+      "callout": "有问题？随时点击 <strong>?</strong> 按钮重播此教程。"
+    }
+  },
   "footer": {
     "copyright": "© 2026 ReadySetClass。保留所有权利。",
     "trademark": "ReadySetClass™ 是注册商标。",

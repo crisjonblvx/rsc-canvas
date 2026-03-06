@@ -250,6 +250,50 @@
     "finish": "完了",
     "preview": "プレビュー"
   },
+  "onboarding": {
+    "close": "×",
+    "back": "← 戻る",
+    "next": "次へ →",
+    "finish": "はじめましょう！🎉",
+    "step1": {
+      "title": "ReadySetClassへようこそ！",
+      "sub": "教育者向けAIツールのセットアップが完了しました。できることをご紹介します：",
+      "item1": "<strong>コース作成</strong> — クイズ、課題、モジュール、シラバスを数分で生成。",
+      "item2": "<strong>AI採点</strong> — AIがルーブリックに基づいて学生の提出物を採点。投稿前にあなたが確認・承認します。",
+      "item3": "<strong>お知らせとディスカッション</strong> — Canvasに直接ログインせずにコンテンツを作成・公開。",
+      "item4": "<strong>Canvas直接同期</strong> — すべてCanvasコースに直接公開。コピー&ペースト不要。",
+      "callout": "<strong>K-12・大学のCanvas</strong>アカウントに対応 — Instructure Canvas LMSを使用するすべての学校。"
+    },
+    "step2": {
+      "title": "Canvasアカウントを接続",
+      "sub": "ReadySetClassはコースと同期するためにCanvas URLとAPIアクセストークンが必要です。",
+      "howTo": "Canvas APIトークンの取得方法：",
+      "s1": "学校のCanvas URLからCanvasアカウントにログイン",
+      "s2": "<strong>プロフィール写真</strong>（右上）をクリック → <strong>設定</strong>",
+      "s3": "<strong>承認済みインテグレーション</strong>までスクロール → <strong>+ 新しいアクセストークン</strong>をクリック",
+      "s4": "「ReadySetClass」などの名前を入力 → <strong>トークンを生成</strong>をクリック",
+      "s5": "トークンをコピー — <strong>表示されるのは一度だけです！</strong>",
+      "callout": "<strong>Canvas URL</strong>の形式：<code>https://yourschool.instructure.com</code>。Canvasにログインした状態でブラウザのアドレスバーを確認してください。"
+    },
+    "step3": {
+      "title": "AI採点 — 仕組み",
+      "sub": "学生がCanvasに課題を提出すると、AIが数分でルーブリックに基づいて採点します。",
+      "item1": "<strong>PDF、Word (.docx)、Excel、テキスト</strong>形式の提出に対応",
+      "item2": "<strong>Canvasのルーブリック</strong>を自動使用 — または手動で入力",
+      "item3": "投稿前にすべての成績を<strong>あなたが確認</strong> — AIが補助、あなたが決定",
+      "item4": "25件の提出 ≈ 手動約10時間 → <strong>AIで約1時間</strong>（90%高速化）",
+      "callout": "サイドバーから：<strong>✨ AI採点者</strong> — 課題を選択し、ルーブリックを確認して採点開始。"
+    },
+    "step4": {
+      "title": "準備完了です！",
+      "sub": "クイックスタートチェックリスト：",
+      "item1": "Canvasを接続（下にスクロール → Canvas接続）",
+      "item2": "<strong>マイコース</strong>からコースを選択",
+      "item3": "何か作成 — まず<strong>📝 クイズ作成</strong>をお試しください",
+      "item4": "学生が課題を提出したら → <strong>✨ AI採点者</strong>を試してみる",
+      "callout": "ご質問は？<strong>?</strong>ボタンをクリックすればいつでもこのウォークスルーを再表示できます。"
+    }
+  },
   "footer": {
     "copyright": "© 2026 ReadySetClass. All rights reserved.",
     "trademark": "ReadySetClass™ は登録商標です。",

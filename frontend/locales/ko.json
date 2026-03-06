@@ -250,6 +250,50 @@
     "finish": "완료",
     "preview": "미리보기"
   },
+  "onboarding": {
+    "close": "×",
+    "back": "← 뒤로",
+    "next": "다음 →",
+    "finish": "시작하기! 🎉",
+    "step1": {
+      "title": "ReadySetClass에 오신 것을 환영합니다!",
+      "sub": "교육자를 위한 AI 도구 설정이 완료되었습니다. 할 수 있는 것들을 소개합니다:",
+      "item1": "<strong>강의 만들기</strong> — 퀴즈, 과제, 모듈, 강의계획서를 몇 분 만에 생성.",
+      "item2": "<strong>AI 채점</strong> — AI가 루브릭에 따라 학생 제출물을 채점합니다. 게시 전에 검토하고 승인합니다.",
+      "item3": "<strong>공지 및 토론</strong> — Canvas에 직접 로그인하지 않고 콘텐츠를 작성하고 게시.",
+      "item4": "<strong>Canvas 직접 동기화</strong> — 모든 내용이 Canvas 강의에 직접 게시됩니다. 복사-붙여넣기 불필요.",
+      "callout": "<strong>K-12 및 대학 Canvas</strong> 계정과 호환 — Instructure Canvas LMS를 사용하는 모든 학교."
+    },
+    "step2": {
+      "title": "Canvas 계정 연결",
+      "sub": "ReadySetClass가 강의와 동기화하려면 Canvas URL과 API 액세스 토큰이 필요합니다.",
+      "howTo": "Canvas API 토큰 받는 방법:",
+      "s1": "학교의 Canvas URL로 Canvas 계정에 로그인",
+      "s2": "<strong>프로필 사진</strong>(오른쪽 상단) 클릭 → <strong>설정</strong>",
+      "s3": "<strong>승인된 통합</strong>까지 스크롤 → <strong>+ 새 액세스 토큰</strong> 클릭",
+      "s4": "\"ReadySetClass\" 같은 이름 입력 → <strong>토큰 생성</strong> 클릭",
+      "s5": "토큰 복사 — <strong>한 번만 볼 수 있습니다!</strong>",
+      "callout": "<strong>Canvas URL</strong> 형식: <code>https://yourschool.instructure.com</code>. Canvas에 로그인 시 브라우저 주소창을 확인하세요."
+    },
+    "step3": {
+      "title": "AI 채점 — 작동 방식",
+      "sub": "학생이 Canvas에 과제를 제출하면 AI가 몇 분 안에 루브릭에 따라 채점합니다.",
+      "item1": "<strong>PDF, Word (.docx), Excel, 텍스트</strong> 제출 지원",
+      "item2": "<strong>Canvas 루브릭</strong> 자동 사용 — 또는 수동으로 입력",
+      "item3": "게시 전 모든 성적을 <strong>직접 검토</strong> — AI가 보조, 결정은 당신이",
+      "item4": "25개 제출 ≈ 수동 약 10시간 → <strong>AI로 약 1시간</strong> (90% 빠름)",
+      "callout": "사이드바에서: <strong>✨ AI 채점기</strong> — 과제 선택, 루브릭 확인 후 채점 시작."
+    },
+    "step4": {
+      "title": "시작할 준비가 됐습니다!",
+      "sub": "빠른 시작 체크리스트:",
+      "item1": "Canvas 연결 (아래로 스크롤 → Canvas 연결)",
+      "item2": "<strong>내 강의</strong>에서 강의 선택",
+      "item3": "무언가 만들기 — 먼저 <strong>📝 퀴즈 만들기</strong>를 시도해 보세요",
+      "item4": "학생이 과제를 제출하면 → <strong>✨ AI 채점기</strong> 사용",
+      "callout": "질문이 있으신가요? 언제든지 <strong>?</strong> 버튼을 클릭하면 이 안내를 다시 볼 수 있습니다."
+    }
+  },
   "footer": {
     "copyright": "© 2026 ReadySetClass. 모든 권리 보유.",
     "trademark": "ReadySetClass™는 등록 상표입니다.",

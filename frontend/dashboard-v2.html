@@ -5015,12 +5015,15 @@ Participation: 10%" style="min-height: 80px;"></textarea>
          ONBOARDING MODAL
     ============================================================ -->
     <div id="onboarding-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; padding:1rem;">
-        <div style="background:white; border-radius:16px; max-width:540px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.3); font-family:'DM Sans',sans-serif;">
+        <div style="background:white; border-radius:16px; max-width:540px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.3); font-family:'DM Sans',sans-serif; position:relative;">
 
             <!-- Progress bar -->
             <div style="height:4px; background:#f0f0f0; border-radius:16px 16px 0 0; overflow:hidden;">
                 <div id="ob-progress" style="height:100%; background:linear-gradient(90deg,#1E3A5F,#C9A961); transition:width 0.4s ease; width:25%"></div>
             </div>
+
+            <!-- Close button -->
+            <button id="ob-close" onclick="closeOnboarding()" style="position:absolute; top:0.75rem; right:1rem; background:none; border:none; font-size:1.4rem; color:#aaa; cursor:pointer; line-height:1; padding:0.25rem 0.5rem; border-radius:4px;" title="Close">&times;</button>
 
             <!-- Step content -->
             <div id="ob-content" style="padding:2rem 2rem 1.5rem"></div>
@@ -5058,72 +5061,79 @@ Participation: 10%" style="min-height: 80px;"></textarea>
     </style>
 
     <script>
-        const OB_STEPS = [
-            {
-                icon: '👋',
-                title: 'Welcome to ReadySetClass!',
-                html: `
-                    <p class="ob-step-sub">You're set up with the AI-powered tool built for educators. Here's what you can do:</p>
-                    <ul class="ob-feature-list">
-                        <li><span>🎓</span><span><strong>Build courses</strong> — generate quizzes, assignments, modules, and syllabi in minutes, not hours.</span></li>
-                        <li><span>✨</span><span><strong>AI Grading</strong> — let AI grade student submissions against your rubric. You review and approve before anything posts.</span></li>
-                        <li><span>📢</span><span><strong>Announcements & Discussions</strong> — draft and publish Canvas content without logging into Canvas directly.</span></li>
-                        <li><span>🔗</span><span><strong>Direct Canvas sync</strong> — everything publishes straight to your Canvas course. No copy-paste.</span></li>
-                    </ul>
-                    <div class="ob-callout">Works with <strong>K-12 and university Canvas</strong> accounts — any school using Instructure Canvas LMS.</div>
-                `
-            },
-            {
-                icon: '🔗',
-                title: 'Connect Your Canvas Account',
-                html: `
-                    <p class="ob-step-sub">ReadySetClass needs your Canvas URL and an API access token to sync with your courses.</p>
-                    <strong style="font-size:0.9rem; color:#1E3A5F;">How to get your Canvas API token:</strong>
-                    <ol class="ob-token-steps">
-                        <li>Log into your Canvas account at your school's Canvas URL</li>
-                        <li>Click your <strong>profile picture</strong> (top right) → <strong>Settings</strong></li>
-                        <li>Scroll down to <strong>Approved Integrations</strong> → click <strong>+ New Access Token</strong></li>
-                        <li>Give it a name like "ReadySetClass" → click <strong>Generate Token</strong></li>
-                        <li>Copy the token — <strong>you only see it once!</strong></li>
-                    </ol>
-                    <div class="ob-callout"><strong>Your Canvas URL</strong> looks like: <code style="background:#e8e8e8;padding:2px 6px;border-radius:4px;">https://yourschool.instructure.com</code><br>Check your browser bar when you're logged into Canvas.</div>
-                `
-            },
-            {
-                icon: '✨',
-                title: 'AI Grading — How It Works',
-                html: `
-                    <p class="ob-step-sub">When students submit assignments on Canvas, AI grades them against your rubric in minutes.</p>
-                    <ul class="ob-feature-list">
-                        <li><span>📄</span><span>Supports <strong>PDF, Word (.docx), Excel, and text</strong> submissions</span></li>
-                        <li><span>📊</span><span>Uses your <strong>Canvas rubric</strong> automatically — or you type one in manually</span></li>
-                        <li><span>👁️</span><span>You <strong>review every grade</strong> before anything posts to Canvas — AI assists, you decide</span></li>
-                        <li><span>⏱️</span><span>25 submissions = ~10 hours manual → <strong>~1 hour with AI</strong> (90% faster)</span></li>
-                    </ul>
-                    <div class="ob-callout">Find it in the sidebar: <strong>✨ AI Grader</strong> — select an assignment, confirm the rubric, and start grading.</div>
-                `
-            },
-            {
-                icon: '🚀',
-                title: "You're Ready to Go!",
-                html: `
-                    <p class="ob-step-sub">Here's your quick-start checklist:</p>
-                    <ul class="ob-feature-list">
-                        <li><span>✅</span><span>Connect Canvas (scroll down on this page → Canvas Connection)</span></li>
-                        <li><span>✅</span><span>Select a course from <strong>My Courses</strong></span></li>
-                        <li><span>✅</span><span>Create something — try <strong>📝 Create Quiz</strong> first, it's the fastest to see results</span></li>
-                        <li><span>✅</span><span>When students submit work → try <strong>✨ AI Grader</strong></span></li>
-                    </ul>
-                    <div class="ob-callout">Have questions? Visit <a href="/faq.html" style="color:#1E3A5F;font-weight:600;">readysetclass.app/faq.html</a> or click the <strong>?</strong> button anytime to replay this walkthrough.</div>
-                `
-            }
-        ];
-
         let obCurrent = 0;
 
+        function _obt(key) {
+            return (window.i18n ? window.i18n.t(key) : null) || key;
+        }
+
+        function getObSteps() {
+            return [
+                {
+                    icon: '👋',
+                    title: _obt('onboarding.step1.title'),
+                    html: `
+                        <p class="ob-step-sub">${_obt('onboarding.step1.sub')}</p>
+                        <ul class="ob-feature-list">
+                            <li><span>🎓</span><span>${_obt('onboarding.step1.item1')}</span></li>
+                            <li><span>✨</span><span>${_obt('onboarding.step1.item2')}</span></li>
+                            <li><span>📢</span><span>${_obt('onboarding.step1.item3')}</span></li>
+                            <li><span>🔗</span><span>${_obt('onboarding.step1.item4')}</span></li>
+                        </ul>
+                        <div class="ob-callout">${_obt('onboarding.step1.callout')}</div>
+                    `
+                },
+                {
+                    icon: '🔗',
+                    title: _obt('onboarding.step2.title'),
+                    html: `
+                        <p class="ob-step-sub">${_obt('onboarding.step2.sub')}</p>
+                        <strong style="font-size:0.9rem; color:#1E3A5F;">${_obt('onboarding.step2.howTo')}</strong>
+                        <ol class="ob-token-steps">
+                            <li>${_obt('onboarding.step2.s1')}</li>
+                            <li>${_obt('onboarding.step2.s2')}</li>
+                            <li>${_obt('onboarding.step2.s3')}</li>
+                            <li>${_obt('onboarding.step2.s4')}</li>
+                            <li>${_obt('onboarding.step2.s5')}</li>
+                        </ol>
+                        <div class="ob-callout">${_obt('onboarding.step2.callout')}</div>
+                    `
+                },
+                {
+                    icon: '✨',
+                    title: _obt('onboarding.step3.title'),
+                    html: `
+                        <p class="ob-step-sub">${_obt('onboarding.step3.sub')}</p>
+                        <ul class="ob-feature-list">
+                            <li><span>📄</span><span>${_obt('onboarding.step3.item1')}</span></li>
+                            <li><span>📊</span><span>${_obt('onboarding.step3.item2')}</span></li>
+                            <li><span>👁️</span><span>${_obt('onboarding.step3.item3')}</span></li>
+                            <li><span>⏱️</span><span>${_obt('onboarding.step3.item4')}</span></li>
+                        </ul>
+                        <div class="ob-callout">${_obt('onboarding.step3.callout')}</div>
+                    `
+                },
+                {
+                    icon: '🚀',
+                    title: _obt('onboarding.step4.title'),
+                    html: `
+                        <p class="ob-step-sub">${_obt('onboarding.step4.sub')}</p>
+                        <ul class="ob-feature-list">
+                            <li><span>✅</span><span>${_obt('onboarding.step4.item1')}</span></li>
+                            <li><span>✅</span><span>${_obt('onboarding.step4.item2')}</span></li>
+                            <li><span>✅</span><span>${_obt('onboarding.step4.item3')}</span></li>
+                            <li><span>✅</span><span>${_obt('onboarding.step4.item4')}</span></li>
+                        </ul>
+                        <div class="ob-callout">${_obt('onboarding.step4.callout')}</div>
+                    `
+                }
+            ];
+        }
+
         function renderObStep() {
-            const step = OB_STEPS[obCurrent];
-            const total = OB_STEPS.length;
+            const steps = getObSteps();
+            const step = steps[obCurrent];
+            const total = steps.length;
             document.getElementById('ob-progress').style.width = `${((obCurrent + 1) / total) * 100}%`;
             document.getElementById('ob-content').innerHTML = `
                 <div class="ob-step-icon">${step.icon}</div>
@@ -5131,13 +5141,20 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                 ${step.html}
             `;
             // Dots
-            document.getElementById('ob-dots').innerHTML = OB_STEPS.map((_, i) =>
+            document.getElementById('ob-dots').innerHTML = steps.map((_, i) =>
                 `<div class="ob-dot${i === obCurrent ? ' active' : ''}" onclick="obGoTo(${i})"></div>`
             ).join('');
             // Back button
-            document.getElementById('ob-back').style.visibility = obCurrent === 0 ? 'hidden' : 'visible';
-            // Next button label
-            document.getElementById('ob-next').textContent = obCurrent === total - 1 ? "Let's Go! 🎉" : 'Next →';
+            const backBtn = document.getElementById('ob-back');
+            backBtn.style.visibility = obCurrent === 0 ? 'hidden' : 'visible';
+            backBtn.textContent = _obt('onboarding.back');
+            // Next/finish button
+            document.getElementById('ob-next').textContent = obCurrent === total - 1
+                ? _obt('onboarding.finish')
+                : _obt('onboarding.next');
+            // Close button label
+            const closeBtn = document.getElementById('ob-close');
+            if (closeBtn) closeBtn.title = _obt('onboarding.close');
         }
 
         function obStep(dir) {

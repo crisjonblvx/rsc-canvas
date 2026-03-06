@@ -371,6 +371,26 @@
                     This will permanently delete all expired demo accounts and their data.
                 </p>
             </div>
+
+            <!-- Bonita Admin Tools (G1) -->
+            <div class="table-container" style="margin-top: 1.5rem;">
+                <h2 style="margin-bottom: 1rem;">🔧 Admin Tools — Bonita Onboarding</h2>
+                <div id="bonitaAdminStatus" style="background: #f8f9fb; border: 1px solid #e4e7ec; border-radius: 10px; padding: 16px 20px; margin-bottom: 1rem;">
+                    <div style="font-size: 0.85rem; color: #6b7280;">Loading Bonita profile status…</div>
+                </div>
+                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="adminResetOnboarding()" id="btnResetOnboarding">
+                        ↺ Reset onboarding — test mode
+                    </button>
+                    <button class="btn btn-secondary" onclick="adminPreviewOnboarding()" id="btnPreviewOnboarding">
+                        👁 Preview onboarding — no changes saved
+                    </button>
+                </div>
+                <p style="color: var(--text-light); margin-top: 0.75rem; font-size: 0.8rem;">
+                    Reset clears interview state but preserves profile fields and uploaded reference materials.
+                    Preview opens the full onboarding flow in read-only mode.
+                </p>
+            </div>
         </div>
     </div>
 
@@ -806,12 +826,76 @@
             }
         }
 
+        // ── Bonita Admin Tools (G1) ──────────────────────────────────────────
+        async function loadBonitaAdminStatus() {
+            try {
+                const resp = await fetch(`${API_URL}/api/admin/onboarding-status`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (!resp.ok) return;
+                const d = await resp.json();
+                const phase = d.onboarding_phase || 'not_started';
+                const completedAt = d.interview_completed_at
+                    ? new Date(d.interview_completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    : null;
+                const phaseLabel = {
+                    'not_started': 'Not started',
+                    'demo_shown': 'Demo shown',
+                    'interview_started': 'Interview in progress',
+                    'interview_complete': 'Interview complete',
+                }[phase] || phase;
+                const statusColor = phase === 'interview_complete' ? '#16a34a' : '#d97706';
+                document.getElementById('bonitaAdminStatus').innerHTML = `
+                    <div style="font-weight:700; font-size:0.95rem; margin-bottom:6px;">Bonita Profile</div>
+                    <div style="font-size:0.875rem; color:${statusColor}; font-weight:600; margin-bottom:4px;">Status: ${phaseLabel}</div>
+                    ${completedAt ? `<div style="font-size:0.8rem; color:#6b7280;">Completed: ${completedAt}</div>` : ''}
+                    ${d.primary_discipline ? `<div style="font-size:0.8rem; color:#6b7280;">Discipline: ${d.primary_discipline}</div>` : ''}
+                    ${d.generations_count ? `<div style="font-size:0.8rem; color:#6b7280;">Generations: ${d.generations_count}</div>` : ''}
+                `;
+            } catch (e) {
+                document.getElementById('bonitaAdminStatus').innerHTML = '<div style="font-size:0.85rem; color:#9ca3af;">Could not load Bonita status.</div>';
+            }
+        }
+
+        async function adminResetOnboarding() {
+            if (!confirm('Reset your Bonita onboarding to "not_started"?\n\nThis clears your interview state but keeps your profile fields and uploaded materials.')) return;
+            try {
+                const resp = await fetch(`${API_URL}/api/admin/onboarding-reset`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: 'reset' })
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || 'Reset failed');
+                showAlert('success', 'Onboarding reset. Redirecting to interview…');
+                setTimeout(() => window.location.href = data.redirect || '/bonita-interview.html', 1500);
+            } catch (e) {
+                showAlert('error', 'Reset failed: ' + e.message);
+            }
+        }
+
+        async function adminPreviewOnboarding() {
+            try {
+                const resp = await fetch(`${API_URL}/api/admin/onboarding-reset`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: 'preview' })
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || 'Failed');
+                window.location.href = data.redirect || '/bonita-interview.html?preview=true';
+            } catch (e) {
+                showAlert('error', 'Preview failed: ' + e.message);
+            }
+        }
+
         // Initialize
         async function init() {
             const hasAccess = await checkAdminAccess();
             if (hasAccess) {
                 loadStats();
                 loadUsers();
+                loadBonitaAdminStatus();
             }
         }
 

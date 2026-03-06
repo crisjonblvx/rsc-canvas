@@ -6378,6 +6378,90 @@ Not hype. Just help."""
         conn.close()
 
 
+# --- Admin: Onboarding Reset (G1 — Content Integrity) ---
+
+class AdminOnboardingResetRequest(BaseModel):
+    mode: str = "reset"  # "reset" | "preview"
+    target_user_id: Optional[int] = None  # defaults to requesting admin's own ID
+
+
+@app.patch("/api/admin/onboarding-reset")
+async def admin_onboarding_reset(
+    request: AdminOnboardingResetRequest,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Admin-only: reset or preview the Bonita onboarding flow for QA/demo purposes.
+    Reset mode: clears interview state, preserves profile fields + materials.
+    Preview mode: returns redirect URL only — no DB changes."""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    target_id = request.target_user_id or current_user['user_id']
+
+    if request.mode == "preview":
+        return {
+            "status": "ok",
+            "mode": "preview",
+            "redirect": "/bonita-interview.html?preview=true",
+        }
+
+    if request.mode != "reset":
+        raise HTTPException(status_code=400, detail="mode must be 'reset' or 'preview'")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE faculty_profiles
+            SET onboarding_phase = 'not_started',
+                interview_step = 0,
+                interview_completed = FALSE,
+                interview_completed_at = NULL,
+                last_updated = NOW()
+            WHERE user_id = %s
+        """, (target_id,))
+        affected = cursor.rowcount
+        conn.commit()
+
+        # Log the admin action
+        print(f"🔧 Admin {current_user['user_id']} reset onboarding for user {target_id}")
+
+        return {
+            "status": "ok",
+            "mode": "reset",
+            "target_user_id": target_id,
+            "rows_affected": affected,
+            "redirect": "/bonita-interview.html",
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/admin/onboarding-status")
+async def admin_get_onboarding_status(current_user=Depends(get_current_user_from_token)):
+    """Get Bonita profile status for the requesting admin user."""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT onboarding_phase, interview_completed, interview_completed_at,
+                   primary_discipline, generations_count
+            FROM faculty_profiles WHERE user_id = %s
+        """, (current_user['user_id'],))
+        row = cursor.fetchone()
+        if not row:
+            return {"onboarding_phase": "not_started", "interview_completed": False}
+        cols = ['onboarding_phase', 'interview_completed', 'interview_completed_at',
+                'primary_discipline', 'generations_count']
+        return dict(zip(cols, row))
+    finally:
+        cursor.close()
+        conn.close()
+
+
 # --- Admin: Model Usage Dashboard ---
 
 @app.get("/api/admin/model-usage")

@@ -393,7 +393,22 @@
             background: #f0f4ff;
             border-radius: 12px;
             border-left: 4px solid var(--navy);
+            white-space: pre-wrap;
         }
+
+        /* ── Preview mode banner ── */
+        .preview-banner {
+            background: #fffbeb;
+            border-bottom: 2px solid #fde68a;
+            padding: 10px 32px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #92400e;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+        .preview-banner.active { display: flex; }
         .edit-hint {
             font-size: 13px;
             color: #666;
@@ -474,6 +489,11 @@
 <div class="topbar">
     <div class="topbar-logo">Ready<span>Set</span>Class™</div>
     <button class="topbar-skip" onclick="skipOnboarding()">Skip for now</button>
+</div>
+
+<div class="preview-banner" id="previewBanner">
+    <span>👁</span>
+    <span>Preview Mode — no changes will be saved to your profile</span>
 </div>
 
 <div class="container">
@@ -610,6 +630,12 @@
     const API_URL = 'https://facultyflow-production.up.railway.app';
     const authToken = localStorage.getItem('auth_token');
 
+    // Preview mode — ?preview=true shows banner and intercepts all writes
+    const IS_PREVIEW = new URLSearchParams(window.location.search).get('preview') === 'true';
+    if (IS_PREVIEW) {
+        document.getElementById('previewBanner').classList.add('active');
+    }
+
     // State
     let currentStep = 'identity';
     let turnNumber = 0;
@@ -658,13 +684,13 @@
 
             const phase = profile.onboarding_phase || 'not_started';
 
-            if (phase === 'interview_complete') {
-                // Already done — redirect to dashboard
+            if (!IS_PREVIEW && phase === 'interview_complete') {
+                // Already done — redirect to dashboard (skip in preview mode)
                 window.location.href = '/dashboard-v2.html';
                 return;
             }
-            if (phase === 'interview_started' && profile.interview_step > 0) {
-                // Resume interview
+            if (!IS_PREVIEW && phase === 'interview_started' && profile.interview_step > 0) {
+                // Resume interview (skip in preview mode — always show welcome)
                 await resumeInterview(profile);
                 return;
             }
@@ -698,21 +724,30 @@
         btn.innerHTML = '<span class="spinner"></span> Bonita is thinking…';
 
         try {
-            const res = await fetch(`${API_URL}/api/faculty/demo/generate`, {
-                method: 'POST',
-                headers: authHeaders(),
-                body: JSON.stringify({
-                    discipline,
-                    content_type: 'assignment',
-                    context: level,
-                }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'Generation failed');
+            let sampleOutput, note;
+            if (IS_PREVIEW) {
+                await new Promise(r => setTimeout(r, 900));
+                sampleOutput = `**Assignment: Analyzing ${discipline} in Contemporary Context**\n\nIn this assignment you will examine a real-world case through the lens of ${discipline}. Choose a current event or phenomenon from the past 12 months and apply at least three core concepts from our course to analyze it.\n\n**Requirements:**\n- 800-1000 words\n- Minimum 3 scholarly sources\n- Submit via Canvas by Friday 11:59 PM\n\nYour analysis should demonstrate not just familiarity with the concepts, but the ability to use them as genuine analytical tools. Strong work will complicate the easy interpretation.`;
+                note = `This is a preview sample. Real generations use your discipline, student profile, and voice.`;
+            } else {
+                const res = await fetch(`${API_URL}/api/faculty/demo/generate`, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify({
+                        discipline,
+                        content_type: 'assignment',
+                        context: level,
+                    }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Generation failed');
+                sampleOutput = data.sample_output;
+                note = data.note;
+            }
 
             document.getElementById('demo-label').textContent = `${discipline} — ${level}`;
-            document.getElementById('demo-content').textContent = data.sample_output;
-            document.getElementById('demo-note').textContent = data.note;
+            document.getElementById('demo-content').textContent = sampleOutput;
+            document.getElementById('demo-note').textContent = note;
             document.getElementById('demo-output').style.display = 'block';
             document.getElementById('demo-output').scrollIntoView({ behavior: 'smooth', block: 'start' });
         } catch (err) {
@@ -883,17 +918,41 @@
         turnNumber++;
 
         try {
-            const res = await fetch(`${API_URL}/api/faculty/interview/message`, {
-                method: 'POST',
-                headers: authHeaders(),
-                body: JSON.stringify({
-                    faculty_message: msg,
+            let data;
+            if (IS_PREVIEW) {
+                // Preview mode — return a realistic fake response without writing to DB
+                await new Promise(r => setTimeout(r, 800)); // simulate latency
+                const previewResponses = {
+                    identity: "Thanks for sharing that. How long have you been teaching at this level?",
+                    discipline: "That's a rich area. What specific questions or tensions in your field do you find yourself returning to most often?",
+                    students: "Helpful context. What's the thing your students most consistently struggle with in this course?",
+                    pedagogy: "Got it. What does an exceptional piece of student work actually look like for you?",
+                    voice: "Understood. If you have a syllabus or assignment instructions handy, feel free to paste a paragraph — I'll pick up your voice from there.",
+                    reference: "Perfect. I have everything I need. Let me put together what I've learned about you.",
+                };
+                const layerIdx = LAYER_ORDER.indexOf(currentStep);
+                const nextStep = LAYER_ORDER[layerIdx + 1] || currentStep;
+                const isLast = currentStep === 'reference';
+                data = {
+                    bonita_message: previewResponses[currentStep] || "Tell me more.",
+                    extracted_fields: {},
+                    next_step: isLast ? currentStep : nextStep,
+                    interview_complete: isLast && turnNumber > 1,
                     turn_number: turnNumber,
-                    current_step: currentStep,
-                }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'Something went wrong');
+                };
+            } else {
+                const res = await fetch(`${API_URL}/api/faculty/interview/message`, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify({
+                        faculty_message: msg,
+                        turn_number: turnNumber,
+                        current_step: currentStep,
+                    }),
+                });
+                data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Something went wrong');
+            }
 
             removeTypingIndicator();
             appendBonitoMessage(data.bonita_message);
@@ -941,6 +1000,13 @@
 
     async function triggerInterviewComplete() {
         appendBonitoMessage("Give me just a moment while I put together what I've learned about you…");
+
+        if (IS_PREVIEW) {
+            await new Promise(r => setTimeout(r, 1200));
+            const previewPlayback = `You've been teaching ${profileData.primary_discipline || 'your discipline'} for ${profileData.years_teaching || 'several'} years, and your students ${profileData.typical_student_profile ? 'are ' + profileData.typical_student_profile : 'bring a range of experiences'}. The core thing you want them to be able to do: ${profileData.learning_outcome_focus || 'think critically and apply what they learn'}.\n\nYour style is ${profileData.teaching_style || 'engaged and student-centered'}, and when you're grading you're looking for ${profileData.what_an_a_looks_like || 'work that demonstrates genuine understanding'}.\n\nDoes that sound right? I'd rather know now than build you the wrong thing for an entire semester.`;
+            showPlayback(previewPlayback, profileData);
+            return;
+        }
 
         try {
             const res = await fetch(`${API_URL}/api/faculty/interview/complete`, {
@@ -1082,33 +1148,38 @@
             cancelEdit(key);
             return;
         }
-        try {
-            await fetch(`${API_URL}/api/faculty/profile`, {
-                method: 'POST',
-                headers: authHeaders(),
-                body: JSON.stringify(updates),
-            });
-            Object.assign(profileData, updates);
-            cancelEdit(key);
-            buildEditCards(); // refresh display
-        } catch (e) {
-            // silently fail — profile will sync on next load
-            cancelEdit(key);
+        if (!IS_PREVIEW) {
+            try {
+                await fetch(`${API_URL}/api/faculty/profile`, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify(updates),
+                });
+            } catch (e) { /* silently fail */ }
         }
+        Object.assign(profileData, updates);
+        cancelEdit(key);
+        buildEditCards(); // refresh display
     }
 
     async function confirmProfile() {
+        if (IS_PREVIEW) {
+            window.location.href = '/admin.html';
+            return;
+        }
         window.location.href = '/dashboard-v2.html';
     }
 
     async function skipOnboarding() {
-        try {
-            await fetch(`${API_URL}/api/faculty/interview/skip`, {
-                method: 'POST',
-                headers: authHeaders(),
-            });
-        } catch (e) { /* ignore */ }
-        window.location.href = '/dashboard-v2.html';
+        if (!IS_PREVIEW) {
+            try {
+                await fetch(`${API_URL}/api/faculty/interview/skip`, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                });
+            } catch (e) { /* ignore */ }
+        }
+        window.location.href = IS_PREVIEW ? '/admin.html' : '/dashboard-v2.html';
     }
 
     // ── Utilities ──────────────────────────────────────────────────

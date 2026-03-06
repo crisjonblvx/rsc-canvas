@@ -2183,7 +2183,8 @@ async def generate_quiz_questions(
         if reference_context:
             enriched_description += f"\n\nCourse reference materials (use specific topics and concepts from here):\n{reference_context}"
 
-        faculty_ctx = get_faculty_profile_context(user_id)
+        faculty_ctx = get_faculty_context(user_id)
+        increment_faculty_generations(user_id)
         quiz_data = bonita.generate_quiz(
             week=1,
             topic=request.topic,
@@ -2597,7 +2598,8 @@ async def create_announcement_v2(
         language_name = LANGUAGE_MAP.get(request.language, "English")
         tone_desc = ANNOUNCEMENT_TONE_MAP.get(request.tone, ANNOUNCEMENT_TONE_MAP[3])
 
-        faculty_ctx = get_faculty_profile_context(user_id)
+        faculty_ctx = get_faculty_context(user_id)
+        increment_faculty_generations(user_id)
 
         if request.custom_message and not request.enhance:
             # Quick Input: Post as-is, just wrap in HTML paragraphs
@@ -2727,7 +2729,8 @@ async def generate_ai_page(
         reference_context = get_user_reference_context(current_user['user_id'], db, course_name=request.course_name, max_chars=ref_max_chars)
         course_label = request.course_name or "this course"
 
-        faculty_ctx = get_faculty_profile_context(current_user['user_id'])
+        faculty_ctx = get_faculty_context(current_user['user_id'])
+        increment_faculty_generations(current_user['user_id'])
         system = f"""You are Bonita, an AI assistant helping college professors create course pages.
 Your output should be well-formatted HTML suitable for Canvas LMS.
 {faculty_ctx}"""
@@ -2968,7 +2971,8 @@ async def generate_ai_assignment(
         course_label = request.course_name or "this course"
         ref_section = f"\n\nCOURSE REFERENCE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
 
-        faculty_ctx = get_faculty_profile_context(current_user['user_id'])
+        faculty_ctx = get_faculty_context(current_user['user_id'])
+        increment_faculty_generations(current_user['user_id'])
         system = f"""You are Bonita, an AI assistant helping college professors create assignments.
 Write in HTML formatted for Canvas LMS.
 {faculty_ctx}"""
@@ -3518,7 +3522,8 @@ async def generate_ai_discussion(
         course_label = request.course_name or "this course"
         ref_section = f"\n\nCOURSE REFERENCE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
 
-        faculty_ctx = get_faculty_profile_context(user_id)
+        faculty_ctx = get_faculty_context(user_id)
+        increment_faculty_generations(user_id)
         system = f"You are Bonita, helping professors create engaging class discussions.\n{faculty_ctx}"
         prompt = f"""Create a discussion topic for a college course.
 
@@ -3576,7 +3581,8 @@ async def generate_ai_syllabus(
         course_label = selected_cn or request.course_name or "this course"
         ref_section = f"\n\nEXISTING COURSE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
 
-        faculty_ctx = get_faculty_profile_context(user_id)
+        faculty_ctx = get_faculty_context(user_id)
+        increment_faculty_generations(user_id)
         system = f"You are Bonita, helping professors create course syllabi.\n{faculty_ctx}"
         prompt = f"""Create a course syllabus for: {request.course_name}
 
@@ -5451,143 +5457,76 @@ async def get_bonita_signal_stats(
 
 # ── Bonita Faculty Interview System ────────────────────────────────────────────
 
-# The 6 interview layers and their Bonita prompts
-_INTERVIEW_LAYERS = {
-    1: {
-        "name": "Identity",
-        "bonita_opener": (
-            "Hi! I'm Bonita — I help ReadySetClass learn how you teach so every piece of "
-            "content feels like *you* wrote it. This quick conversation takes about 3 minutes. "
-            "Let's start simple: What do you like to be called, and what's your teaching role? "
-            "(e.g., Professor Smith, adjunct lecturer, K-12 teacher, TA...)"
-        ),
-        "extract_fields": ["preferred_name", "pronouns", "teaching_role", "institution", "department", "years_teaching"],
-    },
-    2: {
-        "name": "Discipline",
-        "bonita_opener": (
-            "Great! Now tell me about what you teach. What's your primary discipline or subject area? "
-            "And what level are your courses typically — introductory, upper-division, graduate, a mix?"
-        ),
-        "extract_fields": ["primary_discipline", "sub_disciplines", "typical_course_levels", "course_types"],
-    },
-    3: {
-        "name": "Students",
-        "bonita_opener": (
-            "Who are your students? Think about a typical class — how big is it, "
-            "and what's the vibe? First-generation college students, pre-med, grad students, "
-            "community college, STEM-focused, arts? What do they usually struggle with?"
-        ),
-        "extract_fields": ["typical_class_size", "student_population", "student_challenges"],
-    },
-    4: {
-        "name": "Pedagogy",
-        "bonita_opener": (
-            "How would you describe your teaching style? Are you more lecture-heavy, "
-            "project-based, Socratic? Do you lean toward detailed rubrics or more holistic grading? "
-            "How much scaffolding do you typically give students?"
-        ),
-        "extract_fields": ["teaching_philosophy", "assignment_style", "grading_approach", "scaffolding_pref"],
-    },
-    5: {
-        "name": "Voice",
-        "bonita_opener": (
-            "Last big one: how do you *sound* in your course communications? "
-            "Formal and precise? Warm and approachable? Do you use humor? "
-            "Any cultural or linguistic context I should know about?"
-        ),
-        "extract_fields": ["communication_tone", "use_humor", "cultural_notes"],
-    },
-    6: {
-        "name": "Reference",
-        "bonita_opener": (
-            "Almost done! Do you have an existing syllabus or course structure you'd like me to work from? "
-            "Any key texts, frameworks, or prior course materials I should know about?"
-        ),
-        "extract_fields": ["has_existing_syllabus", "syllabus_notes", "key_texts"],
-    },
-}
-
-_PLAYBACK_PROMPT = """You are Bonita, ReadySetClass's learning AI. Based on the faculty profile data below,
-write a warm, personal 3-5 sentence summary of what you learned about this professor and how you'll
-personalize their content. Speak directly to them in second person. Be specific about their discipline,
-student population, and voice. End with one sentence about what makes their teaching approach distinctive.
-
-Faculty Profile:
-{profile_json}
-"""
-
-_EXTRACT_PROMPT = """You are Bonita. Extract structured data from this faculty interview response.
-Layer: {layer_name}
-Fields to extract: {fields}
-User said: "{user_message}"
-
-Return a JSON object with the extracted fields. Use null for any field not mentioned.
-For lists, return arrays. For booleans, infer from context.
-teaching_role options: professor, adjunct, lecturer, k12_teacher, ta, other
-typical_class_size options: small, medium, large, massive
-assignment_style options: project_based, essay_heavy, quiz_heavy, mixed
-grading_approach options: specs, rubric, holistic, contract
-scaffolding_pref options: heavy, moderate, minimal
-communication_tone options: formal, professional, balanced, friendly, casual
-
-Return only valid JSON, no markdown."""
-
-_GENERATION_PROFILE_PROMPT = """The instructor using this tool has the following teaching profile:
-- Name/Role: {preferred_name}, {teaching_role} at {institution}
-- Discipline: {primary_discipline} ({typical_course_levels})
-- Students: Typically {typical_class_size} classes of {student_population}
-- Pedagogy: {assignment_style} style, {grading_approach} grading, {scaffolding_pref} scaffolding
-- Voice/Tone: {communication_tone}{humor_note}{cultural_note}
-- Teaching philosophy: {teaching_philosophy}
-
-Generate content that authentically reflects this instructor's voice and approach.
-"""
-
-
-def get_faculty_profile_context(user_id: int) -> str:
-    """Return a system-prompt snippet based on the faculty profile, or empty string if none exists."""
+def get_faculty_context(user_id: int) -> str:
+    """Builds the faculty context string injected into every generation system prompt.
+    Returns empty string if no profile exists or interview is not yet completed."""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT preferred_name, teaching_role, institution, primary_discipline,
-                   typical_course_levels, typical_class_size, student_population,
-                   assignment_style, grading_approach, scaffolding_pref,
-                   communication_tone, use_humor, cultural_notes, teaching_philosophy,
-                   interview_complete
-            FROM faculty_profiles WHERE user_id = %s
-        """, (user_id,))
+        cursor.execute("SELECT * FROM faculty_profiles WHERE user_id = %s", (user_id,))
         row = cursor.fetchone()
-        if not row or not row[14]:  # interview_complete = False
+        if not row:
             return ""
-        (preferred_name, teaching_role, institution, primary_discipline,
-         typical_course_levels, typical_class_size, student_population,
-         assignment_style, grading_approach, scaffolding_pref,
-         communication_tone, use_humor, cultural_notes, teaching_philosophy, _) = row
+        cols = [d[0] for d in cursor.description]
+        profile = dict(zip(cols, row))
+        if not profile.get('interview_completed'):
+            return ""
 
-        humor_note = ", uses humor" if use_humor else ""
-        cultural_note = f", cultural context: {cultural_notes}" if cultural_notes else ""
-        levels_str = ", ".join(typical_course_levels) if typical_course_levels else "mixed levels"
-        population_str = ", ".join(student_population) if student_population else "general"
+        parts = []
 
-        return _GENERATION_PROFILE_PROMPT.format(
-            preferred_name=preferred_name or "Instructor",
-            teaching_role=teaching_role or "educator",
-            institution=institution or "their institution",
-            primary_discipline=primary_discipline or "their subject",
-            typical_course_levels=levels_str,
-            typical_class_size=typical_class_size or "medium",
-            student_population=population_str,
-            assignment_style=assignment_style or "mixed",
-            grading_approach=grading_approach or "rubric",
-            scaffolding_pref=scaffolding_pref or "moderate",
-            communication_tone=communication_tone or "professional",
-            humor_note=humor_note,
-            cultural_note=cultural_note,
-            teaching_philosophy=teaching_philosophy or "student-centered learning",
+        if profile.get('primary_discipline'):
+            line = f"Faculty teaches {profile['primary_discipline']}"
+            if profile.get('discipline_focus'):
+                line += f", focusing on {profile['discipline_focus']}"
+            parts.append(line)
+        if profile.get('anchor_thinkers'):
+            parts.append(f"Anchor thinkers/frameworks: {profile['anchor_thinkers']}")
+        if profile.get('typical_student_profile'):
+            parts.append(f"Their students: {profile['typical_student_profile']}")
+        if profile.get('student_struggles'):
+            parts.append(f"Students struggle with: {profile['student_struggles']}")
+        if profile.get('learning_outcome_focus'):
+            parts.append(f"What faculty wants students to DO: {profile['learning_outcome_focus']}")
+        if profile.get('teaching_style'):
+            parts.append(f"Teaching style: {profile['teaching_style']}")
+        if profile.get('what_an_a_looks_like'):
+            parts.append(f"An A student: {profile['what_an_a_looks_like']}")
+        if profile.get('voice_style_profile'):
+            import json as _json
+            vsp = profile['voice_style_profile']
+            if isinstance(vsp, str):
+                try:
+                    vsp = _json.loads(vsp)
+                except Exception:
+                    vsp = {}
+            contractions = 'uses contractions' if vsp.get('uses_contractions') else 'formal language'
+            tone = ', '.join(vsp.get('tone_markers', []))
+            formality = vsp.get('formality', 'conversational')
+            parts.append(
+                f"Communication style: {formality}, {contractions}"
+                + (f", tone: {tone}" if tone else "")
+            )
+
+        if not parts:
+            return ""
+
+        context = (
+            "FACULTY PROFILE — use this as context for everything you generate.\n"
+            "Generate content specifically for this educator, their discipline,\n"
+            "and their students. Not generic academic content.\n\n"
+            + "\n".join(f"• {p}" for p in parts)
         )
+
+        if profile.get('reference_material_keys'):
+            context += (
+                "\n\nThis faculty member has uploaded reference materials "
+                "(syllabi, prior assignments, course notes). "
+                "Generate content that matches the standard and style "
+                "evident in their existing work."
+            )
+
+        return context
     except Exception:
         return ""
     finally:
@@ -5598,9 +5537,50 @@ def get_faculty_profile_context(user_id: int) -> str:
                 pass
 
 
-@app.get("/api/v2/bonita/profile")
+def increment_faculty_generations(user_id: int) -> None:
+    """Increment generations_count on faculty_profiles if a profile row exists."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE faculty_profiles
+            SET generations_count = generations_count + 1, last_updated = NOW()
+            WHERE user_id = %s
+        """, (user_id,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception:
+        pass
+
+
+class FacultyProfileUpsertRequest(BaseModel):
+    canvas_user_id: Optional[str] = None
+    years_teaching: Optional[int] = None
+    teaching_level: Optional[List[str]] = None
+    employment_type: Optional[str] = None
+    is_course_owner: Optional[bool] = None
+    primary_discipline: Optional[str] = None
+    discipline_focus: Optional[str] = None
+    anchor_thinkers: Optional[str] = None
+    anchor_frameworks: Optional[str] = None
+    typical_student_profile: Optional[str] = None
+    student_struggles: Optional[str] = None
+    learning_outcome_focus: Optional[str] = None
+    teaching_style: Optional[str] = None
+    grading_philosophy: Optional[str] = None
+    what_an_a_looks_like: Optional[str] = None
+    communication_style: Optional[str] = None
+    uses_humor: Optional[bool] = None
+    voice_sample: Optional[str] = None
+    onboarding_phase: Optional[str] = None
+    interview_step: Optional[int] = None
+    interview_completed: Optional[bool] = None
+
+
+@app.get("/api/faculty/profile")
 async def get_faculty_profile(current_user=Depends(get_current_user_from_token)):
-    """Get the current user's faculty profile and interview state."""
+    """Get the current user's faculty profile. Returns onboarding_phase 'not_started' if no row exists."""
     user_id = current_user['user_id']
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -5608,307 +5588,75 @@ async def get_faculty_profile(current_user=Depends(get_current_user_from_token))
         cursor.execute("SELECT * FROM faculty_profiles WHERE user_id = %s", (user_id,))
         row = cursor.fetchone()
         if not row:
-            return {"exists": False, "interview_layer": 0, "interview_complete": False}
+            return {"onboarding_phase": "not_started"}
         cols = [d[0] for d in cursor.description]
-        profile = dict(zip(cols, row))
-        profile["exists"] = True
-        return profile
+        return dict(zip(cols, row))
     finally:
         cursor.close()
         conn.close()
 
 
-@app.post("/api/v2/bonita/interview/start")
-async def start_interview(current_user=Depends(get_current_user_from_token)):
-    """Begin or resume the Bonita faculty interview. Returns the next Bonita prompt."""
-    user_id = current_user['user_id']
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        # Ensure profile row exists
-        cursor.execute("""
-            INSERT INTO faculty_profiles (user_id, interview_layer)
-            VALUES (%s, 1)
-            ON CONFLICT (user_id) DO UPDATE SET interview_layer = GREATEST(faculty_profiles.interview_layer, 1)
-            RETURNING interview_layer, interview_complete, preferred_name, is_returning
-        """, (user_id,))
-        row = cursor.fetchone()
-        conn.commit()
-        layer, complete, preferred_name, is_returning = row
-
-        if complete:
-            return {
-                "status": "complete",
-                "message": f"Your Bonita profile is already set up, {preferred_name or 'friend'}! "
-                           "You can update it anytime from Account settings.",
-                "layer": 6,
-            }
-
-        # Returning RSC Canvas users get a shorter opener
-        opener = _INTERVIEW_LAYERS[layer]["bonita_opener"]
-        if is_returning and layer == 1:
-            opener = (
-                f"Welcome back{', ' + preferred_name if preferred_name else ''}! "
-                "I remember you from RSC Canvas. Let me quickly confirm your profile — "
-                "what's your current teaching role and institution?"
-            )
-
-        # Log Bonita's opening turn
-        cursor.execute("""
-            INSERT INTO bonita_interview_log (user_id, layer, turn, role, message)
-            VALUES (%s, %s, 1, 'bonita', %s)
-        """, (user_id, layer, opener))
-        conn.commit()
-
-        return {
-            "status": "in_progress",
-            "layer": layer,
-            "layer_name": _INTERVIEW_LAYERS[layer]["name"],
-            "total_layers": 6,
-            "message": opener,
-        }
-    finally:
-        cursor.close()
-        conn.close()
-
-
-class InterviewAnswerRequest(BaseModel):
-    message: str
-    layer: int
-
-
-@app.post("/api/v2/bonita/interview/answer")
-async def submit_interview_answer(
-    request: InterviewAnswerRequest,
+@app.post("/api/faculty/profile")
+async def upsert_faculty_profile(
+    request: FacultyProfileUpsertRequest,
     current_user=Depends(get_current_user_from_token)
 ):
-    """Submit a user answer, extract structured data, advance the interview."""
-    user_id = current_user['user_id']
-    layer = request.layer
-    user_message = request.message.strip()
-
-    if not user_message:
-        raise HTTPException(status_code=400, detail="Message cannot be empty")
-    if layer < 1 or layer > 6:
-        raise HTTPException(status_code=400, detail="Invalid layer")
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        # Count turns in this layer
-        cursor.execute("""
-            SELECT COUNT(*) FROM bonita_interview_log
-            WHERE user_id = %s AND layer = %s
-        """, (user_id, layer))
-        turn_count = cursor.fetchone()[0]
-
-        # Log user turn
-        cursor.execute("""
-            INSERT INTO bonita_interview_log (user_id, layer, turn, role, message)
-            VALUES (%s, %s, %s, 'user', %s)
-        """, (user_id, layer, turn_count + 1, user_message))
-        conn.commit()
-
-        # Extract structured data with AI
-        layer_config = _INTERVIEW_LAYERS[layer]
-        extract_prompt = _EXTRACT_PROMPT.format(
-            layer_name=layer_config["name"],
-            fields=", ".join(layer_config["extract_fields"]),
-            user_message=user_message,
-        )
-
-        extracted = {}
-        try:
-            extract_result = await call_ai(
-                system_prompt="You are a data extraction assistant. Return only valid JSON.",
-                user_prompt=extract_prompt,
-                task_type="extract",
-                max_tokens=500,
-            )
-            import json as _json
-            # Strip markdown if present
-            clean = extract_result.strip()
-            if clean.startswith("```"):
-                clean = clean.split("\n", 1)[1].rsplit("```", 1)[0]
-            extracted = _json.loads(clean)
-        except Exception:
-            extracted = {}
-
-        # Persist extracted fields to faculty_profiles
-        if extracted:
-            set_clauses = []
-            values = []
-            field_map = {
-                "preferred_name": "preferred_name",
-                "pronouns": "pronouns",
-                "teaching_role": "teaching_role",
-                "institution": "institution",
-                "department": "department",
-                "years_teaching": "years_teaching",
-                "primary_discipline": "primary_discipline",
-                "sub_disciplines": "sub_disciplines",
-                "typical_course_levels": "typical_course_levels",
-                "course_types": "course_types",
-                "typical_class_size": "typical_class_size",
-                "student_population": "student_population",
-                "student_challenges": "student_challenges",
-                "teaching_philosophy": "teaching_philosophy",
-                "assignment_style": "assignment_style",
-                "grading_approach": "grading_approach",
-                "scaffolding_pref": "scaffolding_pref",
-                "communication_tone": "communication_tone",
-                "use_humor": "use_humor",
-                "cultural_notes": "cultural_notes",
-                "has_existing_syllabus": "has_existing_syllabus",
-                "syllabus_notes": "syllabus_notes",
-                "key_texts": "key_texts",
-            }
-            for key, col in field_map.items():
-                if key in extracted and extracted[key] is not None:
-                    set_clauses.append(f"{col} = %s")
-                    values.append(extracted[key])
-
-            if set_clauses:
-                values.append(user_id)
-                cursor.execute(f"""
-                    UPDATE faculty_profiles
-                    SET {", ".join(set_clauses)}, last_updated = NOW()
-                    WHERE user_id = %s
-                """, values)
-                conn.commit()
-
-            # Log extracted data on the user turn
-            cursor.execute("""
-                UPDATE bonita_interview_log SET extracted_data = %s
-                WHERE user_id = %s AND layer = %s AND role = 'user'
-                ORDER BY created_at DESC LIMIT 1
-            """, (_json.dumps(extracted), user_id, layer))
-            conn.commit()
-
-        # Advance to next layer
-        next_layer = layer + 1
-        is_complete = next_layer > 6
-
-        if is_complete:
-            cursor.execute("""
-                UPDATE faculty_profiles
-                SET interview_layer = 6, interview_complete = TRUE, last_updated = NOW()
-                WHERE user_id = %s
-            """, (user_id,))
-            conn.commit()
-            return {
-                "status": "complete",
-                "layer": 6,
-                "extracted": extracted,
-                "message": None,
-                "next_layer": None,
-            }
-        else:
-            cursor.execute("""
-                UPDATE faculty_profiles SET interview_layer = %s, last_updated = NOW()
-                WHERE user_id = %s
-            """, (next_layer, user_id))
-            next_opener = _INTERVIEW_LAYERS[next_layer]["bonita_opener"]
-            cursor.execute("""
-                INSERT INTO bonita_interview_log (user_id, layer, turn, role, message)
-                VALUES (%s, %s, 1, 'bonita', %s)
-            """, (user_id, next_layer, next_opener))
-            conn.commit()
-
-            return {
-                "status": "in_progress",
-                "layer": next_layer,
-                "layer_name": _INTERVIEW_LAYERS[next_layer]["name"],
-                "total_layers": 6,
-                "extracted": extracted,
-                "message": next_opener,
-            }
-    finally:
-        cursor.close()
-        conn.close()
-
-
-@app.get("/api/v2/bonita/profile/playback")
-async def get_profile_playback(current_user=Depends(get_current_user_from_token)):
-    """Generate a warm Bonita summary of what was learned about the faculty member."""
-    user_id = current_user['user_id']
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("""
-            SELECT preferred_name, teaching_role, institution, primary_discipline,
-                   typical_course_levels, typical_class_size, student_population,
-                   assignment_style, grading_approach, scaffolding_pref,
-                   communication_tone, use_humor, cultural_notes, teaching_philosophy,
-                   interview_complete
-            FROM faculty_profiles WHERE user_id = %s
-        """, (user_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="No profile found. Complete the Bonita interview first.")
-        if not row[14]:
-            raise HTTPException(status_code=400, detail="Interview not yet complete.")
-
-        cols = ["preferred_name", "teaching_role", "institution", "primary_discipline",
-                "typical_course_levels", "typical_class_size", "student_population",
-                "assignment_style", "grading_approach", "scaffolding_pref",
-                "communication_tone", "use_humor", "cultural_notes", "teaching_philosophy",
-                "interview_complete"]
-        profile_data = dict(zip(cols, row))
-
-        import json as _json
-        playback = await call_ai(
-            system_prompt="You are Bonita, a warm and insightful learning AI.",
-            user_prompt=_PLAYBACK_PROMPT.format(profile_json=_json.dumps(profile_data, default=str)),
-            task_type="generate",
-            max_tokens=300,
-        )
-        return {"playback": playback, "profile": profile_data}
-    finally:
-        cursor.close()
-        conn.close()
-
-
-class ProfileUpdateRequest(BaseModel):
-    preferred_name: Optional[str] = None
-    pronouns: Optional[str] = None
-    teaching_role: Optional[str] = None
-    institution: Optional[str] = None
-    department: Optional[str] = None
-    primary_discipline: Optional[str] = None
-    communication_tone: Optional[str] = None
-    use_humor: Optional[bool] = None
-    teaching_philosophy: Optional[str] = None
-    student_challenges: Optional[str] = None
-    cultural_notes: Optional[str] = None
-
-
-@app.patch("/api/v2/bonita/profile")
-async def update_faculty_profile(
-    request: ProfileUpdateRequest,
-    current_user=Depends(get_current_user_from_token)
-):
-    """Update specific fields in the faculty profile (post-interview edits)."""
+    """Create or update faculty profile. Upserts on user_id, increments profile_version on update."""
     user_id = current_user['user_id']
     updates = {k: v for k, v in request.dict().items() if v is not None}
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields to update")
 
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        set_clauses = [f"{k} = %s" for k in updates.keys()]
-        values = list(updates.values()) + [user_id]
-        cursor.execute(f"""
-            UPDATE faculty_profiles
-            SET {", ".join(set_clauses)}, last_updated = NOW()
-            WHERE user_id = %s
-        """, values)
+        cursor.execute("""
+            INSERT INTO faculty_profiles (user_id) VALUES (%s)
+            ON CONFLICT (user_id) DO NOTHING
+        """, (user_id,))
+        if updates:
+            set_clauses = [f"{k} = %s" for k in updates.keys()]
+            values = list(updates.values()) + [user_id]
+            cursor.execute(f"""
+                UPDATE faculty_profiles
+                SET {', '.join(set_clauses)},
+                    profile_version = profile_version + 1,
+                    last_updated = NOW()
+                WHERE user_id = %s
+            """, values)
         conn.commit()
-        return {"status": "updated", "fields": list(updates.keys())}
+        cursor.execute("SELECT * FROM faculty_profiles WHERE user_id = %s", (user_id,))
+        row = cursor.fetchone()
+        cols = [d[0] for d in cursor.description]
+        return dict(zip(cols, row))
     finally:
         cursor.close()
         conn.close()
+
+
+@app.get("/api/faculty/profile/interview-log")
+async def get_interview_log(current_user=Depends(get_current_user_from_token)):
+    """Returns the Bonita interview conversation log for the current user, ordered by turn_number."""
+    user_id = current_user['user_id']
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT bil.id, bil.turn_number, bil.speaker, bil.message,
+                   bil.extracted_data, bil.created_at
+            FROM bonita_interview_log bil
+            JOIN faculty_profiles fp ON fp.id = bil.faculty_profile_id
+            WHERE fp.user_id = %s
+            ORDER BY bil.turn_number ASC
+        """, (user_id,))
+        rows = cursor.fetchall()
+        if not rows:
+            return {"log": []}
+        cols = [d[0] for d in cursor.description]
+        return {"log": [dict(zip(cols, r)) for r in rows]}
+    finally:
+        cursor.close()
+        conn.close()
+
+
 
 
 # --- Course Activations (B1 Dual Limiter) ---

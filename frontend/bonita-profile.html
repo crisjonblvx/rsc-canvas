@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Bonita Profile — ReadySetClass™</title>
+    <link rel="icon" href="/assets/ReadySetClass_alpha_badge.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy: #1B2A5E;
+            --gold: #C9A84C;
+            --gold-light: #F5E6B8;
+            --bg: #f8f9fb;
+            --card: #ffffff;
+            --border: #e4e7ec;
+            --text: #1a1a2e;
+            --muted: #6b7280;
+            --font-head: 'Sora', sans-serif;
+            --font-body: 'DM Sans', sans-serif;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font-body); background: var(--bg); min-height: 100vh; color: var(--text); }
+
+        /* ── Top bar ── */
+        .topbar {
+            background: var(--navy);
+            padding: 14px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .topbar-logo { font-family: var(--font-head); font-size: 18px; font-weight: 700; color: white; letter-spacing: -0.3px; }
+        .topbar-logo span { color: var(--gold); }
+        .topbar-back {
+            background: none; border: 1px solid rgba(255,255,255,0.3);
+            color: rgba(255,255,255,0.8); border-radius: 6px; padding: 6px 16px;
+            font-size: 13px; cursor: pointer; font-family: var(--font-body);
+            text-decoration: none; display: inline-block;
+        }
+        .topbar-back:hover { background: rgba(255,255,255,0.08); color: white; }
+
+        /* ── Layout ── */
+        .container { max-width: 780px; margin: 0 auto; padding: 40px 24px 80px; }
+
+        /* ── Profile header ── */
+        .profile-hero {
+            background: linear-gradient(135deg, var(--navy) 0%, #2D5F8A 100%);
+            border-radius: 14px;
+            padding: 28px 32px;
+            color: white;
+            margin-bottom: 28px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .bonita-avatar {
+            width: 60px; height: 60px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--gold) 0%, #e8c87a 100%);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 26px; flex-shrink: 0;
+        }
+        .profile-hero-text { flex: 1; }
+        .profile-hero h1 { font-family: var(--font-head); font-size: 1.4rem; font-weight: 700; margin-bottom: 4px; }
+        .profile-hero p { opacity: 0.8; font-size: 0.9rem; }
+        .profile-stats {
+            display: flex; gap: 24px; margin-top: 12px; flex-wrap: wrap;
+        }
+        .profile-stat { text-align: center; }
+        .profile-stat-num { font-family: var(--font-head); font-size: 1.5rem; font-weight: 700; color: var(--gold); }
+        .profile-stat-label { font-size: 0.75rem; opacity: 0.7; }
+
+        /* ── Phase badge ── */
+        .phase-badge {
+            display: inline-block; padding: 4px 12px; border-radius: 20px;
+            font-size: 0.75rem; font-weight: 600; margin-left: 8px;
+        }
+        .phase-complete { background: #16a34a; color: white; }
+        .phase-partial { background: var(--gold); color: var(--navy); }
+        .phase-none { background: rgba(255,255,255,0.2); color: white; }
+
+        /* ── Cards ── */
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+        .card-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 16px; cursor: pointer; user-select: none;
+        }
+        .card-title { font-family: var(--font-head); font-size: 0.95rem; font-weight: 700; color: var(--navy); display: flex; align-items: center; gap: 8px; }
+        .card-edit-btn {
+            background: none; border: 1px solid var(--border); color: var(--muted);
+            border-radius: 6px; padding: 4px 12px; font-size: 0.8rem; cursor: pointer;
+            font-family: var(--font-body); transition: all 0.15s;
+        }
+        .card-edit-btn:hover { border-color: var(--navy); color: var(--navy); }
+        .card-save-btn {
+            background: var(--navy); border: none; color: white;
+            border-radius: 6px; padding: 4px 12px; font-size: 0.8rem; cursor: pointer;
+            font-family: var(--font-body); display: none;
+        }
+        .card-save-btn.visible { display: inline-block; }
+
+        /* ── Field display ── */
+        .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        @media (max-width: 560px) { .field-grid { grid-template-columns: 1fr; } }
+        .field-item label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+        .field-item .field-val { font-size: 0.9rem; color: var(--text); line-height: 1.5; }
+        .field-item .field-val.empty { color: #9ca3af; font-style: italic; }
+        .field-item textarea, .field-item input, .field-item select {
+            width: 100%; border: 1px solid var(--border); border-radius: 6px;
+            padding: 8px 10px; font-size: 0.9rem; font-family: var(--font-body);
+            color: var(--text); background: var(--bg); display: none;
+            resize: vertical; transition: border 0.15s;
+        }
+        .field-item textarea:focus, .field-item input:focus { outline: none; border-color: var(--navy); }
+        .field-item.editing .field-val { display: none; }
+        .field-item.editing textarea, .field-item.editing input, .field-item.editing select { display: block; }
+
+        /* ── Reference materials ── */
+        .ref-list { list-style: none; }
+        .ref-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 0; border-bottom: 1px solid var(--border);
+        }
+        .ref-item:last-child { border-bottom: none; }
+        .ref-icon { font-size: 1.2rem; flex-shrink: 0; }
+        .ref-info { flex: 1; min-width: 0; }
+        .ref-name { font-size: 0.9rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ref-meta { font-size: 0.75rem; color: var(--muted); }
+        .ref-delete {
+            background: none; border: none; color: #dc2626; cursor: pointer;
+            font-size: 1rem; padding: 4px 8px; border-radius: 4px; flex-shrink: 0;
+            transition: background 0.15s;
+        }
+        .ref-delete:hover { background: #fee2e2; }
+
+        /* ── Upload zone ── */
+        .upload-zone {
+            border: 2px dashed var(--border); border-radius: 10px;
+            padding: 20px; text-align: center; cursor: pointer;
+            transition: all 0.15s; margin-top: 12px;
+        }
+        .upload-zone:hover, .upload-zone.drag-over { border-color: var(--navy); background: #f0f4ff; }
+        .upload-zone p { font-size: 0.875rem; color: var(--muted); margin-top: 6px; }
+        .upload-zone strong { color: var(--navy); }
+        #refFileInput { display: none; }
+
+        /* ── Toast ── */
+        .toast {
+            position: fixed; bottom: 24px; right: 24px;
+            background: var(--navy); color: white; padding: 12px 20px;
+            border-radius: 8px; font-size: 0.875rem; z-index: 9999;
+            opacity: 0; transition: opacity 0.3s; pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+
+        /* ── Loading / empty states ── */
+        .loading-msg { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 0.95rem; }
+        .incomplete-notice {
+            background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px;
+            padding: 14px 18px; margin-bottom: 20px; font-size: 0.875rem;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .incomplete-notice a { color: var(--navy); font-weight: 600; }
+
+        /* ── Upload status ── */
+        .upload-status { font-size: 0.85rem; margin-top: 8px; color: var(--muted); min-height: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <div class="topbar-logo">Ready<span>Set</span>Class™</div>
+    <a href="/dashboard-v2.html" class="topbar-back">← Dashboard</a>
+</div>
+
+<div class="container">
+    <div id="loadingMsg" class="loading-msg">Loading your Bonita profile…</div>
+    <div id="profileContent" style="display:none;">
+
+        <!-- Hero -->
+        <div class="profile-hero" id="profileHero">
+            <div class="bonita-avatar">✨</div>
+            <div class="profile-hero-text">
+                <h1>Bonita knows you <span class="phase-badge phase-none" id="phaseBadge">Not started</span></h1>
+                <p id="profileSubtitle">Start the interview to personalize every generation.</p>
+                <div class="profile-stats">
+                    <div class="profile-stat">
+                        <div class="profile-stat-num" id="genCount">0</div>
+                        <div class="profile-stat-label">generations</div>
+                    </div>
+                    <div class="profile-stat">
+                        <div class="profile-stat-num" id="refCount">0</div>
+                        <div class="profile-stat-label">reference files</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Incomplete notice (shown unless interview_complete) -->
+        <div class="incomplete-notice" id="incompleteNotice" style="display:none;">
+            <span>⚠️</span>
+            <span>Your profile is incomplete — Bonita uses generic context until the interview is done. <a href="/bonita-interview.html">Complete interview →</a></span>
+        </div>
+
+        <!-- ── Layer 1: Identity ── -->
+        <div class="card" id="cardIdentity">
+            <div class="card-header">
+                <div class="card-title">🎓 Identity</div>
+                <div>
+                    <button class="card-edit-btn" onclick="toggleEdit('identity')">Edit</button>
+                    <button class="card-save-btn" id="saveIdentity" onclick="saveLayer('identity')">Save</button>
+                </div>
+            </div>
+            <div class="field-grid">
+                <div class="field-item" id="fi_years_teaching">
+                    <label>Years teaching</label>
+                    <div class="field-val" id="fv_years_teaching">—</div>
+                    <input type="number" id="fe_years_teaching" min="0" max="60" placeholder="e.g. 12">
+                </div>
+                <div class="field-item" id="fi_employment_type">
+                    <label>Role</label>
+                    <div class="field-val" id="fv_employment_type">—</div>
+                    <select id="fe_employment_type">
+                        <option value="">— select —</option>
+                        <option value="full_time">Full-time</option>
+                        <option value="adjunct">Adjunct</option>
+                        <option value="visiting">Visiting</option>
+                        <option value="emeritus">Emeritus</option>
+                    </select>
+                </div>
+                <div class="field-item" id="fi_teaching_level" style="grid-column:1/-1;">
+                    <label>Teaching levels</label>
+                    <div class="field-val" id="fv_teaching_level">—</div>
+                    <input type="text" id="fe_teaching_level" placeholder="e.g. undergrad, grad, dual_enrollment">
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Layer 2: Discipline ── -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">📚 Discipline</div>
+                <div>
+                    <button class="card-edit-btn" onclick="toggleEdit('discipline')">Edit</button>
+                    <button class="card-save-btn" id="saveDiscipline" onclick="saveLayer('discipline')">Save</button>
+                </div>
+            </div>
+            <div class="field-grid">
+                <div class="field-item" id="fi_primary_discipline" style="grid-column:1/-1;">
+                    <label>Primary discipline</label>
+                    <div class="field-val" id="fv_primary_discipline">—</div>
+                    <input type="text" id="fe_primary_discipline" placeholder="e.g. Sociology, Computer Science">
+                </div>
+                <div class="field-item" id="fi_discipline_focus" style="grid-column:1/-1;">
+                    <label>Discipline focus</label>
+                    <div class="field-val" id="fv_discipline_focus">—</div>
+                    <textarea id="fe_discipline_focus" rows="2" placeholder="What specific areas or questions drive your teaching?"></textarea>
+                </div>
+                <div class="field-item" id="fi_anchor_thinkers" style="grid-column:1/-1;">
+                    <label>Anchor thinkers / frameworks</label>
+                    <div class="field-val" id="fv_anchor_thinkers">—</div>
+                    <textarea id="fe_anchor_thinkers" rows="2" placeholder="e.g. Du Bois, Foucault, bell hooks, critical race theory"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Layer 3: Students ── -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">👩‍🎓 Students</div>
+                <div>
+                    <button class="card-edit-btn" onclick="toggleEdit('students')">Edit</button>
+                    <button class="card-save-btn" id="saveStudents" onclick="saveLayer('students')">Save</button>
+                </div>
+            </div>
+            <div class="field-grid">
+                <div class="field-item" id="fi_typical_student_profile" style="grid-column:1/-1;">
+                    <label>Typical student profile</label>
+                    <div class="field-val" id="fv_typical_student_profile">—</div>
+                    <textarea id="fe_typical_student_profile" rows="2" placeholder="Who are your students?"></textarea>
+                </div>
+                <div class="field-item" id="fi_student_struggles" style="grid-column:1/-1;">
+                    <label>What students struggle with</label>
+                    <div class="field-val" id="fv_student_struggles">—</div>
+                    <textarea id="fe_student_struggles" rows="2" placeholder="Common misconceptions, skills gaps, motivation barriers..."></textarea>
+                </div>
+                <div class="field-item" id="fi_learning_outcome_focus" style="grid-column:1/-1;">
+                    <label>What you want students to DO</label>
+                    <div class="field-val" id="fv_learning_outcome_focus">—</div>
+                    <textarea id="fe_learning_outcome_focus" rows="2" placeholder="The core capability or disposition you're developing"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Layer 4: Pedagogy ── -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">🏫 Pedagogy</div>
+                <div>
+                    <button class="card-edit-btn" onclick="toggleEdit('pedagogy')">Edit</button>
+                    <button class="card-save-btn" id="savePedagogy" onclick="saveLayer('pedagogy')">Save</button>
+                </div>
+            </div>
+            <div class="field-grid">
+                <div class="field-item" id="fi_teaching_style" style="grid-column:1/-1;">
+                    <label>Teaching style</label>
+                    <div class="field-val" id="fv_teaching_style">—</div>
+                    <textarea id="fe_teaching_style" rows="2" placeholder="How do you run your classes?"></textarea>
+                </div>
+                <div class="field-item" id="fi_grading_philosophy" style="grid-column:1/-1;">
+                    <label>Grading philosophy</label>
+                    <div class="field-val" id="fv_grading_philosophy">—</div>
+                    <textarea id="fe_grading_philosophy" rows="2" placeholder="Specs grading, rubrics, holistic..."></textarea>
+                </div>
+                <div class="field-item" id="fi_what_an_a_looks_like" style="grid-column:1/-1;">
+                    <label>What an A looks like</label>
+                    <div class="field-val" id="fv_what_an_a_looks_like">—</div>
+                    <textarea id="fe_what_an_a_looks_like" rows="2" placeholder="What distinguishes excellent student work in your courses?"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Layer 5: Voice ── -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">🗣️ Voice &amp; Communication</div>
+                <div>
+                    <button class="card-edit-btn" onclick="toggleEdit('voice')">Edit</button>
+                    <button class="card-save-btn" id="saveVoice" onclick="saveLayer('voice')">Save</button>
+                </div>
+            </div>
+            <div class="field-grid">
+                <div class="field-item" id="fi_communication_style">
+                    <label>Communication style</label>
+                    <div class="field-val" id="fv_communication_style">—</div>
+                    <select id="fe_communication_style">
+                        <option value="">— select —</option>
+                        <option value="formal">Formal</option>
+                        <option value="conversational">Conversational</option>
+                        <option value="warm">Warm</option>
+                        <option value="direct">Direct</option>
+                    </select>
+                </div>
+                <div class="field-item" id="fi_uses_humor">
+                    <label>Uses humor</label>
+                    <div class="field-val" id="fv_uses_humor">—</div>
+                    <select id="fe_uses_humor">
+                        <option value="">— select —</option>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                    </select>
+                </div>
+                <div class="field-item" id="fi_voice_sample" style="grid-column:1/-1;">
+                    <label>Voice sample</label>
+                    <div class="field-val" id="fv_voice_sample">—</div>
+                    <textarea id="fe_voice_sample" rows="4" placeholder="Paste a paragraph you've written — assignment instructions, email to students, anything."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Reference Materials ── -->
+        <div class="card">
+            <div class="card-header" style="cursor:default;">
+                <div class="card-title">📎 Reference Materials</div>
+            </div>
+
+            <ul class="ref-list" id="refList">
+                <li style="color:#9ca3af; font-size:0.875rem; padding:8px 0;">No materials uploaded yet.</li>
+            </ul>
+
+            <div class="upload-zone" id="uploadZone" onclick="document.getElementById('refFileInput').click()">
+                <div style="font-size:1.5rem;">📄</div>
+                <p><strong>Click to upload</strong> or drag and drop</p>
+                <p>PDF, DOCX, TXT, MD · Max 10MB</p>
+            </div>
+            <input type="file" id="refFileInput" accept=".pdf,.docx,.txt,.md" onchange="uploadRefMaterial(this.files[0])">
+            <div class="upload-status" id="uploadStatus"></div>
+        </div>
+
+    </div><!-- /profileContent -->
+</div><!-- /container -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+    const API_URL = 'https://facultyflow-production.up.railway.app';
+    const authToken = localStorage.getItem('auth_token');
+
+    if (!authToken) { window.location.href = '/login.html'; }
+
+    let profileData = {};
+
+    // ── Utilities ──────────────────────────────────────────────────────────────
+
+    function showToast(msg, duration = 2500) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), duration);
+    }
+
+    function fmt(val) {
+        if (val === null || val === undefined || val === '') return null;
+        if (Array.isArray(val)) return val.join(', ') || null;
+        return String(val);
+    }
+
+    function setFieldVal(id, val) {
+        const el = document.getElementById('fv_' + id);
+        if (!el) return;
+        const display = fmt(val);
+        if (display) {
+            el.textContent = display;
+            el.classList.remove('empty');
+        } else {
+            el.textContent = '—';
+            el.classList.add('empty');
+        }
+    }
+
+    function setFieldInput(id, val) {
+        const el = document.getElementById('fe_' + id);
+        if (!el) return;
+        if (Array.isArray(val)) {
+            el.value = val.join(', ');
+        } else if (typeof val === 'boolean') {
+            el.value = String(val);
+        } else {
+            el.value = val || '';
+        }
+    }
+
+    // ── Load profile ──────────────────────────────────────────────────────────
+
+    async function loadProfile() {
+        try {
+            const resp = await fetch(API_URL + '/api/faculty/profile', {
+                headers: { 'Authorization': 'Bearer ' + authToken }
+            });
+            if (!resp.ok) throw new Error('Failed');
+            profileData = await resp.json();
+            renderProfile(profileData);
+
+            // Also load reference materials list
+            loadRefMaterials();
+        } catch (e) {
+            document.getElementById('loadingMsg').textContent = 'Could not load profile. ' + e.message;
+        }
+    }
+
+    function renderProfile(p) {
+        document.getElementById('loadingMsg').style.display = 'none';
+        document.getElementById('profileContent').style.display = 'block';
+
+        // Hero
+        const phase = p.onboarding_phase || 'not_started';
+        const badge = document.getElementById('phaseBadge');
+        const sub = document.getElementById('profileSubtitle');
+        const hero = document.querySelector('.profile-hero h1');
+
+        if (phase === 'interview_complete') {
+            badge.textContent = 'Profile complete';
+            badge.className = 'phase-badge phase-complete';
+            sub.textContent = (p.primary_discipline ? p.primary_discipline + ' · ' : '') + 'Bonita is fully personalized for you.';
+        } else if (phase === 'interview_started') {
+            badge.textContent = 'Interview in progress';
+            badge.className = 'phase-badge phase-partial';
+            sub.textContent = 'Finish the interview to unlock full personalization.';
+            document.getElementById('incompleteNotice').style.display = 'flex';
+        } else if (phase === 'demo_shown') {
+            badge.textContent = 'Using defaults';
+            badge.className = 'phase-badge phase-none';
+            sub.textContent = 'Complete the interview to personalize Bonita for your teaching.';
+            document.getElementById('incompleteNotice').style.display = 'flex';
+        } else {
+            badge.textContent = 'Not started';
+            badge.className = 'phase-badge phase-none';
+            sub.textContent = 'Start the interview to teach Bonita your style.';
+            document.getElementById('incompleteNotice').style.display = 'flex';
+        }
+
+        document.getElementById('genCount').textContent = p.generations_count || 0;
+
+        // Identity
+        setFieldVal('years_teaching', p.years_teaching);
+        setFieldInput('years_teaching', p.years_teaching);
+        setFieldVal('employment_type', p.employment_type);
+        setFieldInput('employment_type', p.employment_type);
+        setFieldVal('teaching_level', p.teaching_level);
+        setFieldInput('teaching_level', p.teaching_level);
+
+        // Discipline
+        setFieldVal('primary_discipline', p.primary_discipline);
+        setFieldInput('primary_discipline', p.primary_discipline);
+        setFieldVal('discipline_focus', p.discipline_focus);
+        setFieldInput('discipline_focus', p.discipline_focus);
+        setFieldVal('anchor_thinkers', p.anchor_thinkers);
+        setFieldInput('anchor_thinkers', p.anchor_thinkers);
+
+        // Students
+        setFieldVal('typical_student_profile', p.typical_student_profile);
+        setFieldInput('typical_student_profile', p.typical_student_profile);
+        setFieldVal('student_struggles', p.student_struggles);
+        setFieldInput('student_struggles', p.student_struggles);
+        setFieldVal('learning_outcome_focus', p.learning_outcome_focus);
+        setFieldInput('learning_outcome_focus', p.learning_outcome_focus);
+
+        // Pedagogy
+        setFieldVal('teaching_style', p.teaching_style);
+        setFieldInput('teaching_style', p.teaching_style);
+        setFieldVal('grading_philosophy', p.grading_philosophy);
+        setFieldInput('grading_philosophy', p.grading_philosophy);
+        setFieldVal('what_an_a_looks_like', p.what_an_a_looks_like);
+        setFieldInput('what_an_a_looks_like', p.what_an_a_looks_like);
+
+        // Voice
+        setFieldVal('communication_style', p.communication_style);
+        setFieldInput('communication_style', p.communication_style);
+        setFieldVal('uses_humor', p.uses_humor === true ? 'Yes' : p.uses_humor === false ? 'No' : null);
+        setFieldInput('uses_humor', p.uses_humor);
+        setFieldVal('voice_sample', p.voice_sample);
+        setFieldInput('voice_sample', p.voice_sample);
+    }
+
+    // ── Edit / save layers ─────────────────────────────────────────────────────
+
+    const LAYER_FIELDS = {
+        identity: ['years_teaching', 'employment_type', 'teaching_level'],
+        discipline: ['primary_discipline', 'discipline_focus', 'anchor_thinkers'],
+        students: ['typical_student_profile', 'student_struggles', 'learning_outcome_focus'],
+        pedagogy: ['teaching_style', 'grading_philosophy', 'what_an_a_looks_like'],
+        voice: ['communication_style', 'uses_humor', 'voice_sample'],
+    };
+
+    function toggleEdit(layer) {
+        const fields = LAYER_FIELDS[layer];
+        const saveBtn = document.getElementById('save' + layer.charAt(0).toUpperCase() + layer.slice(1));
+        const editBtns = document.querySelectorAll('#card' + layer.charAt(0).toUpperCase() + layer.slice(1) + ' .card-edit-btn');
+        const isEditing = saveBtn.classList.contains('visible');
+
+        if (isEditing) {
+            // Cancel — restore display values
+            fields.forEach(f => {
+                document.getElementById('fi_' + f)?.classList.remove('editing');
+            });
+            saveBtn.classList.remove('visible');
+        } else {
+            fields.forEach(f => {
+                document.getElementById('fi_' + f)?.classList.add('editing');
+            });
+            saveBtn.classList.add('visible');
+        }
+    }
+
+    // Make toggleEdit work by card layer id lookup
+    // We need card IDs per layer. Let me add a simpler approach: pass the card element.
+    function toggleEdit(layer) {
+        const fields = LAYER_FIELDS[layer];
+        if (!fields) return;
+        const capLayer = layer.charAt(0).toUpperCase() + layer.slice(1);
+        const saveBtn = document.getElementById('save' + capLayer);
+        const isEditing = saveBtn?.classList.contains('visible');
+        fields.forEach(f => {
+            const fi = document.getElementById('fi_' + f);
+            if (fi) fi.classList.toggle('editing', !isEditing);
+        });
+        if (saveBtn) saveBtn.classList.toggle('visible', !isEditing);
+    }
+
+    async function saveLayer(layer) {
+        const fields = LAYER_FIELDS[layer];
+        const payload = {};
+        fields.forEach(f => {
+            const el = document.getElementById('fe_' + f);
+            if (!el) return;
+            let val = el.value.trim();
+            if (f === 'years_teaching') {
+                payload[f] = val ? parseInt(val) : null;
+            } else if (f === 'uses_humor') {
+                payload[f] = val === 'true' ? true : val === 'false' ? false : null;
+            } else if (f === 'teaching_level') {
+                payload[f] = val ? val.split(',').map(s => s.trim()).filter(Boolean) : null;
+            } else {
+                payload[f] = val || null;
+            }
+        });
+
+        try {
+            const resp = await fetch(API_URL + '/api/faculty/profile', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + authToken,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+            if (!resp.ok) throw new Error('Save failed');
+            const updated = await resp.json();
+            profileData = { ...profileData, ...updated };
+            renderProfile(profileData);
+            // Exit edit mode
+            const capLayer = layer.charAt(0).toUpperCase() + layer.slice(1);
+            const saveBtn = document.getElementById('save' + capLayer);
+            if (saveBtn) saveBtn.classList.remove('visible');
+            fields.forEach(f => document.getElementById('fi_' + f)?.classList.remove('editing'));
+            showToast('Saved ✓');
+        } catch (e) {
+            showToast('Save failed: ' + e.message);
+        }
+    }
+
+    // ── Reference materials ────────────────────────────────────────────────────
+
+    async function loadRefMaterials() {
+        try {
+            const resp = await fetch(API_URL + '/api/faculty/reference-material', {
+                headers: { 'Authorization': 'Bearer ' + authToken }
+            });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            renderRefList(data.materials || []);
+        } catch (e) { /* non-critical */ }
+    }
+
+    function renderRefList(materials) {
+        document.getElementById('refCount').textContent = materials.length;
+        const list = document.getElementById('refList');
+        if (materials.length === 0) {
+            list.innerHTML = '<li style="color:#9ca3af; font-size:0.875rem; padding:8px 0;">No materials uploaded yet.</li>';
+            return;
+        }
+        const extIcons = { pdf: '📕', docx: '📘', txt: '📄', md: '📝' };
+        list.innerHTML = materials.map(m => `
+            <li class="ref-item">
+                <span class="ref-icon">${extIcons[m.file_type] || '📄'}</span>
+                <div class="ref-info">
+                    <div class="ref-name">${escHtml(m.file_name)}</div>
+                    <div class="ref-meta">${m.file_type.toUpperCase()} · ${(m.char_count || 0).toLocaleString()} chars · ${fmtDate(m.created_at)}</div>
+                </div>
+                <button class="ref-delete" onclick="deleteRefMaterial('${escAttr(m.key)}')" title="Remove">✕</button>
+            </li>
+        `).join('');
+    }
+
+    async function uploadRefMaterial(file) {
+        if (!file) return;
+        const status = document.getElementById('uploadStatus');
+        status.textContent = 'Uploading…';
+        const fd = new FormData();
+        fd.append('file', file);
+        try {
+            const resp = await fetch(API_URL + '/api/faculty/reference-material/upload', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + authToken },
+                body: fd
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || 'Upload failed');
+            status.textContent = '';
+            showToast('Uploaded: ' + file.name + ' ✓');
+            loadRefMaterials();
+            document.getElementById('refFileInput').value = '';
+        } catch (e) {
+            status.textContent = '❌ ' + e.message;
+        }
+    }
+
+    async function deleteRefMaterial(key) {
+        if (!confirm('Remove this reference material?')) return;
+        try {
+            const resp = await fetch(API_URL + '/api/faculty/reference-material/' + encodeURIComponent(key), {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + authToken }
+            });
+            if (!resp.ok) throw new Error('Delete failed');
+            showToast('Removed ✓');
+            loadRefMaterials();
+        } catch (e) {
+            showToast('Failed: ' + e.message);
+        }
+    }
+
+    // ── Drag-and-drop ──────────────────────────────────────────────────────────
+    const zone = document.getElementById('uploadZone');
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (file) uploadRefMaterial(file);
+    });
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+    function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function escAttr(s) { return String(s).replace(/'/g,"\\'"); }
+    function fmtDate(iso) {
+        if (!iso) return '';
+        const d = new Date(iso);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    // ── Boot ───────────────────────────────────────────────────────────────────
+    loadProfile();
+</script>
+</body>
+</html>

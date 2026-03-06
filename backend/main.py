@@ -5519,12 +5519,37 @@ def get_faculty_context(user_id: int) -> str:
         )
 
         if profile.get('reference_material_keys'):
-            context += (
-                "\n\nThis faculty member has uploaded reference materials "
-                "(syllabi, prior assignments, course notes). "
-                "Generate content that matches the standard and style "
-                "evident in their existing work."
-            )
+            # Load up to 3 reference materials, first 1500 chars each
+            ref_keys = profile['reference_material_keys'][:3]
+            try:
+                ref_conn = get_db_connection()
+                ref_cursor = ref_conn.cursor()
+                ref_cursor.execute("""
+                    SELECT file_name, extracted_text
+                    FROM faculty_reference_materials
+                    WHERE key = ANY(%s) AND user_id = %s
+                    ORDER BY created_at ASC
+                    LIMIT 3
+                """, (ref_keys, user_id))
+                ref_rows = ref_cursor.fetchall()
+                ref_cursor.close()
+                ref_conn.close()
+                if ref_rows:
+                    ref_parts = []
+                    for fname, text in ref_rows:
+                        snippet = (text or "")[:1500].strip()
+                        if snippet:
+                            ref_parts.append(f"--- {fname} ---\n{snippet}")
+                    if ref_parts:
+                        context += (
+                            "\n\nREFERENCE MATERIALS (match the style and standard in these):\n\n"
+                            + "\n\n".join(ref_parts)
+                        )
+            except Exception:
+                context += (
+                    "\n\nThis faculty member has uploaded reference materials. "
+                    "Match the standard and style of their existing work."
+                )
 
         return context
     except Exception:
@@ -6052,6 +6077,156 @@ async def interview_skip(current_user=Depends(get_current_user_from_token)):
             "status": "ok",
             "message": "Profile will build from usage. Bonita learns as you work.",
         }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- Faculty Reference Materials ---
+
+@app.post("/api/faculty/reference-material/upload")
+async def faculty_upload_reference_material(
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user_from_token)
+):
+    """Upload a reference material for the faculty profile (syllabus, assignments, notes).
+    Extracts text, stores in faculty_reference_materials, adds key to faculty_profiles."""
+    import uuid as _uuid
+
+    user_id = current_user['user_id']
+    file_ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+    if file_ext not in ('pdf', 'docx', 'txt', 'md'):
+        raise HTTPException(status_code=400, detail="Supported file types: PDF, DOCX, TXT, MD")
+
+    file_content = await file.read()
+    if len(file_content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+
+    # Extract text
+    extracted_text = ""
+    try:
+        if file_ext == 'pdf':
+            pdf_file = io.BytesIO(file_content)
+            pdf_reader = PyPDF2.PdfReader(pdf_file)
+            for page in pdf_reader.pages:
+                extracted_text += (page.extract_text() or "") + "\n"
+        elif file_ext == 'docx':
+            docx_file = io.BytesIO(file_content)
+            doc = Document(docx_file)
+            for paragraph in doc.paragraphs:
+                extracted_text += paragraph.text + "\n"
+        else:  # txt, md
+            extracted_text = file_content.decode('utf-8', errors='replace')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to extract text: {str(e)}")
+
+    extracted_text = extracted_text.strip()
+    if len(extracted_text) < 50:
+        raise HTTPException(status_code=400, detail="File appears empty or unreadable")
+
+    synthetic_key = f"faculty/{user_id}/reference/{_uuid.uuid4()}.{file_ext}"
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO faculty_reference_materials (user_id, key, file_name, file_type, extracted_text, char_count)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (user_id, synthetic_key, file.filename, file_ext, extracted_text, len(extracted_text)))
+
+        # Add key to faculty_profiles.reference_material_keys; create profile row if missing
+        cursor.execute("""
+            INSERT INTO faculty_profiles (user_id, reference_material_keys, onboarding_phase)
+            VALUES (%s, ARRAY[%s], 'not_started')
+            ON CONFLICT (user_id) DO UPDATE SET
+                reference_material_keys = array_append(
+                    COALESCE(faculty_profiles.reference_material_keys, ARRAY[]::TEXT[]),
+                    EXCLUDED.reference_material_keys[1]
+                ),
+                last_updated = NOW()
+        """, (user_id, synthetic_key))
+
+        # Auto-set voice_sample if empty and text is rich enough
+        if len(extracted_text) >= 500:
+            cursor.execute("""
+                UPDATE faculty_profiles SET voice_sample = %s
+                WHERE user_id = %s AND (voice_sample IS NULL OR voice_sample = '')
+            """, (extracted_text[:500], user_id))
+
+        conn.commit()
+
+        return {
+            "status": "ok",
+            "key": synthetic_key,
+            "file_name": file.filename,
+            "char_count": len(extracted_text),
+            "preview": extracted_text[:200],
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/faculty/reference-material")
+async def faculty_list_reference_materials(current_user=Depends(get_current_user_from_token)):
+    """List all reference materials uploaded for this faculty profile."""
+    user_id = current_user['user_id']
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT key, file_name, file_type, char_count, created_at
+            FROM faculty_reference_materials
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+        """, (user_id,))
+        rows = cursor.fetchall()
+        return {
+            "materials": [
+                {
+                    "key": r[0],
+                    "file_name": r[1],
+                    "file_type": r[2],
+                    "char_count": r[3],
+                    "created_at": r[4].isoformat() if r[4] else None,
+                }
+                for r in rows
+            ]
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.delete("/api/faculty/reference-material/{key:path}")
+async def faculty_delete_reference_material(key: str, current_user=Depends(get_current_user_from_token)):
+    """Delete a faculty reference material and remove its key from the profile."""
+    user_id = current_user['user_id']
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Verify ownership
+        cursor.execute(
+            "SELECT id FROM faculty_reference_materials WHERE key = %s AND user_id = %s",
+            (key, user_id)
+        )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Material not found")
+
+        cursor.execute(
+            "DELETE FROM faculty_reference_materials WHERE key = %s AND user_id = %s",
+            (key, user_id)
+        )
+
+        cursor.execute("""
+            UPDATE faculty_profiles
+            SET reference_material_keys = array_remove(reference_material_keys, %s),
+                last_updated = NOW()
+            WHERE user_id = %s
+        """, (key, user_id))
+
+        conn.commit()
+        return {"status": "ok", "deleted_key": key}
     finally:
         cursor.close()
         conn.close()

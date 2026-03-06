@@ -1497,6 +1497,7 @@
                 <li class="nav-item" onclick="showSection('module')">📦 <span data-i18n="nav.modules">Modules</span></li>
                 <li class="nav-item" onclick="showSection('syllabus')">📋 <span data-i18n="nav.syllabus">Syllabus</span></li>
                 <li class="nav-item" onclick="showSection('reference')">📚 <span data-i18n="nav.referenceMatl">Reference Materials</span></li>
+                <li class="nav-item" onclick="window.location.href='/bonita-profile.html'" style="background:linear-gradient(135deg,rgba(201,168,76,0.12),rgba(27,42,94,0.07)); border-left:3px solid #C9A84C; font-weight:600;">✨ <span>Bonita Profile</span></li>
                 <li class="nav-item" onclick="openOnboarding()" style="margin-top:1.5rem; border-top:1px solid rgba(0,0,0,0.08); padding-top:1rem; color:#888; font-size:0.88rem;">❓ <span data-i18n="nav.gettingStarted">Getting Started</span></li>
                 <li class="nav-item" onclick="window.location.href='/faq.html'" style="color:#888; font-size:0.88rem;">📖 <span data-i18n="nav.faq">FAQ</span></li>
                 <li class="nav-item" id="adminNavItem" style="display: none; margin-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 1rem;" onclick="window.location.href='/admin.html'">🛡️ Admin Panel</li>
@@ -1548,6 +1549,19 @@
             </div>
 
             <div class="content-wrapper">
+                <!-- Bonita Onboarding Banner (F2) -->
+                <div id="bonitaBanner" style="display:none; background:linear-gradient(135deg,#1E3A5F 0%,#2D5F8A 100%); border-radius:12px; padding:1.25rem 1.5rem; margin-bottom:1.5rem; color:#fff; display:none; align-items:center; gap:1rem; flex-wrap:wrap;">
+                    <div style="font-size:2rem; line-height:1;">✨</div>
+                    <div style="flex:1; min-width:200px;">
+                        <div style="font-weight:700; font-size:1rem; margin-bottom:0.25rem;">Meet Bonita — your AI teaching assistant</div>
+                        <div style="font-size:0.875rem; opacity:0.85;">A 10-minute conversation teaches Bonita your discipline, your students, and your voice. Every tool gets sharper.</div>
+                    </div>
+                    <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+                        <a href="/bonita-interview.html" style="background:#C9A84C; color:#1E3A5F; padding:0.6rem 1.25rem; border-radius:8px; font-weight:700; text-decoration:none; font-size:0.9rem; white-space:nowrap;">Start interview</a>
+                        <button onclick="dismissBonitaBanner()" style="background:transparent; border:1px solid rgba(255,255,255,0.4); color:rgba(255,255,255,0.7); padding:0.5rem 0.9rem; border-radius:8px; cursor:pointer; font-size:0.85rem; white-space:nowrap;">Not now</button>
+                    </div>
+                </div>
+
                 <!-- Canvas Connection -->
                 <div id="canvasConnection" class="connection-card">
                 <h2><span data-i18n="canvas.title">Canvas Connection</span> <span id="connectionStatus" class="status-badge disconnected" data-i18n="canvas.notConnected">Not Connected</span></h2>
@@ -2704,7 +2718,31 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                     }
                 } catch (e) { /* non-critical — localStorage preference used */ }
             }
+
+            // Bonita onboarding phase check (F2)
+            if (authToken) {
+                try {
+                    const bp = await fetch(API_URL + '/api/faculty/profile', {
+                        headers: { 'Authorization': 'Bearer ' + authToken }
+                    });
+                    if (bp.ok) {
+                        const prof = await bp.json();
+                        const phase = prof.onboarding_phase || 'not_started';
+                        const dismissed = sessionStorage.getItem('bonitaBannerDismissed');
+                        if (!dismissed && phase !== 'interview_complete' && phase !== 'demo_shown') {
+                            const banner = document.getElementById('bonitaBanner');
+                            if (banner) banner.style.display = 'flex';
+                        }
+                    }
+                } catch (e) { /* non-critical */ }
+            }
         });
+
+        function dismissBonitaBanner() {
+            sessionStorage.setItem('bonitaBannerDismissed', '1');
+            const banner = document.getElementById('bonitaBanner');
+            if (banner) banner.style.display = 'none';
+        }
 
         // ============================================================================
         // APP INITIALIZATION

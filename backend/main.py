@@ -5657,6 +5657,404 @@ async def get_interview_log(current_user=Depends(get_current_user_from_token)):
         conn.close()
 
 
+# ── Interview Conductor Prompts (Session 2) ────────────────────────────────────
+
+_BONITA_INTERVIEW_SYSTEM = """You are Bonita — an AI collaborator embedded inside ReadySetClass for Canvas. You are getting to know a faculty member for the first time.
+
+Your goal is to understand how they teach across six layers: identity, discipline, students, pedagogy, voice, and reference material. You will use this to personalize every piece of course content you generate for them — forever.
+
+CONVERSATION RULES:
+1. You are having a conversation, not conducting a survey. Respond to what they actually said before asking the next question. Reflect. Affirm. Then move forward.
+
+2. Ask ONE question per turn. Never stack questions.
+
+3. Use their answers to shape how you ask the next question. If they said "I teach adjunct at 3 schools" do not ask them to describe their pedagogical identity in depth — focus on the course context instead.
+
+4. Never make faculty feel inadequate. A first-semester teacher who says "I'm still figuring it out" should hear "that's exactly where good instincts are built."
+
+5. Extract structured data from every response. Return it as JSON at the end of every response (hidden from user, parsed by backend):
+<extracted>
+{"years_teaching": 3, "employment_type": "full_time", "teaching_level": ["undergrad"]}
+</extracted>
+Only include fields you are confident about. Do not guess.
+Valid profile fields: years_teaching (int), teaching_level (array: undergrad/grad/dual_enrollment/community), employment_type (full_time/adjunct/visiting/emeritus), is_course_owner (bool), primary_discipline (str), discipline_focus (str), anchor_thinkers (str), anchor_frameworks (str), typical_student_profile (str), student_struggles (str), learning_outcome_focus (str), teaching_style (str), grading_philosophy (str), what_an_a_looks_like (str), communication_style (formal/conversational/warm/direct), uses_humor (bool), voice_sample (str).
+
+6. Current layer: {current_layer}
+Fields collected so far: {collected_fields}
+Move to the next layer when the current one is complete.
+Signal layer completion with: <layer_complete>{layer_name}</layer_complete>
+Valid layer names: identity, discipline, students, pedagogy, voice, reference
+
+BRANCHING BASED ON IDENTITY:
+- New professor (0-3 years): Lead more. Reframe: "You get to build your teaching identity intentionally." On anchor thinkers: "Who interested you most in your own education? Start there."
+- Adjunct (assigned course): Pivot from personal identity to course context. "Let me ask about THIS course." Note is_course_owner=False.
+- Seasoned professor (10+ years): Respect depth immediately. "Upload something rather than describe it. Let your work introduce you." Skip basic questions. Go to depth.
+
+LAYER SEQUENCE:
+1. identity — years, level, full-time or adjunct
+2. discipline — what + specific corner + anchor thinkers
+3. students — who + struggles + what they should DO (learning_outcome_focus is the most important field)
+4. pedagogy — how classroom runs + grading philosophy + what an A looks like
+5. voice — communication style + ask for voice sample (a sentence or paragraph they've written to students)
+6. reference — invite upload of syllabus/assignments (explain it helps Bonita match their standard)
+
+When all 6 layers are complete, include <layer_complete>reference</layer_complete> in your final message."""
+
+_BONITA_PLAYBACK_PROMPT = """Generate a warm, specific, first-person playback summary for this faculty member based on their profile.
+
+Profile data:
+{profile_json}
+
+Rules:
+- 150-200 words. No longer.
+- Specific, not generic. Use their actual words back where possible.
+- End with exactly: "Does that sound right? I'd rather know now than build you the wrong thing for an entire semester."
+- Write as Bonita — warm, direct, confident.
+- If any field is missing, skip it gracefully. Do not say "you didn't tell me your X."
+- Do not use bullet points. Write in flowing prose."""
+
+_BONITA_VOICE_EXTRACTION_PROMPT = """Analyze this writing sample from a faculty member. Extract their voice profile as JSON only. No preamble, no explanation.
+
+Writing sample:
+{voice_sample}
+
+Return ONLY this JSON structure (no markdown, no code block):
+{{
+  "formality": "formal|conversational|warm|direct",
+  "avg_sentence_length": "short|medium|long",
+  "uses_contractions": true,
+  "uses_first_person": true,
+  "uses_humor": false,
+  "tone_markers": ["warm", "direct"],
+  "vocabulary_level": "technical|accessible|casual",
+  "paragraph_style": "dense|scannable|mixed"
+}}"""
+
+
+class DemoGenerateRequest(BaseModel):
+    discipline: str
+    content_type: str = "assignment"
+    context: Optional[str] = None
+
+
+@app.post("/api/faculty/demo/generate")
+async def faculty_demo_generate(
+    request: DemoGenerateRequest,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Phase 1 onboarding — generate a real sample to show Bonita's quality before interview."""
+    content_type = request.content_type.lower()
+    context_note = f" in a {request.context}" if request.context else ""
+
+    type_instructions = {
+        "assignment": "Create a complete assignment with clear instructions, learning objectives, and a grading rubric.",
+        "quiz": "Create a 5-question quiz with a mix of question types and an answer key.",
+        "discussion": "Create an engaging discussion prompt that pushes students to think critically.",
+        "syllabus": "Create a course syllabus outline with key sections: description, objectives, weekly topics, and grading breakdown.",
+    }
+    instruction = type_instructions.get(content_type, type_instructions["assignment"])
+
+    system = (
+        "You are Bonita, an AI teaching assistant. Generate high-quality, specific course content. "
+        "Be concrete and discipline-specific. Show what great AI-assisted content looks like."
+    )
+    prompt = (
+        f"Generate a sample {content_type} for a {request.discipline} course{context_note}.\n\n"
+        f"{instruction}\n\n"
+        "Make it specific to the discipline — not generic. Show the quality a professor would actually use."
+    )
+
+    sample = await call_ai(
+        task_type="generate",
+        system_prompt=system,
+        user_prompt=prompt,
+        user_id=current_user['user_id'],
+    )
+
+    return {
+        "sample_output": sample,
+        "content_type": content_type,
+        "discipline": request.discipline,
+        "note": (
+            "This is a general sample. After Bonita gets to know you — your discipline, "
+            "your students, how you grade — every output will be specific to you."
+        ),
+    }
+
+
+class InterviewMessageRequest(BaseModel):
+    faculty_message: str
+    turn_number: int
+    current_step: str = "identity"
+
+
+@app.post("/api/faculty/interview/message")
+async def interview_message(
+    request: InterviewMessageRequest,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Core interview endpoint. Each call = one turn of the Bonita conversation."""
+    import json as _json
+    import re as _re
+    user_id = current_user['user_id']
+
+    if not request.faculty_message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Get or create faculty profile row
+        cursor.execute("""
+            INSERT INTO faculty_profiles (user_id, onboarding_phase, interview_step)
+            VALUES (%s, 'interview_started', %s)
+            ON CONFLICT (user_id) DO UPDATE SET
+                onboarding_phase = CASE
+                    WHEN faculty_profiles.onboarding_phase = 'not_started' THEN 'interview_started'
+                    ELSE faculty_profiles.onboarding_phase
+                END,
+                interview_step = GREATEST(faculty_profiles.interview_step, %s),
+                last_updated = NOW()
+            RETURNING id
+        """, (user_id, request.turn_number, request.turn_number))
+        profile_id = cursor.fetchone()[0]
+        conn.commit()
+
+        # Log faculty message
+        cursor.execute("""
+            INSERT INTO bonita_interview_log
+                (faculty_profile_id, turn_number, speaker, message)
+            VALUES (%s, %s, 'faculty', %s)
+        """, (profile_id, request.turn_number, request.faculty_message.strip()))
+        conn.commit()
+
+        # Load full conversation history for context
+        cursor.execute("""
+            SELECT speaker, message FROM bonita_interview_log
+            WHERE faculty_profile_id = %s
+            ORDER BY turn_number ASC
+        """, (profile_id,))
+        history = cursor.fetchall()
+
+        # Get current profile state for the system prompt
+        cursor.execute("SELECT * FROM faculty_profiles WHERE id = %s", (profile_id,))
+        row = cursor.fetchone()
+        cols = [d[0] for d in cursor.description]
+        profile = dict(zip(cols, row))
+
+        # Build collected_fields summary for the system prompt
+        field_names = [
+            'years_teaching', 'teaching_level', 'employment_type', 'is_course_owner',
+            'primary_discipline', 'discipline_focus', 'anchor_thinkers', 'anchor_frameworks',
+            'typical_student_profile', 'student_struggles', 'learning_outcome_focus',
+            'teaching_style', 'grading_philosophy', 'what_an_a_looks_like',
+            'communication_style', 'uses_humor', 'voice_sample',
+        ]
+        collected = {f: profile[f] for f in field_names if profile.get(f) is not None}
+        collected_summary = ", ".join(f"{k}={v}" for k, v in list(collected.items())[:10]) or "none yet"
+
+        system = _BONITA_INTERVIEW_SYSTEM.format(
+            current_layer=request.current_step,
+            collected_fields=collected_summary,
+        )
+
+        # Build messages list for conversation continuity
+        messages = []
+        for speaker, msg in history[:-1]:  # exclude the turn we just logged
+            role = "assistant" if speaker == "bonita" else "user"
+            # Strip extracted tags from history to keep context clean
+            clean_msg = _re.sub(r'<extracted>.*?</extracted>', '', msg, flags=_re.DOTALL).strip()
+            clean_msg = _re.sub(r'<layer_complete>.*?</layer_complete>', '', clean_msg).strip()
+            if clean_msg:
+                messages.append({"role": role, "content": clean_msg})
+
+        # Current faculty message
+        messages.append({"role": "user", "content": request.faculty_message.strip()})
+
+        # Call Claude Sonnet 4.6 with conversation history
+        # Build a single prompt that includes the history
+        history_text = ""
+        for m in messages[:-1]:
+            prefix = "Bonita" if m["role"] == "assistant" else "Faculty"
+            history_text += f"{prefix}: {m['content']}\n\n"
+
+        full_prompt = (
+            (history_text if history_text else "")
+            + f"Faculty: {request.faculty_message.strip()}"
+        )
+
+        bonita_raw = await call_ai(
+            task_type="generate",
+            system_prompt=system,
+            user_prompt=full_prompt,
+            user_id=user_id,
+        )
+
+        # Extract structured data from <extracted>...</extracted>
+        extracted_match = _re.search(r'<extracted>(.*?)</extracted>', bonita_raw, _re.DOTALL)
+        extracted_fields = {}
+        if extracted_match:
+            try:
+                extracted_fields = _json.loads(extracted_match.group(1).strip())
+            except Exception:
+                extracted_fields = {}
+
+        # Detect layer completion
+        layer_complete_match = _re.search(r'<layer_complete>(.*?)</layer_complete>', bonita_raw)
+        completed_layer = layer_complete_match.group(1).strip() if layer_complete_match else None
+        interview_done = completed_layer == "reference"
+
+        # Clean Bonita message (strip tags before storing/returning)
+        bonita_message = _re.sub(r'<extracted>.*?</extracted>', '', bonita_raw, flags=_re.DOTALL)
+        bonita_message = _re.sub(r'<layer_complete>.*?</layer_complete>', '', bonita_message).strip()
+
+        # Persist extracted fields to faculty_profiles
+        if extracted_fields:
+            valid_fields = {f for f in field_names}
+            safe = {k: v for k, v in extracted_fields.items() if k in valid_fields and v is not None}
+            if safe:
+                set_clauses = [f"{k} = %s" for k in safe.keys()]
+                values = list(safe.values()) + [user_id]
+                cursor.execute(f"""
+                    UPDATE faculty_profiles
+                    SET {', '.join(set_clauses)}, last_updated = NOW()
+                    WHERE user_id = %s
+                """, values)
+                conn.commit()
+
+        # Log Bonita's response
+        next_turn = request.turn_number + 1
+        cursor.execute("""
+            INSERT INTO bonita_interview_log
+                (faculty_profile_id, turn_number, speaker, message, extracted_data)
+            VALUES (%s, %s, 'bonita', %s, %s)
+        """, (profile_id, next_turn, bonita_message,
+              _json.dumps(extracted_fields) if extracted_fields else None))
+        conn.commit()
+
+        # Determine next step based on layer progression
+        layer_order = ["identity", "discipline", "students", "pedagogy", "voice", "reference"]
+        current_idx = layer_order.index(request.current_step) if request.current_step in layer_order else 0
+        if completed_layer and completed_layer in layer_order:
+            completed_idx = layer_order.index(completed_layer)
+            next_step = layer_order[completed_idx + 1] if completed_idx + 1 < len(layer_order) else "reference"
+        else:
+            next_step = request.current_step
+
+        return {
+            "bonita_message": bonita_message,
+            "extracted_fields": extracted_fields,
+            "completed_layer": completed_layer,
+            "next_step": next_step,
+            "interview_complete": interview_done,
+            "turn_number": next_turn,
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/faculty/interview/complete")
+async def interview_complete(current_user=Depends(get_current_user_from_token)):
+    """Called when all 6 layers are done. Extracts voice profile, generates playback, marks complete."""
+    import json as _json
+    user_id = current_user['user_id']
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM faculty_profiles WHERE user_id = %s", (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="No profile found")
+        cols = [d[0] for d in cursor.description]
+        profile = dict(zip(cols, row))
+
+        # Step 1: Extract voice_style_profile from voice_sample if present
+        if profile.get('voice_sample') and not profile.get('voice_style_profile'):
+            try:
+                voice_json_str = await call_ai(
+                    task_type="generate",
+                    system_prompt="You are a writing style analyst. Return only valid JSON, no markdown.",
+                    user_prompt=_BONITA_VOICE_EXTRACTION_PROMPT.format(
+                        voice_sample=profile['voice_sample']
+                    ),
+                    user_id=user_id,
+                )
+                # Strip markdown code block if present
+                voice_clean = voice_json_str.strip()
+                if voice_clean.startswith("```"):
+                    voice_clean = voice_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                voice_profile = _json.loads(voice_clean)
+                cursor.execute("""
+                    UPDATE faculty_profiles SET voice_style_profile = %s WHERE user_id = %s
+                """, (_json.dumps(voice_profile), user_id))
+                conn.commit()
+                profile['voice_style_profile'] = voice_profile
+            except Exception as e:
+                print(f"⚠️  Voice extraction failed: {e}")
+
+        # Step 2: Generate playback summary
+        profile_for_playback = {k: v for k, v in profile.items() if v is not None and k not in
+                                 ('id', 'user_id', 'canvas_user_id', 'created_at', 'last_updated',
+                                  'profile_version', 'generations_count', 'interview_step',
+                                  'interview_completed', 'interview_completed_at', 'onboarding_phase',
+                                  'reference_material_keys')}
+        playback = await call_ai(
+            task_type="generate",
+            system_prompt="You are Bonita, a warm and direct AI teaching collaborator.",
+            user_prompt=_BONITA_PLAYBACK_PROMPT.format(
+                profile_json=_json.dumps(profile_for_playback, default=str)
+            ),
+            user_id=user_id,
+        )
+
+        # Step 3: Mark interview complete
+        from datetime import datetime
+        cursor.execute("""
+            UPDATE faculty_profiles
+            SET interview_completed = TRUE,
+                onboarding_phase = 'interview_complete',
+                interview_completed_at = NOW(),
+                last_updated = NOW()
+            WHERE user_id = %s
+        """, (user_id,))
+        conn.commit()
+
+        # Return updated profile
+        cursor.execute("SELECT * FROM faculty_profiles WHERE user_id = %s", (user_id,))
+        final_row = cursor.fetchone()
+        final_cols = [d[0] for d in cursor.description]
+        final_profile = dict(zip(final_cols, final_row))
+
+        return {"playback": playback, "profile": final_profile}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/faculty/interview/skip")
+async def interview_skip(current_user=Depends(get_current_user_from_token)):
+    """Skip the interview. Bonita still works — just not personalized yet."""
+    user_id = current_user['user_id']
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO faculty_profiles (user_id, onboarding_phase)
+            VALUES (%s, 'demo_shown')
+            ON CONFLICT (user_id) DO UPDATE SET
+                onboarding_phase = 'demo_shown',
+                last_updated = NOW()
+        """, (user_id,))
+        conn.commit()
+        return {
+            "status": "ok",
+            "message": "Profile will build from usage. Bonita learns as you work.",
+        }
+    finally:
+        cursor.close()
+        conn.close()
 
 
 # --- Course Activations (B1 Dual Limiter) ---

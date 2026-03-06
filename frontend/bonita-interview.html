@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meet Bonita — ReadySetClass™</title>
+    <link rel="icon" href="/assets/ReadySetClass_alpha_badge.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy: #1B2A5E;
+            --gold: #C9A84C;
+            --gold-light: #F5E6B8;
+            --font-head: 'Sora', sans-serif;
+            --font-body: 'DM Sans', sans-serif;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: var(--font-body);
+            background: #f8f9fb;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Top bar ── */
+        .topbar {
+            background: var(--navy);
+            padding: 14px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        .topbar-logo {
+            font-family: var(--font-head);
+            font-size: 18px;
+            font-weight: 700;
+            color: white;
+            letter-spacing: -0.3px;
+        }
+        .topbar-logo span { color: var(--gold); }
+        .topbar-skip {
+            background: none;
+            border: 1px solid rgba(255,255,255,0.3);
+            color: rgba(255,255,255,0.7);
+            border-radius: 6px;
+            padding: 6px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            font-family: var(--font-body);
+            transition: all 0.15s;
+        }
+        .topbar-skip:hover { background: rgba(255,255,255,0.08); color: white; }
+
+        /* ── Main container ── */
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 40px 24px 80px;
+            flex: 1;
+            width: 100%;
+        }
+
+        /* ── Screen management ── */
+        .screen { display: none; }
+        .screen.active { display: block; }
+
+        /* ── Bonita avatar / header ── */
+        .bonita-header {
+            text-align: center;
+            margin-bottom: 36px;
+        }
+        .bonita-avatar {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--navy) 0%, #2d4a8a 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin: 0 auto 16px;
+            box-shadow: 0 4px 16px rgba(27,42,94,0.25);
+        }
+        .bonita-name {
+            font-family: var(--font-head);
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--navy);
+            margin-bottom: 8px;
+        }
+        .bonita-tagline {
+            font-size: 16px;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        /* ── Card ── */
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+            padding: 32px;
+            margin-bottom: 20px;
+        }
+
+        /* ── Form elements ── */
+        label {
+            display: block;
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--navy);
+            margin-bottom: 8px;
+            margin-top: 20px;
+        }
+        label:first-child { margin-top: 0; }
+        input[type=text], select, textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1.5px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 15px;
+            font-family: var(--font-body);
+            color: #1a1a1a;
+            background: white;
+            transition: border-color 0.15s;
+            outline: none;
+        }
+        input[type=text]:focus, select:focus, textarea:focus {
+            border-color: var(--navy);
+        }
+        textarea { resize: vertical; min-height: 80px; }
+
+        /* ── Buttons ── */
+        .btn-primary {
+            background: var(--navy);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 14px 28px;
+            font-size: 15px;
+            font-weight: 700;
+            font-family: var(--font-head);
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-primary:hover { background: #253578; }
+        .btn-primary:active { transform: scale(0.98); }
+        .btn-primary:disabled {
+            background: #aaa;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-secondary {
+            background: white;
+            color: var(--navy);
+            border: 2px solid var(--navy);
+            border-radius: 10px;
+            padding: 12px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: var(--font-body);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-secondary:hover { background: #f0f4ff; }
+        .btn-gold {
+            background: var(--gold);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 14px 28px;
+            font-size: 15px;
+            font-weight: 700;
+            font-family: var(--font-head);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-gold:hover { background: #b8963f; }
+        .btn-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+            flex-wrap: wrap;
+        }
+        .btn-link {
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 13px;
+            cursor: pointer;
+            text-decoration: underline;
+            padding: 8px 0;
+            font-family: var(--font-body);
+        }
+        .btn-link:hover { color: var(--navy); }
+
+        /* ── Loading spinner ── */
+        .spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2.5px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Sample output card ── */
+        .sample-card {
+            background: #f8f9fb;
+            border: 1.5px solid #e0e8ff;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+        }
+        .sample-card h3 {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--navy);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+        .sample-content {
+            font-size: 14px;
+            line-height: 1.65;
+            color: #333;
+            white-space: pre-wrap;
+            max-height: 340px;
+            overflow-y: auto;
+        }
+        .sample-note {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: var(--gold-light);
+            border-radius: 8px;
+            font-size: 13px;
+            color: #6b5300;
+            line-height: 1.5;
+        }
+
+        /* ── Chat thread ── */
+        .chat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+        .chat-title {
+            font-family: var(--font-head);
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--navy);
+        }
+        .progress-dots {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ddd;
+            transition: background 0.3s;
+        }
+        .dot.active { background: var(--navy); }
+        .dot.done { background: var(--gold); }
+
+        .chat-thread {
+            max-height: 420px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding-right: 4px;
+        }
+        .chat-thread::-webkit-scrollbar { width: 4px; }
+        .chat-thread::-webkit-scrollbar-track { background: transparent; }
+        .chat-thread::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+
+        .msg {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+        .msg.bonita { flex-direction: row; }
+        .msg.faculty { flex-direction: row-reverse; }
+        .msg-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--navy);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .msg.faculty .msg-avatar { background: #e0e8ff; }
+        .msg-bubble {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .msg.bonita .msg-bubble {
+            background: #f0f4ff;
+            color: #1a1a1a;
+            border-bottom-left-radius: 4px;
+        }
+        .msg.faculty .msg-bubble {
+            background: var(--navy);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        /* ── Quick reply chips ── */
+        .quick-replies {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .chip {
+            background: white;
+            border: 1.5px solid var(--navy);
+            color: var(--navy);
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: var(--font-body);
+            transition: all 0.15s;
+        }
+        .chip:hover { background: var(--navy); color: white; }
+
+        /* ── Input row ── */
+        .input-row {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        .input-row textarea {
+            flex: 1;
+            min-height: 52px;
+            max-height: 120px;
+            padding: 14px 16px;
+            font-size: 14px;
+            resize: none;
+        }
+        .send-btn {
+            background: var(--navy);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            width: 48px;
+            height: 52px;
+            font-size: 20px;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: background 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .send-btn:hover { background: #253578; }
+        .send-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        .save-later {
+            text-align: center;
+            margin-top: 12px;
+        }
+
+        /* ── Playback ── */
+        .playback-text {
+            font-size: 16px;
+            line-height: 1.7;
+            color: #1a1a1a;
+            margin-bottom: 24px;
+            padding: 24px;
+            background: #f0f4ff;
+            border-radius: 12px;
+            border-left: 4px solid var(--navy);
+        }
+        .edit-hint {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 16px;
+        }
+        .profile-layers {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .layer-card {
+            border: 1.5px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 16px;
+        }
+        .layer-card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+        .layer-card-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--navy);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .layer-card-edit {
+            background: none;
+            border: 1px solid var(--navy);
+            color: var(--navy);
+            border-radius: 5px;
+            padding: 3px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            font-family: var(--font-body);
+        }
+        .layer-card-value {
+            font-size: 14px;
+            color: #444;
+            line-height: 1.5;
+        }
+        .layer-card-value.empty { color: #aaa; font-style: italic; }
+        .layer-edit-input {
+            margin-top: 8px;
+        }
+
+        /* ── Error/status messages ── */
+        .status-msg {
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin: 12px 0;
+        }
+        .status-msg.error { background: #fff0f0; color: #c00; border: 1px solid #fcc; }
+        .status-msg.success { background: #f0fff4; color: #076; border: 1px solid #9df; }
+
+        /* ── Loading screen ── */
+        #screen-loading {
+            text-align: center;
+            padding: 80px 20px;
+        }
+        .loading-spinner-lg {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #e0e0e0;
+            border-top-color: var(--navy);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <div class="topbar-logo">Ready<span>Set</span>Class™</div>
+    <button class="topbar-skip" onclick="skipOnboarding()">Skip for now</button>
+</div>
+
+<div class="container">
+
+    <!-- Loading screen -->
+    <div id="screen-loading" class="screen active">
+        <div class="loading-spinner-lg"></div>
+        <p style="color:#666; font-size:15px;">Loading your profile...</p>
+    </div>
+
+    <!-- Screen 1: Welcome / Demo -->
+    <div id="screen-welcome" class="screen">
+        <div class="bonita-header">
+            <div class="bonita-avatar">✨</div>
+            <div class="bonita-name">Hi, I'm Bonita.</div>
+            <div class="bonita-tagline">
+                I help faculty build better courses faster — assignments, syllabi, exams, discussions, and more.<br>
+                And I learn how <em>you</em> teach so every output gets more useful over time.<br><br>
+                <strong>Let me show you what I mean.</strong>
+            </div>
+        </div>
+
+        <div class="card">
+            <label>What do you teach?</label>
+            <input type="text" id="demo-discipline" placeholder="e.g., Media Studies, Organic Chemistry, U.S. History…" />
+
+            <label>What level?</label>
+            <select id="demo-level">
+                <option value="intro undergrad">Intro / undergrad</option>
+                <option value="upper-division undergrad">Upper-division undergrad</option>
+                <option value="graduate">Graduate</option>
+                <option value="community college">Community college</option>
+                <option value="dual enrollment / high school">Dual enrollment / high school</option>
+                <option value="mixed levels">Mixed levels</option>
+            </select>
+
+            <div class="btn-row">
+                <button class="btn-primary" onclick="runDemo()" id="demo-btn">
+                    Generate a sample assignment →
+                </button>
+            </div>
+        </div>
+
+        <!-- Sample output (hidden until generated) -->
+        <div id="demo-output" style="display:none;">
+            <div class="sample-card">
+                <h3>Sample output — <span id="demo-label"></span></h3>
+                <div class="sample-content" id="demo-content"></div>
+            </div>
+            <div class="sample-note" id="demo-note"></div>
+
+            <div class="card" style="margin-top:20px; text-align:center; padding:28px;">
+                <p style="font-size:16px; font-weight:600; color:var(--navy); margin-bottom:8px;">This is a general sample.</p>
+                <p style="font-size:14px; color:#555; margin-bottom:24px; line-height:1.6;">
+                    After Bonita gets to know you — your discipline, your students, how you grade — every output will be specific to you.<br>
+                    It takes about 5 minutes. Ready?
+                </p>
+                <div class="btn-row" style="justify-content:center;">
+                    <button class="btn-primary" onclick="startInterview()">Yes, let's go →</button>
+                    <button class="btn-secondary" onclick="skipOnboarding()">Use Bonita as-is</button>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align:center; margin-top:12px;">
+            <button class="btn-link" onclick="skipOnboarding()">Skip — take me straight to Bonita</button>
+        </div>
+    </div>
+
+    <!-- Screen 2: Interview -->
+    <div id="screen-interview" class="screen">
+        <div class="card">
+            <div class="chat-header">
+                <div class="chat-title">Getting to know you</div>
+                <div class="progress-dots" id="progress-dots">
+                    <div class="dot active" data-layer="identity" title="Identity"></div>
+                    <div class="dot" data-layer="discipline" title="Discipline"></div>
+                    <div class="dot" data-layer="students" title="Students"></div>
+                    <div class="dot" data-layer="pedagogy" title="Pedagogy"></div>
+                    <div class="dot" data-layer="voice" title="Voice"></div>
+                    <div class="dot" data-layer="reference" title="Reference"></div>
+                </div>
+            </div>
+
+            <div class="chat-thread" id="chat-thread">
+                <!-- Messages injected here -->
+            </div>
+
+            <div id="quick-replies-area"></div>
+
+            <div class="input-row">
+                <textarea id="faculty-input" placeholder="Type your response…" rows="2"
+                    onkeydown="handleInputKey(event)"></textarea>
+                <button class="send-btn" id="send-btn" onclick="sendMessage()" title="Send">→</button>
+            </div>
+
+            <div class="save-later">
+                <button class="btn-link" onclick="saveAndLeave()">Save progress and finish later</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Screen 3: Playback -->
+    <div id="screen-playback" class="screen">
+        <div class="bonita-header" style="margin-bottom:24px;">
+            <div class="bonita-avatar">✨</div>
+            <div class="bonita-name" style="font-size:22px;">Here's what I understand about you.</div>
+        </div>
+
+        <div class="card">
+            <div class="playback-text" id="playback-text"></div>
+
+            <div class="btn-row" id="playback-actions">
+                <button class="btn-primary" onclick="confirmProfile()">That's right — let's build something →</button>
+                <button class="btn-secondary" onclick="showEditCards()">Edit something</button>
+            </div>
+        </div>
+
+        <!-- Editable profile cards (hidden until Edit is clicked) -->
+        <div id="edit-cards" style="display:none;">
+            <p class="edit-hint">Click Edit on any layer to correct it. Changes save immediately.</p>
+            <div class="profile-layers" id="profile-layers-container">
+                <!-- Injected by JS -->
+            </div>
+            <div class="btn-row">
+                <button class="btn-primary" onclick="confirmProfile()">Got it — let's go →</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const API_URL = 'https://facultyflow-production.up.railway.app';
+    const authToken = localStorage.getItem('auth_token');
+
+    // State
+    let currentStep = 'identity';
+    let turnNumber = 0;
+    let profileData = {};
+    let interviewComplete = false;
+
+    const LAYER_ORDER = ['identity', 'discipline', 'students', 'pedagogy', 'voice', 'reference'];
+    const LAYER_LABELS = {
+        identity: 'Your Teaching Identity',
+        discipline: 'Your Discipline',
+        students: 'Your Students',
+        pedagogy: 'How You Teach',
+        voice: 'Your Voice',
+        reference: 'Reference Materials',
+    };
+
+    // Quick-reply options for early structured questions
+    const QUICK_REPLIES = {
+        identity: ['Full-time faculty', 'Adjunct', 'Visiting faculty', 'Emeritus'],
+        discipline: [],
+        students: [],
+        pedagogy: ['Lecture-heavy', 'Discussion-heavy', 'Project-based', 'Hybrid'],
+        voice: ['Formal and precise', 'Warm and approachable', 'Direct and concise', 'Casual and relaxed'],
+        reference: ['I have a syllabus to share', 'I have past assignments', 'No materials yet'],
+    };
+
+    function authHeaders() {
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
+        };
+    }
+
+    async function init() {
+        if (!authToken) {
+            window.location.href = '/login.html';
+            return;
+        }
+        try {
+            const res = await fetch(`${API_URL}/api/faculty/profile`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            if (!res.ok) throw new Error('auth');
+            const profile = await res.json();
+            profileData = profile;
+
+            const phase = profile.onboarding_phase || 'not_started';
+
+            if (phase === 'interview_complete') {
+                // Already done — redirect to dashboard
+                window.location.href = '/dashboard-v2.html';
+                return;
+            }
+            if (phase === 'interview_started' && profile.interview_step > 0) {
+                // Resume interview
+                await resumeInterview(profile);
+                return;
+            }
+            // Show welcome screen
+            showScreen('welcome');
+        } catch (e) {
+            if (e.message === 'auth') {
+                window.location.href = '/login.html';
+            } else {
+                showScreen('welcome');
+            }
+        }
+    }
+
+    function showScreen(name) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById('screen-' + name).classList.add('active');
+    }
+
+    // ── Screen 1: Demo ─────────────────────────────────────────────
+
+    async function runDemo() {
+        const discipline = document.getElementById('demo-discipline').value.trim();
+        if (!discipline) {
+            document.getElementById('demo-discipline').focus();
+            return;
+        }
+        const level = document.getElementById('demo-level').value;
+        const btn = document.getElementById('demo-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Bonita is thinking…';
+
+        try {
+            const res = await fetch(`${API_URL}/api/faculty/demo/generate`, {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({
+                    discipline,
+                    content_type: 'assignment',
+                    context: level,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Generation failed');
+
+            document.getElementById('demo-label').textContent = `${discipline} — ${level}`;
+            document.getElementById('demo-content').textContent = data.sample_output;
+            document.getElementById('demo-note').textContent = data.note;
+            document.getElementById('demo-output').style.display = 'block';
+            document.getElementById('demo-output').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (err) {
+            btn.disabled = false;
+            btn.innerHTML = 'Generate a sample assignment →';
+            showError('demo-error', err.message);
+        }
+        btn.disabled = false;
+        btn.innerHTML = 'Generate a sample assignment →';
+    }
+
+    function showError(id, msg) {
+        let el = document.getElementById(id);
+        if (!el) {
+            el = document.createElement('div');
+            el.id = id;
+            el.className = 'status-msg error';
+            document.getElementById('screen-welcome').querySelector('.card').appendChild(el);
+        }
+        el.textContent = msg;
+        el.style.display = 'block';
+    }
+
+    // ── Screen 2: Interview ────────────────────────────────────────
+
+    function startInterview() {
+        showScreen('interview');
+        // Bonita opens the conversation
+        appendBonitoMessage(getOpeningMessage());
+        updateProgressDots('identity');
+        renderQuickReplies('identity');
+    }
+
+    function getOpeningMessage() {
+        return (
+            "Hi! I'm Bonita. I'm going to ask you a few questions to understand how you teach — "
+            + "so everything I build for you actually sounds like you.\n\n"
+            + "Let's start simple: How long have you been teaching, and is this a course you designed "
+            + "or one you were assigned?"
+        );
+    }
+
+    async function resumeInterview(profile) {
+        try {
+            const res = await fetch(`${API_URL}/api/faculty/profile/interview-log`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const data = await res.json();
+            const log = data.log || [];
+
+            if (log.length === 0) {
+                startInterview();
+                return;
+            }
+
+            showScreen('interview');
+
+            // Replay conversation history into thread
+            for (const entry of log) {
+                if (entry.speaker === 'bonita') {
+                    appendBonitoMessage(entry.message);
+                } else {
+                    appendFacultyMessage(entry.message);
+                }
+            }
+
+            turnNumber = log.length;
+            // Determine current step from profile
+            const step = getStepFromProfile(profile);
+            currentStep = step;
+            updateProgressDots(step);
+            renderQuickReplies(step);
+        } catch (e) {
+            startInterview();
+        }
+    }
+
+    function getStepFromProfile(profile) {
+        if (!profile.primary_discipline) return 'identity';
+        if (!profile.typical_student_profile) return 'discipline';
+        if (!profile.teaching_style) return 'students';
+        if (!profile.communication_style) return 'pedagogy';
+        if (!profile.voice_sample) return 'voice';
+        return 'reference';
+    }
+
+    function appendBonitoMessage(text) {
+        const thread = document.getElementById('chat-thread');
+        const el = document.createElement('div');
+        el.className = 'msg bonita';
+        el.innerHTML = `
+            <div class="msg-avatar">✨</div>
+            <div class="msg-bubble">${escHtml(text)}</div>
+        `;
+        thread.appendChild(el);
+        thread.scrollTop = thread.scrollHeight;
+    }
+
+    function appendFacultyMessage(text) {
+        const thread = document.getElementById('chat-thread');
+        const el = document.createElement('div');
+        el.className = 'msg faculty';
+        el.innerHTML = `
+            <div class="msg-avatar" style="font-size:12px; color:var(--navy);">You</div>
+            <div class="msg-bubble">${escHtml(text)}</div>
+        `;
+        thread.appendChild(el);
+        thread.scrollTop = thread.scrollHeight;
+    }
+
+    function appendTypingIndicator() {
+        const thread = document.getElementById('chat-thread');
+        const el = document.createElement('div');
+        el.className = 'msg bonita';
+        el.id = 'typing-indicator';
+        el.innerHTML = `
+            <div class="msg-avatar">✨</div>
+            <div class="msg-bubble" style="color:#999; font-style:italic; padding:14px 16px;">
+                Bonita is thinking…
+            </div>
+        `;
+        thread.appendChild(el);
+        thread.scrollTop = thread.scrollHeight;
+    }
+
+    function removeTypingIndicator() {
+        const el = document.getElementById('typing-indicator');
+        if (el) el.remove();
+    }
+
+    function renderQuickReplies(step) {
+        const area = document.getElementById('quick-replies-area');
+        const replies = QUICK_REPLIES[step] || [];
+        if (replies.length === 0) {
+            area.innerHTML = '';
+            return;
+        }
+        area.innerHTML = `<div class="quick-replies">
+            ${replies.map(r => `<button class="chip" onclick="useQuickReply('${escAttr(r)}')">${escHtml(r)}</button>`).join('')}
+        </div>`;
+    }
+
+    function useQuickReply(text) {
+        document.getElementById('faculty-input').value = text;
+        sendMessage();
+    }
+
+    function handleInputKey(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    }
+
+    async function sendMessage() {
+        const input = document.getElementById('faculty-input');
+        const msg = input.value.trim();
+        if (!msg) return;
+
+        const sendBtn = document.getElementById('send-btn');
+        sendBtn.disabled = true;
+        input.value = '';
+        input.style.height = 'auto';
+
+        appendFacultyMessage(msg);
+        appendTypingIndicator();
+        document.getElementById('quick-replies-area').innerHTML = '';
+        turnNumber++;
+
+        try {
+            const res = await fetch(`${API_URL}/api/faculty/interview/message`, {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({
+                    faculty_message: msg,
+                    turn_number: turnNumber,
+                    current_step: currentStep,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Something went wrong');
+
+            removeTypingIndicator();
+            appendBonitoMessage(data.bonita_message);
+
+            if (data.extracted_fields) {
+                Object.assign(profileData, data.extracted_fields);
+            }
+
+            if (data.interview_complete) {
+                interviewComplete = true;
+                await triggerInterviewComplete();
+                return;
+            }
+
+            if (data.next_step && data.next_step !== currentStep) {
+                currentStep = data.next_step;
+                updateProgressDots(currentStep);
+            }
+            renderQuickReplies(currentStep);
+        } catch (err) {
+            removeTypingIndicator();
+            appendBonitoMessage("Sorry, I had a technical issue. Could you try that again?");
+        } finally {
+            sendBtn.disabled = false;
+            input.focus();
+        }
+    }
+
+    function updateProgressDots(activeStep) {
+        const dots = document.querySelectorAll('#progress-dots .dot');
+        const activeIdx = LAYER_ORDER.indexOf(activeStep);
+        dots.forEach((dot, i) => {
+            dot.classList.remove('active', 'done');
+            if (i < activeIdx) dot.classList.add('done');
+            else if (i === activeIdx) dot.classList.add('active');
+        });
+    }
+
+    function saveAndLeave() {
+        // Profile is saved progressively after each turn — just navigate away
+        window.location.href = '/dashboard-v2.html';
+    }
+
+    // ── Screen 3: Playback ─────────────────────────────────────────
+
+    async function triggerInterviewComplete() {
+        appendBonitoMessage("Give me just a moment while I put together what I've learned about you…");
+
+        try {
+            const res = await fetch(`${API_URL}/api/faculty/interview/complete`, {
+                method: 'POST',
+                headers: authHeaders(),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Completion failed');
+
+            profileData = data.profile;
+            showPlayback(data.playback, data.profile);
+        } catch (err) {
+            // If complete fails, still show a generic playback screen
+            showScreen('playback');
+            document.getElementById('playback-text').textContent =
+                "I've captured everything you've shared. Let's go build something together.";
+        }
+    }
+
+    function showPlayback(playback, profile) {
+        document.getElementById('playback-text').textContent = playback;
+        profileData = profile;
+        showScreen('playback');
+    }
+
+    function showEditCards() {
+        document.getElementById('edit-cards').style.display = 'block';
+        buildEditCards();
+        document.getElementById('edit-cards').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function buildEditCards() {
+        const layers = [
+            {
+                key: 'identity',
+                title: 'Your Teaching Identity',
+                fields: [
+                    { label: 'Years teaching', field: 'years_teaching' },
+                    { label: 'Teaching level', field: 'teaching_level', isArray: true },
+                    { label: 'Employment type', field: 'employment_type' },
+                ],
+            },
+            {
+                key: 'discipline',
+                title: 'Your Discipline',
+                fields: [
+                    { label: 'Primary discipline', field: 'primary_discipline' },
+                    { label: 'Specific focus', field: 'discipline_focus' },
+                    { label: 'Anchor thinkers', field: 'anchor_thinkers' },
+                ],
+            },
+            {
+                key: 'students',
+                title: 'Your Students',
+                fields: [
+                    { label: 'Typical student profile', field: 'typical_student_profile' },
+                    { label: 'What they struggle with', field: 'student_struggles' },
+                    { label: 'What they should be able to DO', field: 'learning_outcome_focus' },
+                ],
+            },
+            {
+                key: 'pedagogy',
+                title: 'How You Teach',
+                fields: [
+                    { label: 'Teaching style', field: 'teaching_style' },
+                    { label: 'Grading philosophy', field: 'grading_philosophy' },
+                    { label: 'What an A student does', field: 'what_an_a_looks_like' },
+                ],
+            },
+            {
+                key: 'voice',
+                title: 'Your Voice',
+                fields: [
+                    { label: 'Communication style', field: 'communication_style' },
+                    { label: 'Voice sample', field: 'voice_sample', multiline: true },
+                ],
+            },
+        ];
+
+        const container = document.getElementById('profile-layers-container');
+        container.innerHTML = layers.map(layer => {
+            const valueLines = layer.fields
+                .filter(f => profileData[f.field])
+                .map(f => {
+                    const val = f.isArray && Array.isArray(profileData[f.field])
+                        ? profileData[f.field].join(', ')
+                        : profileData[f.field];
+                    return `<span style="color:#666; font-size:12px;">${escHtml(f.label)}:</span> ${escHtml(String(val))}`;
+                })
+                .join('<br>');
+
+            return `
+            <div class="layer-card" id="layer-${layer.key}">
+                <div class="layer-card-head">
+                    <div class="layer-card-title">${escHtml(layer.title)}</div>
+                    <button class="layer-card-edit" onclick="editLayer('${layer.key}')">Edit</button>
+                </div>
+                <div class="layer-card-value ${valueLines ? '' : 'empty'}" id="layer-val-${layer.key}">
+                    ${valueLines || 'Not captured yet'}
+                </div>
+                <div class="layer-edit-input" id="layer-edit-${layer.key}" style="display:none;">
+                    ${layer.fields.map(f => `
+                        <label style="margin-top:10px;">${escHtml(f.label)}</label>
+                        ${f.multiline
+                            ? `<textarea id="edit-${f.field}" rows="3">${escHtml(profileData[f.field] || '')}</textarea>`
+                            : `<input type="text" id="edit-${f.field}" value="${escAttr(profileData[f.field] || '')}">`
+                        }
+                    `).join('')}
+                    <div class="btn-row" style="margin-top:12px;">
+                        <button class="btn-primary" style="padding:8px 18px; font-size:13px;"
+                            onclick="saveLayer('${layer.key}', ${JSON.stringify(layer.fields)})">Save</button>
+                        <button class="btn-secondary" style="padding:8px 18px; font-size:13px;"
+                            onclick="cancelEdit('${layer.key}')">Cancel</button>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function editLayer(key) {
+        document.getElementById(`layer-edit-${key}`).style.display = 'block';
+        document.getElementById(`layer-val-${key}`).style.display = 'none';
+    }
+
+    function cancelEdit(key) {
+        document.getElementById(`layer-edit-${key}`).style.display = 'none';
+        document.getElementById(`layer-val-${key}`).style.display = 'block';
+    }
+
+    async function saveLayer(key, fields) {
+        const updates = {};
+        for (const f of fields) {
+            const el = document.getElementById(`edit-${f.field}`);
+            if (el && el.value.trim()) {
+                updates[f.field] = el.value.trim();
+            }
+        }
+        if (Object.keys(updates).length === 0) {
+            cancelEdit(key);
+            return;
+        }
+        try {
+            await fetch(`${API_URL}/api/faculty/profile`, {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify(updates),
+            });
+            Object.assign(profileData, updates);
+            cancelEdit(key);
+            buildEditCards(); // refresh display
+        } catch (e) {
+            // silently fail — profile will sync on next load
+            cancelEdit(key);
+        }
+    }
+
+    async function confirmProfile() {
+        window.location.href = '/dashboard-v2.html';
+    }
+
+    async function skipOnboarding() {
+        try {
+            await fetch(`${API_URL}/api/faculty/interview/skip`, {
+                method: 'POST',
+                headers: authHeaders(),
+            });
+        } catch (e) { /* ignore */ }
+        window.location.href = '/dashboard-v2.html';
+    }
+
+    // ── Utilities ──────────────────────────────────────────────────
+
+    function escHtml(str) {
+        if (str == null) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/\n/g, '<br>');
+    }
+
+    function escAttr(str) {
+        if (str == null) return '';
+        return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // ── Init ────────────────────────────────────────────────────────
+    init();
+</script>
+</body>
+</html>

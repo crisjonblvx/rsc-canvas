@@ -1320,6 +1320,42 @@
             cursor: pointer;
             font-family: var(--font-body);
         }
+
+        /* ── RTL support for Arabic ───────────────────────── */
+        [dir="rtl"] .sidebar {
+            left: auto;
+            right: 0;
+            border-right: none;
+            border-left: 1px solid rgba(0,0,0,0.05);
+        }
+        [dir="rtl"] .main-content {
+            margin-left: 0;
+            margin-right: var(--sidebar-width, 260px);
+        }
+        [dir="rtl"] .nav-item {
+            flex-direction: row-reverse;
+        }
+        [dir="rtl"] .nav-item.active {
+            border-right: none;
+            border-left: 3px solid var(--purple);
+        }
+        [dir="rtl"] .header {
+            text-align: right;
+        }
+        [dir="rtl"] .section-header {
+            flex-direction: row-reverse;
+        }
+
+        /* ── Font stacks for non-Latin scripts ────────────── */
+        :lang(zh), :lang(ja), :lang(ko) {
+            font-family: 'Noto Sans CJK SC', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans', sans-serif;
+        }
+        :lang(ar) {
+            font-family: 'Noto Sans Arabic', 'Arial Arabic', 'Segoe UI', sans-serif;
+        }
+        :lang(hi) {
+            font-family: 'Noto Sans Devanagari', 'Mangal', sans-serif;
+        }
     </style>
 </head>
 <body>

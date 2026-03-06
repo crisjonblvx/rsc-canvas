@@ -598,6 +598,18 @@
                 transform: scale(1);
             }
         }
+
+        /* ── Font stacks for non-Latin scripts ────────────── */
+        :lang(zh), :lang(ja), :lang(ko) {
+            font-family: 'Noto Sans CJK SC', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans', sans-serif;
+        }
+        :lang(ar) {
+            font-family: 'Noto Sans Arabic', 'Arial Arabic', 'Segoe UI', sans-serif;
+            direction: rtl;
+        }
+        :lang(hi) {
+            font-family: 'Noto Sans Devanagari', 'Mangal', sans-serif;
+        }
     </style>
 </head>
 <body>

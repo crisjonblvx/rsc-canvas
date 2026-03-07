@@ -113,6 +113,50 @@
     "finish": "Concluir",
     "preview": "Visualizar"
   },
+  "onboarding": {
+    "close": "×",
+    "back": "← Voltar",
+    "next": "Próximo →",
+    "finish": "Vamos lá! 🎉",
+    "step1": {
+      "title": "Bem-vindo ao ReadySetClass!",
+      "sub": "Você está configurado com a ferramenta com IA criada para educadores. Veja o que você pode fazer:",
+      "item1": "<strong>Criar cursos</strong> — gere questionários, tarefas, módulos e ementas em minutos.",
+      "item2": "<strong>Correção por IA</strong> — deixe a IA corrigir as submissões dos alunos com base na sua rubrica. Você revisa e aprova antes de qualquer publicação.",
+      "item3": "<strong>Avisos e Discussões</strong> — redija e publique conteúdo no Canvas sem fazer login diretamente.",
+      "item4": "<strong>Sincronização direta com Canvas</strong> — tudo é publicado diretamente no seu curso Canvas. Sem copiar e colar.",
+      "callout": "Funciona com contas Canvas de <strong>K-12 e universidades</strong> — qualquer escola usando o Instructure Canvas LMS."
+    },
+    "step2": {
+      "title": "Conecte sua conta do Canvas",
+      "sub": "O ReadySetClass precisa da sua URL do Canvas e de um token de acesso à API para sincronizar com seus cursos.",
+      "howTo": "Como obter seu token de API do Canvas:",
+      "s1": "Faça login na sua conta do Canvas na URL do Canvas da sua escola",
+      "s2": "Clique na sua <strong>foto de perfil</strong> (canto superior direito) → <strong>Configurações</strong>",
+      "s3": "Role até <strong>Integrações Aprovadas</strong> → clique em <strong>+ Novo Token de Acesso</strong>",
+      "s4": "Dê um nome como \"ReadySetClass\" → clique em <strong>Gerar Token</strong>",
+      "s5": "Copie o token — <strong>você só o verá uma vez!</strong>",
+      "callout": "Sua <strong>URL do Canvas</strong> se parece com: <code>https://suaescola.instructure.com</code>. Verifique a barra do navegador quando estiver no Canvas."
+    },
+    "step3": {
+      "title": "Correção por IA — Como funciona",
+      "sub": "Quando os alunos enviam tarefas no Canvas, a IA as corrige com base na sua rubrica em minutos.",
+      "item1": "Suporta submissões em <strong>PDF, Word (.docx), Excel e texto</strong>",
+      "item2": "Usa sua <strong>rubrica do Canvas</strong> automaticamente — ou você digita uma manualmente",
+      "item3": "Você <strong>revisa cada nota</strong> antes de qualquer publicação — a IA auxilia, você decide",
+      "item4": "25 submissões ≈ ~10 horas manual → <strong>~1 hora com IA</strong> (90% mais rápido)",
+      "callout": "Encontre na barra lateral: <strong>✨ Corretor IA</strong> — selecione uma tarefa, confirme a rubrica e comece."
+    },
+    "step4": {
+      "title": "Você está pronto para começar!",
+      "sub": "Sua lista de início rápido:",
+      "item1": "Conectar Canvas (role para baixo → Conexão do Canvas)",
+      "item2": "Selecione um curso em <strong>Meus Cursos</strong>",
+      "item3": "Crie algo — experimente <strong>📝 Criar Questionário</strong> primeiro, é o mais rápido",
+      "item4": "Quando os alunos enviarem trabalhos → experimente <strong>✨ Corretor IA</strong>",
+      "callout": "Tem perguntas? Clique no botão <strong>?</strong> a qualquer momento para rever este tutorial."
+    }
+  },
   "footer": {
     "copyright": "© 2026 ReadySetClass. Todos os direitos reservados.",
     "trademark": "ReadySetClass™ é uma marca registrada.",

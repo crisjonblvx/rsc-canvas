@@ -53,6 +53,30 @@ async def startup_event():
         print(f"⚠️  Database initialization failed: {e}")
         print("   App will continue but some features may not work")
 
+    # Run incremental SQL migrations (idempotent — safe to re-run)
+    try:
+        import psycopg2, os, pathlib
+        db_url = os.getenv("DATABASE_URL", "")
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+        if db_url:
+            conn = psycopg2.connect(db_url)
+            cursor = conn.cursor()
+            migrations_dir = pathlib.Path(__file__).parent / "migrations"
+            for migration_file in sorted(migrations_dir.glob("*.sql")):
+                try:
+                    sql = migration_file.read_text()
+                    cursor.execute(sql)
+                    conn.commit()
+                    print(f"✅ Migration applied: {migration_file.name}")
+                except Exception as me:
+                    conn.rollback()
+                    print(f"⚠️  Migration {migration_file.name} skipped (already applied or error): {me}")
+            cursor.close()
+            conn.close()
+    except Exception as e:
+        print(f"⚠️  Migration runner failed (non-critical): {e}")
+
 # CORS middleware - Allow readysetclass.app domains only
 app.add_middleware(
     CORSMiddleware,
@@ -116,6 +140,17 @@ if os.getenv("ANTHROPIC_API_KEY"):
         print("✅ Anthropic client initialized (Claude Sonnet - $0.05/assignment)")
     except Exception as e:
         print(f"⚠️  Anthropic initialization failed: {e}")
+
+# Initialize Gemini (mid-tier: discussions, pages, accessibility, Flash-Lite routing)
+gemini_client = None
+if os.getenv("GEMINI_API_KEY"):
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        gemini_client = genai
+        print("✅ Gemini client initialized (Gemini 2.5 Flash + Flash-Lite)")
+    except Exception as e:
+        print(f"⚠️  Gemini initialization failed: {e}")
 
 if not openai_client and not groq_client and not anthropic_client:
     print("⚠️  No AI API keys found. AI features will not work.")
@@ -482,7 +517,8 @@ Format in clean HTML for Canvas. Keep it practical and actionable."""
         difficulty: str = "medium",
         grade_level: str = "college",
         language: str = "en",
-        tone: int = 3
+        tone: int = 3,
+        faculty_context: str = ""
     ) -> Dict:
         """Generate quiz questions with detailed context and grade-appropriate language (Groq - FREE!)"""
 
@@ -495,7 +531,7 @@ Format in clean HTML for Canvas. Keep it practical and actionable."""
         # Get tone description
         tone_desc = AI_TONE_MAP.get(tone, AI_TONE_MAP[3])
 
-        system = f"You are Bonita, an AI assistant helping educators create {grade_level} quiz questions that assess student understanding at the appropriate reading level."
+        system = f"You are Bonita, an AI assistant helping educators create {grade_level} quiz questions that assess student understanding at the appropriate reading level.\n{faculty_context}"
 
         # Build difficulty distribution based on difficulty level
         if difficulty == "easy":
@@ -600,8 +636,202 @@ Prefer recent (2020+) resources. Cite sources properly."""
         self.cost_tracker["study_packs"] += cost
         return study_pack
 
+    # ── Bonita Learning Signal Methods ─────────────────────────────────────────
+
+    def _infer_course_level(self, course_code: str) -> str:
+        """
+        Infer course level from course code number.
+        Standard higher ed convention:
+          100-199 → intro
+          200-299 → mid
+          300-399 → upper
+          400+    → grad (or advanced undergrad)
+        """
+        import re
+        match = re.search(r'\d+', course_code or '')
+        if not match:
+            return 'unknown'
+        num = int(match.group())
+        if num < 200:  return 'intro'
+        if num < 300:  return 'mid'
+        if num < 400:  return 'upper'
+        return 'grad'
+
+    def _infer_subject_area(self, course_name: str, course_code: str) -> str:
+        """
+        Infer broad subject area from course name/code.
+        Returns normalized subject string for grouping.
+        """
+        name_lower = (course_name or '').lower()
+        code_lower = (course_code or '').lower()
+        combined = name_lower + ' ' + code_lower
+
+        mapping = {
+            'communications': ['comm', 'media', 'journalism', 'broadcast', 'mass comm'],
+            'business':       ['bus', 'mgmt', 'mkt', 'marketing', 'management', 'finance', 'econ'],
+            'stem':           ['math', 'bio', 'chem', 'phys', 'cs', 'eng', 'sci'],
+            'social_science': ['soc', 'psych', 'pols', 'anthro', 'hist'],
+            'humanities':     ['english', 'lit', 'phil', 'art', 'music', 'theatre'],
+            'education':      ['edu', 'educ', 'teach', 'pedagogy'],
+            'health':         ['nurs', 'health', 'kines', 'nutri', 'public health'],
+            'law':            ['law', 'legal', 'crim', 'justice'],
+        }
+
+        for subject, keywords in mapping.items():
+            if any(kw in combined for kw in keywords):
+                return subject
+
+        return 'general'
+
+    def capture_course_signal(
+        self,
+        asset_id: int,
+        user_id: int,
+        course_data: dict,
+        content_mix: dict,
+        bonita_opt_in: bool = False
+    ):
+        """
+        Capture course-level structural signal after a full course build.
+        Fire-and-forget — never raises, never blocks the main flow.
+        """
+        conn = None
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            course_level = self._infer_course_level(course_data.get('course_code', ''))
+            subject_area = self._infer_subject_area(
+                course_data.get('course_name', ''),
+                course_data.get('course_code', '')
+            )
+
+            import json
+            cursor.execute("""
+                INSERT INTO bonita_course_signals (
+                    asset_id, user_id, course_code, subject_area, credit_hours,
+                    course_level, week_count, content_mix, has_rubrics,
+                    has_weighted_grading, learning_objectives_count, bonita_opt_in
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                asset_id,
+                user_id,
+                course_data.get('course_code'),
+                subject_area,
+                course_data.get('credits'),
+                course_level,
+                course_data.get('weeks'),
+                json.dumps(content_mix),
+                content_mix.get('assignments', 0) > 0,
+                course_data.get('weighted_grading', False),
+                len(course_data.get('objectives', [])),
+                bonita_opt_in
+            ))
+            conn.commit()
+            print(f"✅ Bonita course signal captured (asset_id={asset_id})")
+        except Exception as e:
+            print(f"⚠️  Bonita signal capture failed (non-critical): {e}")
+            if conn:
+                try: conn.rollback()
+                except: pass
+        finally:
+            if conn:
+                try: conn.close()
+                except: pass
+
+    def capture_content_signal(
+        self,
+        asset_id: int,
+        user_id: int,
+        content_type: str,
+        course_data: dict,
+        week_number: int = None,
+        word_count: int = 0,
+        has_rubric: bool = False,
+        question_types: dict = None,
+        model_used: str = 'groq',
+        generation_cost: float = 0.0,
+        enhance_applied: bool = False,
+        bonita_opt_in: bool = False
+    ):
+        """
+        Capture individual content piece signal after generation.
+        Fire-and-forget — never raises, never blocks the main flow.
+        """
+        conn = None
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            course_level = self._infer_course_level(course_data.get('course_code', ''))
+            subject_area = self._infer_subject_area(
+                course_data.get('course_name', ''),
+                course_data.get('course_code', '')
+            )
+
+            # Infer difficulty from week position
+            weeks_total = course_data.get('weeks', 16)
+            difficulty = 'foundational'
+            if week_number:
+                pct = week_number / weeks_total
+                if pct > 0.75:   difficulty = 'advanced'
+                elif pct > 0.50: difficulty = 'proficient'
+                elif pct > 0.25: difficulty = 'developing'
+
+            import json
+            cursor.execute("""
+                INSERT INTO bonita_content_signals (
+                    asset_id, user_id, content_type, subject_area, course_level,
+                    week_number, difficulty_level, word_count, has_rubric,
+                    question_types, model_used, generation_cost,
+                    enhance_applied, bonita_opt_in
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                asset_id, user_id, content_type, subject_area, course_level,
+                week_number, difficulty, word_count, has_rubric,
+                json.dumps(question_types or {}), model_used, generation_cost,
+                enhance_applied, bonita_opt_in
+            ))
+            conn.commit()
+        except Exception as e:
+            print(f"⚠️  Bonita content signal capture failed (non-critical): {e}")
+            if conn:
+                try: conn.rollback()
+                except: pass
+        finally:
+            if conn:
+                try: conn.close()
+                except: pass
+
+
 # Initialize Bonita
 bonita = BonitaEngine()
+
+
+def _get_user_bonita_consent(user_id: int) -> bool:
+    """
+    Check if a user has an active Bonita data pipeline consent.
+    Returns False on any error — consent must be explicit, never assumed.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT bonita_consent_granted_at, bonita_consent_revoked_at
+            FROM users WHERE id = %s
+        """, (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            return False
+        granted, revoked = row
+        return granted is not None and (revoked is None or granted > revoked)
+    except Exception:
+        return False
+    finally:
+        if conn:
+            try: conn.close()
+            except: pass
 
 # ============================================================================
 # CANVAS API INTEGRATION
@@ -840,6 +1070,7 @@ class QuizUploadRequest(BaseModel):
     questions: list  # The generated questions from preview
     num_questions: int
     due_date: Optional[str] = None
+    faculty_confirmed: bool = False  # G1 Zone 3
 
 class QuizRequest(BaseModel):
     course_id: int
@@ -1024,6 +1255,103 @@ def log_model_usage(user_id: int, task_type: str, model: str, provider: str,
     finally:
         cursor.close()
         conn.close()
+
+
+async def call_ai(task_type: str, system_prompt: str, user_prompt: str, user_id: int = None) -> str:
+    """
+    Route-aware AI call using model_router.
+    Selects Groq / Gemini Flash / Gemini Flash-Lite / Sonnet based on task_type.
+    Logs usage to model_usage_log automatically. Returns response text.
+    """
+    config = get_model_config(task_type)
+    provider = config["provider"]
+    model = config["model"]
+    max_tokens = config["max_tokens"]
+    temperature = config["temperature"]
+    text = None
+    input_tokens = 0
+    output_tokens = 0
+
+    try:
+        if provider == "groq" and groq_client:
+            response = groq_client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            text = response.choices[0].message.content
+            if response.usage:
+                input_tokens = response.usage.prompt_tokens
+                output_tokens = response.usage.completion_tokens
+
+        elif provider == "gemini" and gemini_client:
+            gmodel = gemini_client.GenerativeModel(model)
+            response = gmodel.generate_content(
+                f"System: {system_prompt}\n\nUser: {user_prompt}"
+            )
+            text = response.text
+            try:
+                input_tokens = response.usage_metadata.prompt_token_count
+                output_tokens = response.usage_metadata.candidates_token_count
+            except Exception:
+                pass
+
+        elif provider == "anthropic" and anthropic_client:
+            response = anthropic_client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            text = response.content[0].text
+            input_tokens = response.usage.input_tokens
+            output_tokens = response.usage.output_tokens
+
+        else:
+            # No configured provider for this route — fall back to Sonnet
+            if anthropic_client:
+                model = "claude-sonnet-4-6"
+                provider = "anthropic"
+                response = anthropic_client.messages.create(
+                    model=model,
+                    max_tokens=max_tokens,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_prompt}],
+                )
+                text = response.content[0].text
+                input_tokens = response.usage.input_tokens
+                output_tokens = response.usage.output_tokens
+            else:
+                raise Exception(f"No AI provider available for task_type={task_type}")
+
+    except Exception as e:
+        print(f"⚠️  call_ai [{task_type}] primary failed: {e}")
+        # Emergency fallback to Anthropic Sonnet
+        if anthropic_client and provider != "anthropic":
+            model = "claude-sonnet-4-6"
+            provider = "anthropic"
+            response = anthropic_client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            text = response.content[0].text
+            input_tokens = response.usage.input_tokens
+            output_tokens = response.usage.output_tokens
+        else:
+            raise
+
+    cost = calculate_cost(model, input_tokens, output_tokens)
+    print(f"✅ call_ai [{task_type}] via {provider}/{model} (cost: ${cost:.4f})")
+    if user_id:
+        log_model_usage(user_id, task_type, model, provider, input_tokens, output_tokens, cost)
+    return text
 
 
 def record_time_saved(user_id: int, asset_type: str, asset_id: int = None, semester_tag: str = None):
@@ -1218,8 +1546,22 @@ async def get_current_user_info(current_user = Depends(get_current_user_from_tok
 class LanguageUpdateRequest(BaseModel):
     preferred_language: str
 
-_SUPPORTED_LANGS = {'en', 'es', 'fr', 'pt', 'ar', 'zh'}
+_SUPPORTED_LANGS = {'en', 'es', 'fr', 'de', 'pt', 'zh', 'ja', 'ko', 'hi', 'ar'}
 
+# ----------------------------------------------------------
+# GET — read current language preference
+# ----------------------------------------------------------
+@app.get("/api/v2/user/language")
+async def get_preferred_language(
+    current_user=Depends(get_current_user_from_token)
+):
+    """Return the user's saved preferred language."""
+    return {"preferred_language": current_user.get("preferred_language", "en")}
+
+
+# ----------------------------------------------------------
+# PATCH — update language preference
+# ----------------------------------------------------------
 @app.patch("/api/v2/user/language")
 async def update_preferred_language(
     request: LanguageUpdateRequest,
@@ -1227,7 +1569,10 @@ async def update_preferred_language(
 ):
     """Persist the user's preferred UI language."""
     if request.preferred_language not in _SUPPORTED_LANGS:
-        raise HTTPException(status_code=400, detail=f"Unsupported language code. Supported: {', '.join(sorted(_SUPPORTED_LANGS))}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported language code. Supported: {', '.join(sorted(_SUPPORTED_LANGS))}"
+        )
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -1240,7 +1585,6 @@ async def update_preferred_language(
     except Exception:
         conn.rollback()
         # Column may not exist before migration 008 — still return success
-        # so the frontend doesn't show errors
         return {"preferred_language": request.preferred_language}
     finally:
         cursor.close()
@@ -1370,6 +1714,81 @@ async def create_checkout_session(
         raise HTTPException(status_code=500, detail=f"Checkout error: {str(e)}")
 
 
+# --- Credit Pack Checkout (B3) ---
+
+class CreditCheckoutRequest(BaseModel):
+    price_id: str
+    success_url: str
+    cancel_url: str
+
+
+@app.post("/api/stripe/create-checkout-credits")
+async def create_credit_checkout(
+    request: CreditCheckoutRequest,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Create Stripe checkout session for one-time credit pack purchase."""
+    if not stripe.api_key:
+        raise HTTPException(status_code=500, detail="Payment system not configured.")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT email, stripe_customer_id FROM users WHERE id = %s", (current_user['user_id'],))
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="User not found")
+        email, stripe_customer_id = result
+
+        # Reuse ensure_stripe_customer logic
+        if stripe_customer_id:
+            try:
+                stripe.Customer.retrieve(stripe_customer_id)
+            except stripe.InvalidRequestError:
+                stripe_customer_id = None
+
+        if not stripe_customer_id:
+            customer = stripe.Customer.create(email=email, metadata={"user_id": str(current_user['user_id'])})
+            stripe_customer_id = customer.id
+            cursor.execute("UPDATE users SET stripe_customer_id = %s WHERE id = %s", (stripe_customer_id, current_user['user_id']))
+            conn.commit()
+
+        checkout_session = stripe.checkout.Session.create(
+            customer=stripe_customer_id,
+            payment_method_types=['card'],
+            line_items=[{'price': request.price_id, 'quantity': 1}],
+            mode='payment',
+            success_url=request.success_url,
+            cancel_url=request.cancel_url,
+            metadata={
+                'user_id': str(current_user['user_id']),
+                'price_id': request.price_id,
+            }
+        )
+
+        return {"checkout_url": checkout_session.url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Credit checkout error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/v2/credit-packs")
+async def get_credit_packs():
+    """Return available credit packs with pricing (no auth required)."""
+    packs = [
+        {"id": "starter",       "name": "Starter Pack",       "credits": 10,  "price": 2.99,  "per_image": 0.30},
+        {"id": "standard",      "name": "Standard Pack",      "credits": 25,  "price": 9.99,  "per_image": 0.40},
+        {"id": "power",         "name": "Power Pack",         "credits": 75,  "price": 24.99, "per_image": 0.33},
+        {"id": "institutional", "name": "Institutional Pack", "credits": 250, "price": 49.99, "per_image": 0.20},
+    ]
+    return {"packs": packs}
+
+
 @app.post("/api/stripe/webhook")
 async def stripe_webhook(request: Request):
     """Handle Stripe webhook events"""
@@ -1386,6 +1805,15 @@ async def stripe_webhook(request: Request):
         'price_1T0FbKGKcotGCnJDVrqbHUHu': 'district',   # district
     }
 
+    # Map Stripe credit pack price IDs to (pack_type, credits)
+    # TODO: Replace placeholders with live Stripe price IDs from CJ
+    CREDIT_PACK_MAP = {
+        'price_CREDIT_STARTER':       ('starter', 10),
+        'price_CREDIT_STANDARD':      ('standard', 25),
+        'price_CREDIT_POWER':         ('power', 75),
+        'price_CREDIT_INSTITUTIONAL': ('institutional', 250),
+    }
+
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, STRIPE_WEBHOOK_SECRET
@@ -1398,23 +1826,42 @@ async def stripe_webhook(request: Request):
         if event['type'] == 'checkout.session.completed':
             session = event['data']['object']
             user_id = session['metadata']['user_id']
-
-            # Determine tier from price_id stored in metadata
             price_id = session['metadata'].get('price_id', '')
-            tier = PRICE_TIER_MAP.get(price_id, 'educator')  # default to educator if unknown
-            print(f"✅ Checkout completed: user={user_id}, price={price_id}, tier={tier}")
+            checkout_mode = session.get('mode', 'subscription')
 
-            # Update user subscription and clear demo status if they were a demo user
-            cursor.execute("""
-                UPDATE users
-                SET subscription_status = 'active',
-                    subscription_tier = %s,
-                    stripe_subscription_id = %s,
-                    trial_ends_at = NULL,
-                    is_demo = FALSE,
-                    demo_expires_at = NULL
-                WHERE id = %s
-            """, (tier, session['subscription'], user_id))
+            # ── Credit pack purchase (one-time payment) ──
+            if price_id in CREDIT_PACK_MAP:
+                pack_type, credits = CREDIT_PACK_MAP[price_id]
+                amount_paid = (session.get('amount_total') or 0) / 100.0
+                payment_intent = session.get('payment_intent', '')
+                print(f"✅ Credit pack purchased: user={user_id}, pack={pack_type}, credits={credits}, amount=${amount_paid:.2f}")
+
+                # Add credits to user balance
+                cursor.execute(
+                    "UPDATE users SET image_credits_balance = COALESCE(image_credits_balance, 0) + %s WHERE id = %s",
+                    (credits, user_id)
+                )
+                # Record the purchase
+                cursor.execute("""
+                    INSERT INTO credit_pack_purchases (user_id, pack_type, credits_purchased, amount_paid, stripe_payment_intent_id)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (user_id, pack_type, credits, amount_paid, payment_intent))
+
+            # ── Subscription purchase ──
+            else:
+                tier = PRICE_TIER_MAP.get(price_id, 'educator')
+                print(f"✅ Subscription checkout: user={user_id}, price={price_id}, tier={tier}")
+
+                cursor.execute("""
+                    UPDATE users
+                    SET subscription_status = 'active',
+                        subscription_tier = %s,
+                        stripe_subscription_id = %s,
+                        trial_ends_at = NULL,
+                        is_demo = FALSE,
+                        demo_expires_at = NULL
+                    WHERE id = %s
+                """, (tier, session.get('subscription'), user_id))
 
         elif event['type'] == 'customer.subscription.updated':
             subscription = event['data']['object']
@@ -1737,6 +2184,8 @@ async def generate_quiz_questions(
         if reference_context:
             enriched_description += f"\n\nCourse reference materials (use specific topics and concepts from here):\n{reference_context}"
 
+        faculty_ctx = get_faculty_context(user_id)
+        increment_faculty_generations(user_id)
         quiz_data = bonita.generate_quiz(
             week=1,
             topic=request.topic,
@@ -1745,7 +2194,8 @@ async def generate_quiz_questions(
             difficulty=request.difficulty,
             grade_level=request.grade_level,
             language=request.language,
-            tone=request.tone
+            tone=request.tone,
+            faculty_context=faculty_ctx,
         )
 
         questions = quiz_data.get("questions", [])
@@ -1796,6 +2246,18 @@ async def upload_quiz_to_canvas(
                 status_code=404,
                 detail="Canvas not connected"
             )
+
+        # G1 Zone 3: Screen quiz topic before Canvas push
+        quiz_content_to_screen = request.topic + " " + " ".join(
+            q.get("question_text", "") for q in request.questions[:5]
+        )
+        flag = await _upload_safety_guard(
+            quiz_content_to_screen, "quiz", user_id,
+            course_id=str(request.course_id), generation_method="manual_input",
+            faculty_confirmed=request.faculty_confirmed,
+        )
+        if flag:
+            return {"status": "flag", **flag}
 
         # Upload to Canvas
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
@@ -2055,6 +2517,59 @@ def get_user_reference_context(user_id: int, db: Session, max_materials: int = 3
     except Exception:
         return ""
 
+# ── G1 Content Safety Guard ─────────────────────────────────────────────────────
+
+async def _upload_safety_guard(
+    content: str,
+    content_type: str,
+    user_id: int,
+    course_id: Optional[str] = None,
+    generation_method: str = "manual_input",
+    faculty_confirmed: bool = False,
+) -> Optional[dict]:
+    """
+    Run content safety check before any Canvas upload.
+    - Hard block: raises HTTPException(422) always.
+    - Soft flag (not confirmed): returns dict for frontend confirmation flow.
+    - Clean / confirmed: returns None (caller proceeds normally).
+    Logs to content_approvals for every push.
+    """
+    from content_integrity import check_content_safety, log_content_approval
+    result = await check_content_safety(content, content_type, anthropic_client)
+
+    # Log every upload attempt
+    try:
+        conn = get_db_connection()
+        log_content_approval(
+            conn, user_id, content_type, generation_method, content,
+            faculty_approved=result["passed"] or faculty_confirmed,
+            course_id=str(course_id) if course_id else None,
+            bonita_generated=(generation_method == "ai_generated"),
+            safety_checked=True,
+            safety_passed=result["passed"],
+            safety_flags={"level": result["level"], "reason": result.get("reason")} if not result["passed"] else None,
+        )
+        conn.close()
+    except Exception as e:
+        print(f"⚠️  content_approval log failed: {e}")
+
+    if result["level"] == "hard_block":
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "CONTENT_HARD_BLOCK",
+                "message": "This content can't be uploaded. Bonita found content that isn't appropriate for an academic platform. Please review and edit your content, then try again.",
+            }
+        )
+    if result["level"] == "soft_flag" and not faculty_confirmed:
+        return {
+            "requires_confirmation": True,
+            "flag_reason": result.get("reason"),
+            "flag_message": result.get("display_message") or "Bonita noticed something worth a second look before this goes to your students.",
+        }
+    return None
+
+
 class AnnouncementRequest(BaseModel):
     course_id: int
     topic: str
@@ -2063,6 +2578,7 @@ class AnnouncementRequest(BaseModel):
     tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
     custom_message: Optional[str] = None  # If set, use this text instead of generating
     enhance: bool = False  # If True + custom_message, AI polishes the custom message
+    faculty_confirmed: bool = False  # G1 Zone 3: faculty confirmed soft flag
 
 
 class AIPageRequest(BaseModel):
@@ -2080,6 +2596,7 @@ class PageRequest(BaseModel):
     course_id: int
     title: str
     content: str
+    faculty_confirmed: bool = False  # G1 Zone 3
 
 
 class AssignmentRequest(BaseModel):
@@ -2088,6 +2605,7 @@ class AssignmentRequest(BaseModel):
     description: str
     points: int = 100
     due_date: Optional[str] = None
+    faculty_confirmed: bool = False  # G1 Zone 3
 
 
 class ModuleRequest(BaseModel):
@@ -2100,6 +2618,7 @@ class DiscussionRequest(BaseModel):
     course_id: int
     topic: str
     prompt: str
+    faculty_confirmed: bool = False  # G1 Zone 3
 
 
 # Grading Setup Models
@@ -2149,6 +2668,9 @@ async def create_announcement_v2(
         language_name = LANGUAGE_MAP.get(request.language, "English")
         tone_desc = ANNOUNCEMENT_TONE_MAP.get(request.tone, ANNOUNCEMENT_TONE_MAP[3])
 
+        faculty_ctx = get_faculty_context(user_id)
+        increment_faculty_generations(user_id)
+
         if request.custom_message and not request.enhance:
             # Quick Input: Post as-is, just wrap in HTML paragraphs
             print(f"📢 Posting announcement as-is (no AI)")
@@ -2157,7 +2679,7 @@ async def create_announcement_v2(
         elif request.custom_message and request.enhance:
             # Quick Input + AI Polish: lightly improve what they wrote
             print(f"📢 Polishing announcement with AI (tone={request.tone})")
-            system = "You are Bonita, helping professors refine course announcements."
+            system = f"You are Bonita, helping professors refine course announcements.\n{faculty_ctx}"
             prompt = f"""Polish and lightly improve this course announcement while keeping the author's voice and intent.
 
 Tone: {tone_desc}
@@ -2174,11 +2696,11 @@ Instructions:
 - Format in HTML for Canvas
 
 Return just the HTML content, no markdown code blocks."""
-            announcement_html, _ = bonita.call_haiku(prompt, system)
+            announcement_html = await call_ai('announcement_generation', system, prompt, user_id=user_id)
         else:
             # AI Generate: write the full announcement from topic
             print(f"📢 Generating announcement on: {request.topic}")
-            system = "You are Bonita, helping professors create course announcements."
+            system = f"You are Bonita, helping professors create course announcements.\n{faculty_ctx}"
             prompt = f"""Create a course announcement about: {request.topic}
 
 Tone: {tone_desc}
@@ -2193,7 +2715,17 @@ Make it:
 - Formatted in HTML for Canvas
 
 Return just the HTML content, no markdown code blocks."""
-            announcement_html, _ = bonita.call_haiku(prompt, system)
+            announcement_html = await call_ai('announcement_generation', system, prompt, user_id=user_id)
+
+        # G1 Zone 2+3: Safety check before Canvas push
+        method = "ai_generated" if not request.custom_message else "manual_input"
+        flag = await _upload_safety_guard(
+            announcement_html, "announcement", user_id,
+            course_id=str(request.course_id), generation_method=method,
+            faculty_confirmed=request.faculty_confirmed,
+        )
+        if flag:
+            return {"status": "flag", **flag}
 
         # Upload to Canvas
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
@@ -2277,8 +2809,11 @@ async def generate_ai_page(
         reference_context = get_user_reference_context(current_user['user_id'], db, course_name=request.course_name, max_chars=ref_max_chars)
         course_label = request.course_name or "this course"
 
-        system = """You are Bonita, an AI assistant helping college professors create course pages.
-Your output should be well-formatted HTML suitable for Canvas LMS."""
+        faculty_ctx = get_faculty_context(current_user['user_id'])
+        increment_faculty_generations(current_user['user_id'])
+        system = f"""You are Bonita, an AI assistant helping college professors create course pages.
+Your output should be well-formatted HTML suitable for Canvas LMS.
+{faculty_ctx}"""
 
         sections = set(request.study_pack_sections or [])
 
@@ -2402,11 +2937,9 @@ Format in HTML for Canvas:
 
 Do NOT include the page title as a heading (Canvas adds it automatically)."""
 
-        # Study guides need more output tokens to render all sections fully
-        sonnet_max_tokens = 4096 if request.page_type == "study_guide" else 4000
-
         # Generate with Claude Sonnet 4.6 (page_full route per model router)
-        generated_content, cost = bonita.call_sonnet(prompt, system, max_tokens=sonnet_max_tokens)
+        generated_content = await call_ai('page_full', system, prompt, user_id=user_id)
+        cost = 0.0
 
         asset_id = save_asset(
             user_id, 'page', request.title or "Course Page",
@@ -2446,6 +2979,15 @@ async def create_page_v2(
         credentials = db.query(CanvasCredentials).filter_by(user_id=user_id).first()
         if not credentials:
             raise HTTPException(status_code=404, detail="Canvas not connected")
+
+        # G1 Zone 2+3: Safety check before Canvas push
+        flag = await _upload_safety_guard(
+            request.content, "page", user_id,
+            course_id=str(request.course_id), generation_method="manual_input",
+            faculty_confirmed=request.faculty_confirmed,
+        )
+        if flag:
+            return {"status": "flag", **flag}
 
         # Upload page to Canvas (content already provided)
         print(f"📄 Creating page: {request.title}")
@@ -2518,8 +3060,11 @@ async def generate_ai_assignment(
         course_label = request.course_name or "this course"
         ref_section = f"\n\nCOURSE REFERENCE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
 
-        system = """You are Bonita, an AI assistant helping college professors create assignments.
-Write in HTML formatted for Canvas LMS."""
+        faculty_ctx = get_faculty_context(current_user['user_id'])
+        increment_faculty_generations(current_user['user_id'])
+        system = f"""You are Bonita, an AI assistant helping college professors create assignments.
+Write in HTML formatted for Canvas LMS.
+{faculty_ctx}"""
 
         prompt = f"""Help a professor create a {assignment_type_desc} for their course.
 
@@ -2548,10 +3093,34 @@ Format in HTML for Canvas:
 
 Do NOT include the assignment title as a heading. Be practical, specific, and actionable."""
 
-        # Generate with Claude Haiku 4.5 (natural, course-specific content)
-        generated_content, cost = bonita.call_haiku(prompt, system)
+        # Generate with model router (assignment_full → Sonnet)
+        generated_content = await call_ai('assignment_full', system, prompt, user_id=user_id)
+        cost = 0.0
 
-        print(f"✅ Assignment generated (cost: ${cost:.4f})")
+        print(f"✅ Assignment generated")
+
+        # Bonita learning signal — fire-and-forget
+        try:
+            user_id = current_user['user_id']
+            asset_id_sig = save_asset(
+                user_id, 'assignment', f"Assignment: {request.topic}",
+                generated_content, course_name=getattr(request, 'course_name', None)
+            ) if not hasattr(request, '_asset_saved') else None
+            course_dict = {
+                'course_name': getattr(request, 'course_name', ''),
+                'course_code': getattr(request, 'course_code', ''),
+                'weeks': 16,
+            }
+            bonita.capture_content_signal(
+                asset_id=asset_id_sig or 0, user_id=user_id,
+                content_type='assignment', course_data=course_dict,
+                word_count=len(generated_content.split()),
+                has_rubric=True,
+                model_used='claude_sonnet',
+                bonita_opt_in=_get_user_bonita_consent(user_id)
+            )
+        except Exception:
+            pass
 
         return {
             "status": "success",
@@ -2600,7 +3169,16 @@ Include:
 
 Format in HTML for Canvas."""
 
-            description, _ = bonita.call_sonnet(prompt, system, max_tokens=4000)
+            description = await call_ai('assignment_full', system, prompt, user_id=user_id)
+
+        # G1 Zone 2+3: Safety check before Canvas push
+        flag = await _upload_safety_guard(
+            description, "assignment", user_id,
+            course_id=str(request.course_id), generation_method="manual_input",
+            faculty_confirmed=request.faculty_confirmed,
+        )
+        if flag:
+            return {"status": "flag", **flag}
 
         # Upload to Canvas
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
@@ -2764,7 +3342,16 @@ Create an engaging discussion post that:
 
 Keep it concise but meaningful."""
 
-        discussion_html, _ = bonita.call_claude(prompt, system)
+        discussion_html = await call_ai('discussion_standard', system, prompt, user_id=user_id)
+
+        # G1 Zone 2+3: Safety check before Canvas push
+        flag = await _upload_safety_guard(
+            discussion_html, "discussion", user_id,
+            course_id=str(request.course_id), generation_method="ai_generated",
+            faculty_confirmed=request.faculty_confirmed,
+        )
+        if flag:
+            return {"status": "flag", "generated_content": discussion_html, **flag}
 
         # Upload to Canvas
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
@@ -3021,6 +3608,7 @@ class AISyllabusRequest(BaseModel):
 class SyllabusRequest(BaseModel):
     course_id: int
     syllabus_body: str
+    faculty_confirmed: bool = False  # G1 Zone 3
 
 
 @app.post("/api/v2/canvas/generate-discussion")
@@ -3042,7 +3630,9 @@ async def generate_ai_discussion(
         course_label = request.course_name or "this course"
         ref_section = f"\n\nCOURSE REFERENCE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
 
-        system = "You are Bonita, helping professors create engaging class discussions."
+        faculty_ctx = get_faculty_context(user_id)
+        increment_faculty_generations(user_id)
+        system = f"You are Bonita, helping professors create engaging class discussions.\n{faculty_ctx}"
         prompt = f"""Create a discussion topic for a college course.
 
 SELECTED COURSE: {course_label}
@@ -3063,15 +3653,15 @@ Include:
 
 Format in HTML for Canvas. Be direct and engaging — students should know exactly what to discuss."""
 
-        content, cost = bonita.call_haiku(prompt, system)
+        content = await call_ai('discussion_standard', system, prompt, user_id=user_id)
 
         asset_id = save_asset(
             user_id, 'discussion', f"Discussion: {request.topic}",
             content, course_name=request.course_name
         )
 
-        print(f"✅ Discussion generated (cost: ${cost:.4f})")
-        return {"status": "success", "generated_content": content, "asset_id": asset_id, "cost": cost}
+        print(f"✅ Discussion generated")
+        return {"status": "success", "generated_content": content, "asset_id": asset_id, "cost": 0.0}
     except HTTPException:
         raise
     except Exception as e:
@@ -3099,7 +3689,9 @@ async def generate_ai_syllabus(
         course_label = selected_cn or request.course_name or "this course"
         ref_section = f"\n\nEXISTING COURSE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
 
-        system = "You are Bonita, helping professors create course syllabi."
+        faculty_ctx = get_faculty_context(user_id)
+        increment_faculty_generations(user_id)
+        system = f"You are Bonita, helping professors create course syllabi.\n{faculty_ctx}"
         prompt = f"""Create a course syllabus for: {request.course_name}
 
 SELECTED COURSE: {course_label}
@@ -3123,15 +3715,34 @@ Format in HTML for Canvas:
 Be specific, practical, and student-friendly. No filler."""
 
         # Syllabus uses Sonnet (syllabus_full route per model router)
-        content, cost = bonita.call_sonnet(prompt, system, max_tokens=6000)
+        content = await call_ai('syllabus_full', system, prompt, user_id=user_id)
 
         asset_id = save_asset(
             user_id, 'syllabus', f"Syllabus: {request.course_name}",
             content, course_name=request.course_name
         )
 
-        print(f"✅ Syllabus generated (cost: ${cost:.4f})")
-        return {"status": "success", "generated_content": content, "asset_id": asset_id, "cost": cost}
+        # Bonita learning signal — fire-and-forget, never blocks
+        try:
+            course_dict = {
+                'course_name': request.course_name,
+                'course_code': getattr(request, 'course_code', ''),
+                'credits': getattr(request, 'credits', None),
+                'weeks': getattr(request, 'weeks', 16),
+                'objectives': request.objectives.split('\n') if isinstance(request.objectives, str) else (request.objectives or []),
+            }
+            bonita.capture_content_signal(
+                asset_id=asset_id, user_id=user_id,
+                content_type='syllabus', course_data=course_dict,
+                word_count=len(content.split()),
+                model_used='claude_sonnet',
+                bonita_opt_in=_get_user_bonita_consent(user_id)
+            )
+        except Exception:
+            pass  # Signal capture must never break the response
+
+        print(f"✅ Syllabus generated")
+        return {"status": "success", "generated_content": content, "asset_id": asset_id, "cost": 0.0}
     except HTTPException:
         raise
     except Exception as e:
@@ -3158,6 +3769,15 @@ async def upload_syllabus(
             raise HTTPException(status_code=404, detail="Canvas not connected")
 
         print(f"📋 Uploading syllabus to course {request.course_id}")
+
+        # G1 Zone 2+3: Safety check before Canvas push
+        flag = await _upload_safety_guard(
+            request.syllabus_body, "syllabus", user_id,
+            course_id=str(request.course_id), generation_method="manual_input",
+            faculty_confirmed=request.faculty_confirmed,
+        )
+        if flag:
+            return {"status": "flag", **flag}
 
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
         canvas_client = CanvasClient(credentials.canvas_url, decrypted_token)
@@ -4482,6 +5102,169 @@ async def delete_asset(asset_id: int, current_user=Depends(get_current_user_from
         conn.close()
 
 
+# --- Image Generation (C1) ---
+
+class ImageGenerateRequest(BaseModel):
+    prompt: str
+    style: Optional[str] = "illustration"  # banner | illustration | icon_set | photo
+    context: Optional[str] = "page"         # page | syllabus
+
+
+@app.post("/api/v2/generate-image")
+async def generate_image(
+    request: ImageGenerateRequest,
+    current_user=Depends(get_current_user_from_token)
+):
+    """
+    Generate an AI image using Gemini image generation.
+    Costs 1 image credit. Saves to media_library.
+    """
+    user_id = current_user['user_id']
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Check credit balance
+        cursor.execute("SELECT image_credits_balance FROM users WHERE id = %s", (user_id,))
+        row = cursor.fetchone()
+        if not row or (row[0] or 0) < 1:
+            raise HTTPException(
+                status_code=402,
+                detail="Insufficient image credits. Purchase a credit pack to generate images."
+            )
+
+        if not gemini_client:
+            raise HTTPException(status_code=503, detail="Image generation service unavailable (GEMINI_API_KEY not set)")
+
+        # Build style-aware prompt
+        style_map = {
+            "banner":       "wide horizontal banner image, 16:9 aspect ratio, professional education design",
+            "illustration": "clean flat illustration, minimal style, educational theme",
+            "icon_set":     "set of 4-6 related icons, flat design, consistent style, white background",
+            "photo":        "realistic photo-style image, high quality, educational context",
+        }
+        style_hint = style_map.get(request.style, style_map["illustration"])
+        full_prompt = f"{request.prompt}. Style: {style_hint}. Clean, professional, suitable for a college course page."
+
+        # Call Gemini image generation
+        print(f"🎨 Generating image: {request.prompt[:60]}...")
+        try:
+            image_model = gemini_client.GenerativeModel("gemini-2.0-flash-exp-image-generation")
+            import google.generativeai as genai_mod
+            response = image_model.generate_content(
+                contents=full_prompt,
+                generation_config=genai_mod.GenerationConfig(response_modalities=["IMAGE"])
+            )
+            image_base64 = None
+            mime_type = "image/png"
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, "inline_data") and part.inline_data:
+                    image_base64 = part.inline_data.data
+                    mime_type = part.inline_data.mime_type or "image/png"
+                    break
+            if not image_base64:
+                raise Exception("No image data returned from Gemini")
+        except Exception as img_err:
+            print(f"⚠️  Gemini image generation failed: {img_err}")
+            raise HTTPException(status_code=500, detail=f"Image generation failed: {str(img_err)}")
+
+        data_url = f"data:{mime_type};base64,{image_base64}"
+
+        # Deduct 1 credit atomically
+        cursor.execute(
+            "UPDATE users SET image_credits_balance = image_credits_balance - 1 WHERE id = %s AND image_credits_balance >= 1 RETURNING image_credits_balance",
+            (user_id,)
+        )
+        updated = cursor.fetchone()
+        if not updated:
+            raise HTTPException(status_code=402, detail="Credit deduction failed — balance may have changed")
+        credits_remaining = updated[0]
+
+        # Save to media_library
+        cursor.execute("""
+            INSERT INTO media_library (user_id, prompt_used, style_preset, image_url, image_data, mime_type, credit_cost)
+            VALUES (%s, %s, %s, %s, %s, %s, 1)
+            RETURNING id
+        """, (user_id, request.prompt, request.style, data_url, image_base64, mime_type))
+        media_id = cursor.fetchone()[0]
+
+        # Log credit usage
+        cursor.execute("""
+            INSERT INTO credit_usage_log (user_id, credits_used, image_url, prompt_used)
+            VALUES (%s, 1, %s, %s)
+        """, (user_id, data_url[:500], request.prompt))
+
+        conn.commit()
+        print(f"✅ Image generated — media_id={media_id}, credits_remaining={credits_remaining}")
+
+        return {
+            "status": "success",
+            "media_id": media_id,
+            "image_url": data_url,
+            "mime_type": mime_type,
+            "credits_remaining": credits_remaining,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Image generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/v2/media-library")
+async def get_media_library(current_user=Depends(get_current_user_from_token)):
+    """Return all images in the user's media library (for My Images tab)."""
+    user_id = current_user['user_id']
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT id, prompt_used, style_preset, image_url, alt_text, created_at
+            FROM media_library
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            LIMIT 50
+        """, (user_id,))
+        rows = cursor.fetchall()
+        return {
+            "images": [
+                {
+                    "id": r[0],
+                    "prompt": r[1],
+                    "style": r[2],
+                    "image_url": r[3],
+                    "alt_text": r[4] or r[1],
+                    "created_at": r[5].isoformat() if r[5] else None,
+                }
+                for r in rows
+            ]
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.patch("/api/v2/media-library/{media_id}/alt")
+async def update_image_alt(media_id: int, payload: dict, current_user=Depends(get_current_user_from_token)):
+    """Update alt text for a saved image."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE media_library SET alt_text = %s WHERE id = %s AND user_id = %s",
+            (payload.get("alt_text", ""), media_id, current_user['user_id'])
+        )
+        conn.commit()
+        return {"status": "updated"}
+    finally:
+        cursor.close()
+        conn.close()
+
+
 # --- Time Saved Counter (D1) ---
 
 @app.get("/api/v2/time-savings")
@@ -4575,14 +5358,11 @@ Instructions:
 
 Return ONLY the bullet points or the word null. No preamble."""
 
-    suggestion_text, cost = bonita.call_haiku(prompt, system, max_tokens=400)
+    suggestion_text = await call_ai('enhance_mode_suggestion', system, prompt, user_id=current_user['user_id'])
     suggestion_text = suggestion_text.strip()
 
     if suggestion_text.lower() in ("null", "none", ""):
         return {"suggestion": None}
-
-    log_model_usage(current_user['user_id'], "enhance_mode_suggestion",
-                    "claude-haiku-4-5-20251001", "anthropic", cost_usd=cost)
 
     return {"suggestion": suggestion_text}
 
@@ -4612,6 +5392,15 @@ async def set_bonita_consent(request: BonitaOptInRequest, current_user=Depends(g
             """, (user_id,))
             # Set all assets bonita_opt_in = false
             cursor.execute("UPDATE assets SET bonita_opt_in = FALSE WHERE user_id = %s", (user_id,))
+            # Revoke signal table consent
+            cursor.execute(
+                "UPDATE bonita_course_signals SET bonita_opt_in = FALSE WHERE user_id = %s",
+                (user_id,)
+            )
+            cursor.execute(
+                "UPDATE bonita_content_signals SET bonita_opt_in = FALSE WHERE user_id = %s",
+                (user_id,)
+            )
             # Queue deletion requests for previously exported assets
             cursor.execute("""
                 INSERT INTO deletion_requests (asset_id)
@@ -4651,6 +5440,962 @@ async def get_bonita_consent(current_user=Depends(get_current_user_from_token)):
             "granted_at": granted.isoformat() if granted else None,
             "asset_count": count or 0
         }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ── Bonita Learning Signal Endpoints ──────────────────────────────────────────
+
+@app.get("/api/v2/bonita/patterns")
+async def get_learning_patterns(
+    subject: str = None,
+    level: str = None,
+    current_user=Depends(get_current_user_from_token)
+):
+    """
+    Return aggregated course patterns for a subject/level.
+    Powers the LMS course setup recommendations.
+    Only returns data where sample_size >= 3 (privacy threshold).
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        query = """
+            SELECT
+                subject_area,
+                course_level,
+                COUNT(*) as sample_size,
+                ROUND(AVG(week_count), 1) as avg_weeks,
+                ROUND(AVG(learning_objectives_count), 1) as avg_objectives,
+                ROUND(AVG((content_mix->>'assignments')::int), 1) as avg_assignments,
+                ROUND(AVG((content_mix->>'quizzes')::int), 1) as avg_quizzes,
+                ROUND(AVG((content_mix->>'discussions')::int), 1) as avg_discussions,
+                ROUND(100.0 * SUM(CASE WHEN has_rubrics THEN 1 ELSE 0 END) / COUNT(*), 1) as rubric_rate
+            FROM bonita_course_signals
+            WHERE bonita_opt_in = TRUE
+        """
+        params = []
+        if subject:
+            query += " AND subject_area = %s"
+            params.append(subject)
+        if level:
+            query += " AND course_level = %s"
+            params.append(level)
+
+        query += """
+            GROUP BY subject_area, course_level
+            HAVING COUNT(*) >= 3
+            ORDER BY sample_size DESC
+        """
+
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        cols = ['subject_area', 'course_level', 'sample_size', 'avg_weeks',
+                'avg_objectives', 'avg_assignments', 'avg_quizzes',
+                'avg_discussions', 'rubric_rate']
+        return {"patterns": [dict(zip(cols, row)) for row in rows]}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/v2/bonita/difficulty-curve")
+async def get_difficulty_curve(
+    subject: str,
+    level: str,
+    current_user=Depends(get_current_user_from_token)
+):
+    """
+    Return difficulty distribution by week for a subject/level.
+    Minimum 5 data points per week required to include that week.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT
+                week_number,
+                difficulty_level,
+                COUNT(*) as count
+            FROM bonita_content_signals
+            WHERE bonita_opt_in = TRUE
+              AND subject_area = %s
+              AND course_level = %s
+              AND week_number IS NOT NULL
+            GROUP BY week_number, difficulty_level
+            HAVING COUNT(*) >= 5
+            ORDER BY week_number, difficulty_level
+        """, (subject, level))
+        rows = cursor.fetchall()
+
+        # Shape into {week: {difficulty: count}} for easy frontend consumption
+        curve = {}
+        for week, difficulty, count in rows:
+            if week not in curve:
+                curve[week] = {}
+            curve[week][difficulty] = count
+
+        return {"subject": subject, "level": level, "curve": curve}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/v2/admin/bonita/signals")
+async def get_bonita_signal_stats(
+    current_user=Depends(get_current_user_from_token)
+):
+    """Admin-only view of Bonita signal pipeline health."""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT
+                (SELECT COUNT(*) FROM bonita_course_signals) as total_course_signals,
+                (SELECT COUNT(*) FROM bonita_course_signals WHERE bonita_opt_in = TRUE) as opted_in_course_signals,
+                (SELECT COUNT(*) FROM bonita_content_signals) as total_content_signals,
+                (SELECT COUNT(*) FROM bonita_content_signals WHERE bonita_opt_in = TRUE) as opted_in_content_signals,
+                (SELECT COUNT(DISTINCT subject_area) FROM bonita_course_signals WHERE bonita_opt_in = TRUE) as subject_areas_covered,
+                (SELECT COUNT(*) FROM bonita_learning_patterns) as computed_patterns
+        """)
+        row = cursor.fetchone()
+        cols = ['total_course_signals', 'opted_in_course_signals',
+                'total_content_signals', 'opted_in_content_signals',
+                'subject_areas_covered', 'computed_patterns']
+        return dict(zip(cols, row))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ── Bonita Faculty Interview System ────────────────────────────────────────────
+
+def get_faculty_context(user_id: int) -> str:
+    """Builds the faculty context string injected into every generation system prompt.
+    Returns empty string if no profile exists or interview is not yet completed."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM faculty_profiles WHERE user_id = %s", (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            return ""
+        cols = [d[0] for d in cursor.description]
+        profile = dict(zip(cols, row))
+        if not profile.get('interview_completed'):
+            return ""
+
+        parts = []
+
+        if profile.get('primary_discipline'):
+            line = f"Faculty teaches {profile['primary_discipline']}"
+            if profile.get('discipline_focus'):
+                line += f", focusing on {profile['discipline_focus']}"
+            parts.append(line)
+        if profile.get('anchor_thinkers'):
+            parts.append(f"Anchor thinkers/frameworks: {profile['anchor_thinkers']}")
+        if profile.get('typical_student_profile'):
+            parts.append(f"Their students: {profile['typical_student_profile']}")
+        if profile.get('student_struggles'):
+            parts.append(f"Students struggle with: {profile['student_struggles']}")
+        if profile.get('learning_outcome_focus'):
+            parts.append(f"What faculty wants students to DO: {profile['learning_outcome_focus']}")
+        if profile.get('teaching_style'):
+            parts.append(f"Teaching style: {profile['teaching_style']}")
+        if profile.get('what_an_a_looks_like'):
+            parts.append(f"An A student: {profile['what_an_a_looks_like']}")
+        if profile.get('voice_style_profile'):
+            import json as _json
+            vsp = profile['voice_style_profile']
+            if isinstance(vsp, str):
+                try:
+                    vsp = _json.loads(vsp)
+                except Exception:
+                    vsp = {}
+            contractions = 'uses contractions' if vsp.get('uses_contractions') else 'formal language'
+            tone = ', '.join(vsp.get('tone_markers', []))
+            formality = vsp.get('formality', 'conversational')
+            parts.append(
+                f"Communication style: {formality}, {contractions}"
+                + (f", tone: {tone}" if tone else "")
+            )
+
+        if not parts:
+            return ""
+
+        context = (
+            "FACULTY PROFILE — use this as context for everything you generate.\n"
+            "Generate content specifically for this educator, their discipline,\n"
+            "and their students. Not generic academic content.\n\n"
+            + "\n".join(f"• {p}" for p in parts)
+        )
+
+        if profile.get('reference_material_keys'):
+            # Load up to 3 reference materials, first 1500 chars each
+            ref_keys = profile['reference_material_keys'][:3]
+            try:
+                ref_conn = get_db_connection()
+                ref_cursor = ref_conn.cursor()
+                ref_cursor.execute("""
+                    SELECT file_name, extracted_text
+                    FROM faculty_reference_materials
+                    WHERE key = ANY(%s) AND user_id = %s
+                    ORDER BY created_at ASC
+                    LIMIT 3
+                """, (ref_keys, user_id))
+                ref_rows = ref_cursor.fetchall()
+                ref_cursor.close()
+                ref_conn.close()
+                if ref_rows:
+                    ref_parts = []
+                    for fname, text in ref_rows:
+                        snippet = (text or "")[:1500].strip()
+                        if snippet:
+                            ref_parts.append(f"--- {fname} ---\n{snippet}")
+                    if ref_parts:
+                        context += (
+                            "\n\nREFERENCE MATERIALS (match the style and standard in these):\n\n"
+                            + "\n\n".join(ref_parts)
+                        )
+            except Exception:
+                context += (
+                    "\n\nThis faculty member has uploaded reference materials. "
+                    "Match the standard and style of their existing work."
+                )
+
+        return context
+    except Exception:
+        return ""
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def increment_faculty_generations(user_id: int) -> None:
+    """Increment generations_count on faculty_profiles if a profile row exists."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE faculty_profiles
+            SET generations_count = generations_count + 1, last_updated = NOW()
+            WHERE user_id = %s
+        """, (user_id,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception:
+        pass
+
+
+class FacultyProfileUpsertRequest(BaseModel):
+    canvas_user_id: Optional[str] = None
+    years_teaching: Optional[int] = None
+    teaching_level: Optional[List[str]] = None
+    employment_type: Optional[str] = None
+    is_course_owner: Optional[bool] = None
+    primary_discipline: Optional[str] = None
+    discipline_focus: Optional[str] = None
+    anchor_thinkers: Optional[str] = None
+    anchor_frameworks: Optional[str] = None
+    typical_student_profile: Optional[str] = None
+    student_struggles: Optional[str] = None
+    learning_outcome_focus: Optional[str] = None
+    teaching_style: Optional[str] = None
+    grading_philosophy: Optional[str] = None
+    what_an_a_looks_like: Optional[str] = None
+    communication_style: Optional[str] = None
+    uses_humor: Optional[bool] = None
+    voice_sample: Optional[str] = None
+    onboarding_phase: Optional[str] = None
+    interview_step: Optional[int] = None
+    interview_completed: Optional[bool] = None
+
+
+@app.get("/api/faculty/profile")
+async def get_faculty_profile(current_user=Depends(get_current_user_from_token)):
+    """Get the current user's faculty profile. Returns onboarding_phase 'not_started' if no row exists."""
+    user_id = current_user['user_id']
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM faculty_profiles WHERE user_id = %s", (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            return {"onboarding_phase": "not_started"}
+        cols = [d[0] for d in cursor.description]
+        return dict(zip(cols, row))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/faculty/profile")
+async def upsert_faculty_profile(
+    request: FacultyProfileUpsertRequest,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Create or update faculty profile. Upserts on user_id, increments profile_version on update."""
+    user_id = current_user['user_id']
+    updates = {k: v for k, v in request.dict().items() if v is not None}
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO faculty_profiles (user_id) VALUES (%s)
+            ON CONFLICT (user_id) DO NOTHING
+        """, (user_id,))
+        if updates:
+            set_clauses = [f"{k} = %s" for k in updates.keys()]
+            values = list(updates.values()) + [user_id]
+            cursor.execute(f"""
+                UPDATE faculty_profiles
+                SET {', '.join(set_clauses)},
+                    profile_version = profile_version + 1,
+                    last_updated = NOW()
+                WHERE user_id = %s
+            """, values)
+        conn.commit()
+        cursor.execute("SELECT * FROM faculty_profiles WHERE user_id = %s", (user_id,))
+        row = cursor.fetchone()
+        cols = [d[0] for d in cursor.description]
+        return dict(zip(cols, row))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/faculty/profile/interview-log")
+async def get_interview_log(current_user=Depends(get_current_user_from_token)):
+    """Returns the Bonita interview conversation log for the current user, ordered by turn_number."""
+    user_id = current_user['user_id']
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT bil.id, bil.turn_number, bil.speaker, bil.message,
+                   bil.extracted_data, bil.created_at
+            FROM bonita_interview_log bil
+            JOIN faculty_profiles fp ON fp.id = bil.faculty_profile_id
+            WHERE fp.user_id = %s
+            ORDER BY bil.turn_number ASC
+        """, (user_id,))
+        rows = cursor.fetchall()
+        if not rows:
+            return {"log": []}
+        cols = [d[0] for d in cursor.description]
+        return {"log": [dict(zip(cols, r)) for r in rows]}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ── Interview Conductor Prompts (Session 2) ────────────────────────────────────
+
+_BONITA_INTERVIEW_SYSTEM = """You are Bonita — an AI collaborator embedded inside ReadySetClass for Canvas. You are getting to know a faculty member for the first time.
+
+Your goal is to understand how they teach across six layers: identity, discipline, students, pedagogy, voice, and reference material. You will use this to personalize every piece of course content you generate for them — forever.
+
+CONVERSATION RULES:
+1. You are having a conversation, not conducting a survey. Respond to what they actually said before asking the next question. Reflect. Affirm. Then move forward.
+
+2. Ask ONE question per turn. Never stack questions.
+
+3. Use their answers to shape how you ask the next question. If they said "I teach adjunct at 3 schools" do not ask them to describe their pedagogical identity in depth — focus on the course context instead.
+
+4. Never make faculty feel inadequate. A first-semester teacher who says "I'm still figuring it out" should hear "that's exactly where good instincts are built."
+
+5. Extract structured data from every response. Return it as JSON at the end of every response (hidden from user, parsed by backend):
+<extracted>
+{"years_teaching": 3, "employment_type": "full_time", "teaching_level": ["undergrad"]}
+</extracted>
+Only include fields you are confident about. Do not guess.
+Valid profile fields: years_teaching (int), teaching_level (array: undergrad/grad/dual_enrollment/community), employment_type (full_time/adjunct/visiting/emeritus), is_course_owner (bool), primary_discipline (str), discipline_focus (str), anchor_thinkers (str), anchor_frameworks (str), typical_student_profile (str), student_struggles (str), learning_outcome_focus (str), teaching_style (str), grading_philosophy (str), what_an_a_looks_like (str), communication_style (formal/conversational/warm/direct), uses_humor (bool), voice_sample (str).
+
+6. Current layer: {current_layer}
+Fields collected so far: {collected_fields}
+Move to the next layer when the current one is complete.
+Signal layer completion with: <layer_complete>{layer_name}</layer_complete>
+Valid layer names: identity, discipline, students, pedagogy, voice, reference
+
+BRANCHING BASED ON IDENTITY:
+- New professor (0-3 years): Lead more. Reframe: "You get to build your teaching identity intentionally." On anchor thinkers: "Who interested you most in your own education? Start there."
+- Adjunct (assigned course): Pivot from personal identity to course context. "Let me ask about THIS course." Note is_course_owner=False.
+- Seasoned professor (10+ years): Respect depth immediately. "Upload something rather than describe it. Let your work introduce you." Skip basic questions. Go to depth.
+
+LAYER SEQUENCE:
+1. identity — years, level, full-time or adjunct
+2. discipline — what + specific corner + anchor thinkers
+3. students — who + struggles + what they should DO (learning_outcome_focus is the most important field)
+4. pedagogy — how classroom runs + grading philosophy + what an A looks like
+5. voice — communication style + ask for voice sample (a sentence or paragraph they've written to students)
+6. reference — invite upload of syllabus/assignments (explain it helps Bonita match their standard)
+
+When all 6 layers are complete, include <layer_complete>reference</layer_complete> in your final message."""
+
+_BONITA_PLAYBACK_PROMPT = """Generate a warm, specific, first-person playback summary for this faculty member based on their profile.
+
+Profile data:
+{profile_json}
+
+Rules:
+- 150-200 words. No longer.
+- Specific, not generic. Use their actual words back where possible.
+- End with exactly: "Does that sound right? I'd rather know now than build you the wrong thing for an entire semester."
+- Write as Bonita — warm, direct, confident.
+- If any field is missing, skip it gracefully. Do not say "you didn't tell me your X."
+- Do not use bullet points. Write in flowing prose."""
+
+_BONITA_VOICE_EXTRACTION_PROMPT = """Analyze this writing sample from a faculty member. Extract their voice profile as JSON only. No preamble, no explanation.
+
+Writing sample:
+{voice_sample}
+
+Return ONLY this JSON structure (no markdown, no code block):
+{{
+  "formality": "formal|conversational|warm|direct",
+  "avg_sentence_length": "short|medium|long",
+  "uses_contractions": true,
+  "uses_first_person": true,
+  "uses_humor": false,
+  "tone_markers": ["warm", "direct"],
+  "vocabulary_level": "technical|accessible|casual",
+  "paragraph_style": "dense|scannable|mixed"
+}}"""
+
+
+class DemoGenerateRequest(BaseModel):
+    discipline: str
+    content_type: str = "assignment"
+    context: Optional[str] = None
+
+
+@app.post("/api/faculty/demo/generate")
+async def faculty_demo_generate(
+    request: DemoGenerateRequest,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Phase 1 onboarding — generate a real sample to show Bonita's quality before interview."""
+    content_type = request.content_type.lower()
+    context_note = f" in a {request.context}" if request.context else ""
+
+    type_instructions = {
+        "assignment": "Create a complete assignment with clear instructions, learning objectives, and a grading rubric.",
+        "quiz": "Create a 5-question quiz with a mix of question types and an answer key.",
+        "discussion": "Create an engaging discussion prompt that pushes students to think critically.",
+        "syllabus": "Create a course syllabus outline with key sections: description, objectives, weekly topics, and grading breakdown.",
+    }
+    instruction = type_instructions.get(content_type, type_instructions["assignment"])
+
+    system = (
+        "You are Bonita, an AI teaching assistant. Generate high-quality, specific course content. "
+        "Be concrete and discipline-specific. Show what great AI-assisted content looks like."
+    )
+    prompt = (
+        f"Generate a sample {content_type} for a {request.discipline} course{context_note}.\n\n"
+        f"{instruction}\n\n"
+        "Make it specific to the discipline — not generic. Show the quality a professor would actually use."
+    )
+
+    sample = await call_ai(
+        task_type="generate",
+        system_prompt=system,
+        user_prompt=prompt,
+        user_id=current_user['user_id'],
+    )
+
+    return {
+        "sample_output": sample,
+        "content_type": content_type,
+        "discipline": request.discipline,
+        "note": (
+            "This is a general sample. After Bonita gets to know you — your discipline, "
+            "your students, how you grade — every output will be specific to you."
+        ),
+    }
+
+
+class InterviewMessageRequest(BaseModel):
+    faculty_message: str
+    turn_number: int
+    current_step: str = "identity"
+
+
+@app.post("/api/faculty/interview/message")
+async def interview_message(
+    request: InterviewMessageRequest,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Core interview endpoint. Each call = one turn of the Bonita conversation."""
+    import json as _json
+    import re as _re
+    from content_integrity import (
+        check_input_quality, record_quality_strike, mark_hostile_skip,
+        _BONITA_RECOVERY_RESPONSES,
+    )
+    user_id = current_user['user_id']
+
+    if not request.faculty_message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+    # ── Zone 1: Input quality check ──────────────────────────────────────────
+    quality_result = await check_input_quality(
+        text=request.faculty_message,
+        question_context=request.current_step,
+        groq_client=groq_client,
+    )
+    quality = quality_result["quality"]
+    quality_issue = quality_result["issue"]
+    stored_to_profile = quality == "good"
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Get or create faculty profile row
+        cursor.execute("""
+            INSERT INTO faculty_profiles (user_id, onboarding_phase, interview_step)
+            VALUES (%s, 'interview_started', %s)
+            ON CONFLICT (user_id) DO UPDATE SET
+                onboarding_phase = CASE
+                    WHEN faculty_profiles.onboarding_phase = 'not_started' THEN 'interview_started'
+                    ELSE faculty_profiles.onboarding_phase
+                END,
+                interview_step = GREATEST(faculty_profiles.interview_step, %s),
+                last_updated = NOW()
+            RETURNING id
+        """, (user_id, request.turn_number, request.turn_number))
+        profile_id = cursor.fetchone()[0]
+        conn.commit()
+
+        # Log faculty message with quality metadata
+        cursor.execute("""
+            INSERT INTO bonita_interview_log
+                (faculty_profile_id, turn_number, speaker, message,
+                 input_quality, quality_issue, stored_to_profile)
+            VALUES (%s, %s, 'faculty', %s, %s, %s, %s)
+        """, (profile_id, request.turn_number, request.faculty_message.strip(),
+              quality, quality_issue, stored_to_profile))
+        conn.commit()
+
+        # If low/garbage quality, record strike + return recovery response
+        if quality in ("low", "garbage"):
+            strike_result = record_quality_strike(conn, user_id, quality_issue or quality)
+            recovery = _BONITA_RECOVERY_RESPONSES.get(quality_issue or quality, _BONITA_RECOVERY_RESPONSES["low"])
+            # Log Bonita's recovery response
+            next_turn = request.turn_number + 1
+            cursor.execute("""
+                INSERT INTO bonita_interview_log
+                    (faculty_profile_id, turn_number, speaker, message)
+                VALUES (%s, %s, 'bonita', %s)
+            """, (profile_id, next_turn, recovery))
+            conn.commit()
+
+            return {
+                "bonita_message": recovery,
+                "extracted_fields": {},
+                "completed_layer": None,
+                "next_step": request.current_step,  # don't advance
+                "interview_complete": False,
+                "turn_number": next_turn,
+                "quality_flag": quality,  # for frontend to optionally show skip path
+                "show_hostile_skip": quality_issue == "hostile" or strike_result.get("garbage_count", 0) >= 3,
+            }
+        # ── End Zone 1 ────────────────────────────────────────────────────────
+        conn.commit()
+
+        # Load full conversation history for context
+        cursor.execute("""
+            SELECT speaker, message FROM bonita_interview_log
+            WHERE faculty_profile_id = %s
+            ORDER BY turn_number ASC
+        """, (profile_id,))
+        history = cursor.fetchall()
+
+        # Get current profile state for the system prompt
+        cursor.execute("SELECT * FROM faculty_profiles WHERE id = %s", (profile_id,))
+        row = cursor.fetchone()
+        cols = [d[0] for d in cursor.description]
+        profile = dict(zip(cols, row))
+
+        # Build collected_fields summary for the system prompt
+        field_names = [
+            'years_teaching', 'teaching_level', 'employment_type', 'is_course_owner',
+            'primary_discipline', 'discipline_focus', 'anchor_thinkers', 'anchor_frameworks',
+            'typical_student_profile', 'student_struggles', 'learning_outcome_focus',
+            'teaching_style', 'grading_philosophy', 'what_an_a_looks_like',
+            'communication_style', 'uses_humor', 'voice_sample',
+        ]
+        collected = {f: profile[f] for f in field_names if profile.get(f) is not None}
+        collected_summary = ", ".join(f"{k}={v}" for k, v in list(collected.items())[:10]) or "none yet"
+
+        system = _BONITA_INTERVIEW_SYSTEM.format(
+            current_layer=request.current_step,
+            collected_fields=collected_summary,
+        )
+
+        # Build messages list for conversation continuity
+        messages = []
+        for speaker, msg in history[:-1]:  # exclude the turn we just logged
+            role = "assistant" if speaker == "bonita" else "user"
+            # Strip extracted tags from history to keep context clean
+            clean_msg = _re.sub(r'<extracted>.*?</extracted>', '', msg, flags=_re.DOTALL).strip()
+            clean_msg = _re.sub(r'<layer_complete>.*?</layer_complete>', '', clean_msg).strip()
+            if clean_msg:
+                messages.append({"role": role, "content": clean_msg})
+
+        # Current faculty message
+        messages.append({"role": "user", "content": request.faculty_message.strip()})
+
+        # Call Claude Sonnet 4.6 with conversation history
+        # Build a single prompt that includes the history
+        history_text = ""
+        for m in messages[:-1]:
+            prefix = "Bonita" if m["role"] == "assistant" else "Faculty"
+            history_text += f"{prefix}: {m['content']}\n\n"
+
+        full_prompt = (
+            (history_text if history_text else "")
+            + f"Faculty: {request.faculty_message.strip()}"
+        )
+
+        bonita_raw = await call_ai(
+            task_type="generate",
+            system_prompt=system,
+            user_prompt=full_prompt,
+            user_id=user_id,
+        )
+
+        # Extract structured data from <extracted>...</extracted>
+        extracted_match = _re.search(r'<extracted>(.*?)</extracted>', bonita_raw, _re.DOTALL)
+        extracted_fields = {}
+        if extracted_match:
+            try:
+                extracted_fields = _json.loads(extracted_match.group(1).strip())
+            except Exception:
+                extracted_fields = {}
+
+        # Detect layer completion
+        layer_complete_match = _re.search(r'<layer_complete>(.*?)</layer_complete>', bonita_raw)
+        completed_layer = layer_complete_match.group(1).strip() if layer_complete_match else None
+        interview_done = completed_layer == "reference"
+
+        # Clean Bonita message (strip tags before storing/returning)
+        bonita_message = _re.sub(r'<extracted>.*?</extracted>', '', bonita_raw, flags=_re.DOTALL)
+        bonita_message = _re.sub(r'<layer_complete>.*?</layer_complete>', '', bonita_message).strip()
+
+        # Persist extracted fields to faculty_profiles
+        if extracted_fields:
+            valid_fields = {f for f in field_names}
+            safe = {k: v for k, v in extracted_fields.items() if k in valid_fields and v is not None}
+            if safe:
+                set_clauses = [f"{k} = %s" for k in safe.keys()]
+                values = list(safe.values()) + [user_id]
+                cursor.execute(f"""
+                    UPDATE faculty_profiles
+                    SET {', '.join(set_clauses)}, last_updated = NOW()
+                    WHERE user_id = %s
+                """, values)
+                conn.commit()
+
+        # Log Bonita's response
+        next_turn = request.turn_number + 1
+        cursor.execute("""
+            INSERT INTO bonita_interview_log
+                (faculty_profile_id, turn_number, speaker, message, extracted_data)
+            VALUES (%s, %s, 'bonita', %s, %s)
+        """, (profile_id, next_turn, bonita_message,
+              _json.dumps(extracted_fields) if extracted_fields else None))
+        conn.commit()
+
+        # Determine next step based on layer progression
+        layer_order = ["identity", "discipline", "students", "pedagogy", "voice", "reference"]
+        current_idx = layer_order.index(request.current_step) if request.current_step in layer_order else 0
+        if completed_layer and completed_layer in layer_order:
+            completed_idx = layer_order.index(completed_layer)
+            next_step = layer_order[completed_idx + 1] if completed_idx + 1 < len(layer_order) else "reference"
+        else:
+            next_step = request.current_step
+
+        return {
+            "bonita_message": bonita_message,
+            "extracted_fields": extracted_fields,
+            "completed_layer": completed_layer,
+            "next_step": next_step,
+            "interview_complete": interview_done,
+            "turn_number": next_turn,
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/faculty/interview/complete")
+async def interview_complete(current_user=Depends(get_current_user_from_token)):
+    """Called when all 6 layers are done. Extracts voice profile, generates playback, marks complete."""
+    import json as _json
+    user_id = current_user['user_id']
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM faculty_profiles WHERE user_id = %s", (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="No profile found")
+        cols = [d[0] for d in cursor.description]
+        profile = dict(zip(cols, row))
+
+        # Step 1: Extract voice_style_profile from voice_sample if present
+        if profile.get('voice_sample') and not profile.get('voice_style_profile'):
+            try:
+                voice_json_str = await call_ai(
+                    task_type="generate",
+                    system_prompt="You are a writing style analyst. Return only valid JSON, no markdown.",
+                    user_prompt=_BONITA_VOICE_EXTRACTION_PROMPT.format(
+                        voice_sample=profile['voice_sample']
+                    ),
+                    user_id=user_id,
+                )
+                # Strip markdown code block if present
+                voice_clean = voice_json_str.strip()
+                if voice_clean.startswith("```"):
+                    voice_clean = voice_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+                voice_profile = _json.loads(voice_clean)
+                cursor.execute("""
+                    UPDATE faculty_profiles SET voice_style_profile = %s WHERE user_id = %s
+                """, (_json.dumps(voice_profile), user_id))
+                conn.commit()
+                profile['voice_style_profile'] = voice_profile
+            except Exception as e:
+                print(f"⚠️  Voice extraction failed: {e}")
+
+        # Step 2: Generate playback summary
+        profile_for_playback = {k: v for k, v in profile.items() if v is not None and k not in
+                                 ('id', 'user_id', 'canvas_user_id', 'created_at', 'last_updated',
+                                  'profile_version', 'generations_count', 'interview_step',
+                                  'interview_completed', 'interview_completed_at', 'onboarding_phase',
+                                  'reference_material_keys')}
+        playback = await call_ai(
+            task_type="generate",
+            system_prompt="You are Bonita, a warm and direct AI teaching collaborator.",
+            user_prompt=_BONITA_PLAYBACK_PROMPT.format(
+                profile_json=_json.dumps(profile_for_playback, default=str)
+            ),
+            user_id=user_id,
+        )
+
+        # Step 3: Mark interview complete
+        from datetime import datetime
+        cursor.execute("""
+            UPDATE faculty_profiles
+            SET interview_completed = TRUE,
+                onboarding_phase = 'interview_complete',
+                interview_completed_at = NOW(),
+                last_updated = NOW()
+            WHERE user_id = %s
+        """, (user_id,))
+        conn.commit()
+
+        # Return updated profile
+        cursor.execute("SELECT * FROM faculty_profiles WHERE user_id = %s", (user_id,))
+        final_row = cursor.fetchone()
+        final_cols = [d[0] for d in cursor.description]
+        final_profile = dict(zip(final_cols, final_row))
+
+        return {"playback": playback, "profile": final_profile}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+class InterviewSkipRequest(BaseModel):
+    hostile: bool = False  # True when faculty chose to leave after hostile-input warning
+
+@app.post("/api/faculty/interview/skip")
+async def interview_skip(
+    request: InterviewSkipRequest = InterviewSkipRequest(),
+    current_user=Depends(get_current_user_from_token)
+):
+    """Skip the interview. Bonita still works — just not personalized yet."""
+    user_id = current_user['user_id']
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        phase = 'skipped_hostile' if request.hostile else 'demo_shown'
+        cursor.execute("""
+            INSERT INTO faculty_profiles (user_id, onboarding_phase)
+            VALUES (%s, %s)
+            ON CONFLICT (user_id) DO UPDATE SET
+                onboarding_phase = %s,
+                last_updated = NOW()
+        """, (user_id, phase, phase))
+        conn.commit()
+        if request.hostile:
+            from content_integrity import mark_hostile_skip
+            mark_hostile_skip(conn, user_id)
+        return {
+            "status": "ok",
+            "message": "Profile will build from usage. Bonita learns as you work.",
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- Faculty Reference Materials ---
+
+@app.post("/api/faculty/reference-material/upload")
+async def faculty_upload_reference_material(
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user_from_token)
+):
+    """Upload a reference material for the faculty profile (syllabus, assignments, notes).
+    Extracts text, stores in faculty_reference_materials, adds key to faculty_profiles."""
+    import uuid as _uuid
+
+    user_id = current_user['user_id']
+    file_ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+    if file_ext not in ('pdf', 'docx', 'txt', 'md'):
+        raise HTTPException(status_code=400, detail="Supported file types: PDF, DOCX, TXT, MD")
+
+    file_content = await file.read()
+    if len(file_content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+
+    # Extract text
+    extracted_text = ""
+    try:
+        if file_ext == 'pdf':
+            pdf_file = io.BytesIO(file_content)
+            pdf_reader = PyPDF2.PdfReader(pdf_file)
+            for page in pdf_reader.pages:
+                extracted_text += (page.extract_text() or "") + "\n"
+        elif file_ext == 'docx':
+            docx_file = io.BytesIO(file_content)
+            doc = Document(docx_file)
+            for paragraph in doc.paragraphs:
+                extracted_text += paragraph.text + "\n"
+        else:  # txt, md
+            extracted_text = file_content.decode('utf-8', errors='replace')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to extract text: {str(e)}")
+
+    extracted_text = extracted_text.strip()
+    if len(extracted_text) < 50:
+        raise HTTPException(status_code=400, detail="File appears empty or unreadable")
+
+    synthetic_key = f"faculty/{user_id}/reference/{_uuid.uuid4()}.{file_ext}"
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO faculty_reference_materials (user_id, key, file_name, file_type, extracted_text, char_count)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (user_id, synthetic_key, file.filename, file_ext, extracted_text, len(extracted_text)))
+
+        # Add key to faculty_profiles.reference_material_keys; create profile row if missing
+        cursor.execute("""
+            INSERT INTO faculty_profiles (user_id, reference_material_keys, onboarding_phase)
+            VALUES (%s, ARRAY[%s], 'not_started')
+            ON CONFLICT (user_id) DO UPDATE SET
+                reference_material_keys = array_append(
+                    COALESCE(faculty_profiles.reference_material_keys, ARRAY[]::TEXT[]),
+                    EXCLUDED.reference_material_keys[1]
+                ),
+                last_updated = NOW()
+        """, (user_id, synthetic_key))
+
+        # Auto-set voice_sample if empty and text is rich enough
+        if len(extracted_text) >= 500:
+            cursor.execute("""
+                UPDATE faculty_profiles SET voice_sample = %s
+                WHERE user_id = %s AND (voice_sample IS NULL OR voice_sample = '')
+            """, (extracted_text[:500], user_id))
+
+        conn.commit()
+
+        return {
+            "status": "ok",
+            "key": synthetic_key,
+            "file_name": file.filename,
+            "char_count": len(extracted_text),
+            "preview": extracted_text[:200],
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/faculty/reference-material")
+async def faculty_list_reference_materials(current_user=Depends(get_current_user_from_token)):
+    """List all reference materials uploaded for this faculty profile."""
+    user_id = current_user['user_id']
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT key, file_name, file_type, char_count, created_at
+            FROM faculty_reference_materials
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+        """, (user_id,))
+        rows = cursor.fetchall()
+        return {
+            "materials": [
+                {
+                    "key": r[0],
+                    "file_name": r[1],
+                    "file_type": r[2],
+                    "char_count": r[3],
+                    "created_at": r[4].isoformat() if r[4] else None,
+                }
+                for r in rows
+            ]
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.delete("/api/faculty/reference-material/{key:path}")
+async def faculty_delete_reference_material(key: str, current_user=Depends(get_current_user_from_token)):
+    """Delete a faculty reference material and remove its key from the profile."""
+    user_id = current_user['user_id']
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Verify ownership
+        cursor.execute(
+            "SELECT id FROM faculty_reference_materials WHERE key = %s AND user_id = %s",
+            (key, user_id)
+        )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Material not found")
+
+        cursor.execute(
+            "DELETE FROM faculty_reference_materials WHERE key = %s AND user_id = %s",
+            (key, user_id)
+        )
+
+        cursor.execute("""
+            UPDATE faculty_profiles
+            SET reference_material_keys = array_remove(reference_material_keys, %s),
+                last_updated = NOW()
+            WHERE user_id = %s
+        """, (key, user_id))
+
+        conn.commit()
+        return {"status": "ok", "deleted_key": key}
     finally:
         cursor.close()
         conn.close()
@@ -4797,6 +6542,217 @@ Not hype. Just help."""
             "invite_subject": subject,
             "invite_body": body
         }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- Admin: Onboarding Reset (G1 — Content Integrity) ---
+
+class AdminOnboardingResetRequest(BaseModel):
+    mode: str = "reset"  # "reset" | "preview"
+    target_user_id: Optional[int] = None  # defaults to requesting admin's own ID
+
+
+@app.patch("/api/admin/onboarding-reset")
+async def admin_onboarding_reset(
+    request: AdminOnboardingResetRequest,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Admin-only: reset or preview the Bonita onboarding flow for QA/demo purposes.
+    Reset mode: clears interview state, preserves profile fields + materials.
+    Preview mode: returns redirect URL only — no DB changes."""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    target_id = request.target_user_id or current_user['user_id']
+
+    if request.mode == "preview":
+        return {
+            "status": "ok",
+            "mode": "preview",
+            "redirect": "/bonita-interview.html?preview=true",
+        }
+
+    if request.mode != "reset":
+        raise HTTPException(status_code=400, detail="mode must be 'reset' or 'preview'")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE faculty_profiles
+            SET onboarding_phase = 'not_started',
+                interview_step = 0,
+                interview_completed = FALSE,
+                interview_completed_at = NULL,
+                last_updated = NOW()
+            WHERE user_id = %s
+        """, (target_id,))
+        affected = cursor.rowcount
+        conn.commit()
+
+        # Log the admin action
+        print(f"🔧 Admin {current_user['user_id']} reset onboarding for user {target_id}")
+
+        return {
+            "status": "ok",
+            "mode": "reset",
+            "target_user_id": target_id,
+            "rows_affected": affected,
+            "redirect": "/bonita-interview.html",
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/admin/onboarding-status")
+async def admin_get_onboarding_status(current_user=Depends(get_current_user_from_token)):
+    """Get Bonita profile status for the requesting admin user."""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT onboarding_phase, interview_completed, interview_completed_at,
+                   primary_discipline, generations_count
+            FROM faculty_profiles WHERE user_id = %s
+        """, (current_user['user_id'],))
+        row = cursor.fetchone()
+        if not row:
+            return {"onboarding_phase": "not_started", "interview_completed": False}
+        cols = ['onboarding_phase', 'interview_completed', 'interview_completed_at',
+                'primary_discipline', 'generations_count']
+        return dict(zip(cols, row))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- Admin: Content Integrity Dashboard (G1) ---
+
+@app.get("/api/admin/content-integrity")
+async def get_content_integrity_stats(
+    days: int = 30,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Admin view of content integrity stats: onboarding quality flags + content approvals."""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Onboarding quality summary
+        cursor.execute("""
+            SELECT
+                COUNT(*) FILTER (WHERE garbage_count >= 3)  AS flagged_users,
+                COUNT(*) FILTER (WHERE hostile_count > 0)   AS hostile_users,
+                COUNT(*) FILTER (WHERE skipped_hostile)     AS hostile_skips,
+                COALESCE(SUM(garbage_count), 0)             AS total_garbage,
+                COALESCE(SUM(hostile_count), 0)             AS total_hostile
+            FROM onboarding_quality_flags
+            WHERE session_date >= NOW() - INTERVAL '%s days'
+        """, (days,))
+        oq = cursor.fetchone()
+
+        # Content approvals summary
+        cursor.execute("""
+            SELECT
+                COUNT(*)                                      AS total_approvals,
+                COUNT(*) FILTER (WHERE safety_passed = false) AS safety_failures,
+                COUNT(*) FILTER (
+                    WHERE safety_flags IS NOT NULL
+                    AND jsonb_array_length(safety_flags) > 0
+                )                                             AS soft_flags,
+                COUNT(*) FILTER (WHERE bonita_generated)      AS ai_generated,
+                COUNT(*) FILTER (WHERE NOT bonita_generated)  AS manual_input
+            FROM content_approvals
+            WHERE created_at >= NOW() - INTERVAL '%s days'
+        """, (days,))
+        ca = cursor.fetchone()
+
+        # Recent flag log (last 25)
+        cursor.execute("""
+            SELECT
+                ca.id,
+                u.email,
+                ca.content_type,
+                CASE WHEN ca.bonita_generated THEN 'AI' ELSE 'Manual' END AS source,
+                ca.safety_flags,
+                ca.safety_passed,
+                ca.created_at
+            FROM content_approvals ca
+            LEFT JOIN users u ON u.id = ca.user_id
+            WHERE (ca.safety_passed = false OR (ca.safety_flags IS NOT NULL AND jsonb_array_length(ca.safety_flags) > 0))
+            ORDER BY ca.created_at DESC
+            LIMIT 25
+        """)
+        flags = cursor.fetchall()
+
+        # Recent hostile onboarding (last 25)
+        cursor.execute("""
+            SELECT
+                oqf.id,
+                u.email,
+                oqf.garbage_count,
+                oqf.hostile_count,
+                oqf.skipped_hostile,
+                oqf.flagged_for_review,
+                oqf.session_date
+            FROM onboarding_quality_flags oqf
+            LEFT JOIN users u ON u.id = oqf.user_id
+            WHERE oqf.flagged_for_review = true OR oqf.hostile_count > 0
+            ORDER BY oqf.session_date DESC
+            LIMIT 25
+        """)
+        onboarding_flags = cursor.fetchall()
+
+        return {
+            "period_days": days,
+            "onboarding": {
+                "flagged_users": oq[0] or 0,
+                "hostile_users": oq[1] or 0,
+                "hostile_skips": oq[2] or 0,
+                "total_garbage_inputs": int(oq[3] or 0),
+                "total_hostile_inputs": int(oq[4] or 0),
+            },
+            "content_approvals": {
+                "total": ca[0] or 0,
+                "safety_failures": ca[1] or 0,
+                "soft_flags": ca[2] or 0,
+                "ai_generated": ca[3] or 0,
+                "manual_input": ca[4] or 0,
+            },
+            "recent_flags": [
+                {
+                    "id": r[0],
+                    "email": r[1],
+                    "content_type": r[2],
+                    "source": r[3],
+                    "safety_flags": r[4],
+                    "safety_passed": r[5],
+                    "created_at": r[6].isoformat() if r[6] else None,
+                }
+                for r in flags
+            ],
+            "recent_onboarding_flags": [
+                {
+                    "id": r[0],
+                    "email": r[1],
+                    "garbage_count": r[2],
+                    "hostile_count": r[3],
+                    "skipped_hostile": r[4],
+                    "flagged_for_review": r[5],
+                    "session_date": r[6].isoformat() if r[6] else None,
+                }
+                for r in onboarding_flags
+            ],
+        }
+    except Exception as e:
+        print(f"❌ content integrity stats error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()
         conn.close()

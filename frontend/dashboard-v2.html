@@ -1320,6 +1320,42 @@
             cursor: pointer;
             font-family: var(--font-body);
         }
+
+        /* ── RTL support for Arabic ───────────────────────── */
+        [dir="rtl"] .sidebar {
+            left: auto;
+            right: 0;
+            border-right: none;
+            border-left: 1px solid rgba(0,0,0,0.05);
+        }
+        [dir="rtl"] .main-content {
+            margin-left: 0;
+            margin-right: var(--sidebar-width, 260px);
+        }
+        [dir="rtl"] .nav-item {
+            flex-direction: row-reverse;
+        }
+        [dir="rtl"] .nav-item.active {
+            border-right: none;
+            border-left: 3px solid var(--purple);
+        }
+        [dir="rtl"] .header {
+            text-align: right;
+        }
+        [dir="rtl"] .section-header {
+            flex-direction: row-reverse;
+        }
+
+        /* ── Font stacks for non-Latin scripts ────────────── */
+        :lang(zh), :lang(ja), :lang(ko) {
+            font-family: 'Noto Sans CJK SC', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans', sans-serif;
+        }
+        :lang(ar) {
+            font-family: 'Noto Sans Arabic', 'Arial Arabic', 'Segoe UI', sans-serif;
+        }
+        :lang(hi) {
+            font-family: 'Noto Sans Devanagari', 'Mangal', sans-serif;
+        }
     </style>
 </head>
 <body>
@@ -1461,6 +1497,7 @@
                 <li class="nav-item" onclick="showSection('module')">📦 <span data-i18n="nav.modules">Modules</span></li>
                 <li class="nav-item" onclick="showSection('syllabus')">📋 <span data-i18n="nav.syllabus">Syllabus</span></li>
                 <li class="nav-item" onclick="showSection('reference')">📚 <span data-i18n="nav.referenceMatl">Reference Materials</span></li>
+                <li class="nav-item" onclick="window.location.href='/bonita-profile.html'" style="background:linear-gradient(135deg,rgba(201,168,76,0.12),rgba(27,42,94,0.07)); border-left:3px solid #C9A84C; font-weight:600;">✨ <span>Bonita Profile</span></li>
                 <li class="nav-item" onclick="openOnboarding()" style="margin-top:1.5rem; border-top:1px solid rgba(0,0,0,0.08); padding-top:1rem; color:#888; font-size:0.88rem;">❓ <span data-i18n="nav.gettingStarted">Getting Started</span></li>
                 <li class="nav-item" onclick="window.location.href='/faq.html'" style="color:#888; font-size:0.88rem;">📖 <span data-i18n="nav.faq">FAQ</span></li>
                 <li class="nav-item" id="adminNavItem" style="display: none; margin-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 1rem;" onclick="window.location.href='/admin.html'">🛡️ Admin Panel</li>
@@ -1512,6 +1549,19 @@
             </div>
 
             <div class="content-wrapper">
+                <!-- Bonita Onboarding Banner (F2) -->
+                <div id="bonitaBanner" style="display:none; background:linear-gradient(135deg,#1E3A5F 0%,#2D5F8A 100%); border-radius:12px; padding:1.25rem 1.5rem; margin-bottom:1.5rem; color:#fff; display:none; align-items:center; gap:1rem; flex-wrap:wrap;">
+                    <div style="font-size:2rem; line-height:1;">✨</div>
+                    <div style="flex:1; min-width:200px;">
+                        <div style="font-weight:700; font-size:1rem; margin-bottom:0.25rem;">Meet Bonita — your AI teaching assistant</div>
+                        <div style="font-size:0.875rem; opacity:0.85;">A 10-minute conversation teaches Bonita your discipline, your students, and your voice. Every tool gets sharper.</div>
+                    </div>
+                    <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+                        <a href="/bonita-interview.html" style="background:#C9A84C; color:#1E3A5F; padding:0.6rem 1.25rem; border-radius:8px; font-weight:700; text-decoration:none; font-size:0.9rem; white-space:nowrap;">Start interview</a>
+                        <button onclick="dismissBonitaBanner()" style="background:transparent; border:1px solid rgba(255,255,255,0.4); color:rgba(255,255,255,0.7); padding:0.5rem 0.9rem; border-radius:8px; cursor:pointer; font-size:0.85rem; white-space:nowrap;">Not now</button>
+                    </div>
+                </div>
+
                 <!-- Canvas Connection -->
                 <div id="canvasConnection" class="connection-card">
                 <h2><span data-i18n="canvas.title">Canvas Connection</span> <span id="connectionStatus" class="status-badge disconnected" data-i18n="canvas.notConnected">Not Connected</span></h2>
@@ -1864,8 +1914,19 @@ Students should demonstrate understanding of how technology challenges tradition
                     <div id="aiQuizPreviewContent" style="background: white; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; max-height: 400px; overflow-y: auto;">
                         <!-- Quiz questions will be rendered here -->
                     </div>
+                    <div style="background:#fffbf0; border:1px solid #e8d87a; border-radius:8px; padding:0.875rem 1rem; margin-bottom:1rem;">
+                        <p style="font-size:13px; color:#6b6340; margin:0 0 0.6rem; font-weight:600;">✦ Your AI Teaching Assistant created this. Please review before it reaches students.</p>
+                        <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:0.4rem; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="quiz_review_check" onchange="g1UpdateUploadBtn('quiz')" style="margin-top:2px;">
+                            I've reviewed this content
+                        </label>
+                        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="quiz_accurate_check" onchange="g1UpdateUploadBtn('quiz')" style="margin-top:2px;">
+                            It accurately represents my course
+                        </label>
+                    </div>
                     <div style="display: flex; gap: 1rem;">
-                        <button class="btn btn-primary" onclick="uploadAIQuiz()">📤 Upload to Canvas</button>
+                        <button class="btn btn-primary" id="quiz_upload_btn" onclick="uploadAIQuiz()" disabled style="opacity:0.5; cursor:not-allowed;">📤 Upload to Canvas</button>
                         <button class="btn" onclick="cancelAIQuiz()" style="background: #666; color: white;">Cancel</button>
                     </div>
                 </div>
@@ -2048,8 +2109,19 @@ Students should demonstrate understanding of how technology challenges tradition
                         <textarea id="aiGeneratedContent" style="display: none; min-height: 300px; font-family: 'DM Sans', sans-serif; line-height: 1.6;"></textarea>
                     </div>
 
+                    <div style="background:#fffbf0; border:1px solid #e8d87a; border-radius:8px; padding:0.875rem 1rem; margin-bottom:1rem;">
+                        <p style="font-size:13px; color:#6b6340; margin:0 0 0.6rem; font-weight:600;">✦ Your AI Teaching Assistant created this. Please review before it reaches students.</p>
+                        <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:0.4rem; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="assignment_review_check" onchange="g1UpdateUploadBtn('assignment')" style="margin-top:2px;">
+                            I've reviewed this content
+                        </label>
+                        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="assignment_accurate_check" onchange="g1UpdateUploadBtn('assignment')" style="margin-top:2px;">
+                            It accurately represents my course
+                        </label>
+                    </div>
                     <div style="display: flex; gap: 1rem;">
-                        <button class="btn btn-primary" onclick="uploadAIAssignment()">📤 <span data-i18n="btn.uploadToCanvas">Upload to Canvas</span></button>
+                        <button class="btn btn-primary" id="assignment_upload_btn" onclick="uploadAIAssignment()" disabled style="opacity:0.5; cursor:not-allowed;">📤 <span data-i18n="btn.uploadToCanvas">Upload to Canvas</span></button>
                         <button class="btn" onclick="togglePreviewMode('aiGeneratedContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
                         <button class="btn" onclick="cancelAIAssignment()" style="background: #666; color: white;">Cancel</button>
                     </div>
@@ -2202,9 +2274,21 @@ Students should demonstrate understanding of how technology challenges tradition
                         <textarea id="aiGeneratedPageContent" style="display: none; min-height: 300px; font-family: 'DM Sans', sans-serif; line-height: 1.6;"></textarea>
                     </div>
 
-                    <div style="display: flex; gap: 1rem;">
-                        <button class="btn btn-primary" onclick="uploadAIPage()">📤 <span data-i18n="btn.uploadToCanvas">Upload to Canvas</span></button>
+                    <div style="background:#fffbf0; border:1px solid #e8d87a; border-radius:8px; padding:0.875rem 1rem; margin-bottom:1rem;">
+                        <p style="font-size:13px; color:#6b6340; margin:0 0 0.6rem; font-weight:600;">✦ Your AI Teaching Assistant created this. Please review before it reaches students.</p>
+                        <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:0.4rem; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="page_review_check" onchange="g1UpdateUploadBtn('page')" style="margin-top:2px;">
+                            I've reviewed this content
+                        </label>
+                        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="page_accurate_check" onchange="g1UpdateUploadBtn('page')" style="margin-top:2px;">
+                            It accurately represents my course
+                        </label>
+                    </div>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary" id="page_upload_btn" onclick="uploadAIPage()" disabled style="opacity:0.5; cursor:not-allowed;">📤 <span data-i18n="btn.uploadToCanvas">Upload to Canvas</span></button>
                         <button class="btn" onclick="togglePreviewMode('aiGeneratedPageContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
+                        <button class="btn" onclick="openImagePanel('page')" style="background: var(--purple); color: white;">📷✨ Add AI Image</button>
                         <button class="btn" onclick="cancelAIPage()" style="background: #666; color: white;">Cancel</button>
                     </div>
                 </div>
@@ -2304,8 +2388,19 @@ Students should demonstrate understanding of how technology challenges tradition
                         <textarea id="aiGeneratedDiscussionContent" style="display: none; min-height: 300px; font-family: 'DM Sans', sans-serif; line-height: 1.6;"></textarea>
                     </div>
 
+                    <div style="background:#fffbf0; border:1px solid #e8d87a; border-radius:8px; padding:0.875rem 1rem; margin-bottom:1rem;">
+                        <p style="font-size:13px; color:#6b6340; margin:0 0 0.6rem; font-weight:600;">✦ Your AI Teaching Assistant created this. Please review before it reaches students.</p>
+                        <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:0.4rem; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="discussion_review_check" onchange="g1UpdateUploadBtn('discussion')" style="margin-top:2px;">
+                            I've reviewed this content
+                        </label>
+                        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="discussion_accurate_check" onchange="g1UpdateUploadBtn('discussion')" style="margin-top:2px;">
+                            It accurately represents my course
+                        </label>
+                    </div>
                     <div style="display: flex; gap: 1rem;">
-                        <button class="btn btn-primary" onclick="uploadAIDiscussion()">📤 Upload to Canvas</button>
+                        <button class="btn btn-primary" id="discussion_upload_btn" onclick="uploadAIDiscussion()" disabled style="opacity:0.5; cursor:not-allowed;">📤 Upload to Canvas</button>
                         <button class="btn" onclick="togglePreviewMode('aiGeneratedDiscussionContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
                         <button class="btn" onclick="cancelAIDiscussion()" style="background: #666; color: white;">Cancel</button>
                     </div>
@@ -2420,9 +2515,21 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         <div id="aiGeneratedSyllabusContentPreview" class="rendered-preview"></div>
                         <textarea id="aiGeneratedSyllabusContent" style="display: none; min-height: 400px;"></textarea>
                     </div>
-                    <div style="display: flex; gap: 1rem;">
-                        <button class="btn btn-primary" onclick="uploadAISyllabus()">📤 Upload to Canvas</button>
+                    <div style="background:#fffbf0; border:1px solid #e8d87a; border-radius:8px; padding:0.875rem 1rem; margin-bottom:1rem;">
+                        <p style="font-size:13px; color:#6b6340; margin:0 0 0.6rem; font-weight:600;">✦ Your AI Teaching Assistant created this. Please review before it reaches students.</p>
+                        <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:0.4rem; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="syllabus_review_check" onchange="g1UpdateUploadBtn('syllabus')" style="margin-top:2px;">
+                            I've reviewed this content
+                        </label>
+                        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="syllabus_accurate_check" onchange="g1UpdateUploadBtn('syllabus')" style="margin-top:2px;">
+                            It accurately represents my course
+                        </label>
+                    </div>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary" id="syllabus_upload_btn" onclick="uploadAISyllabus()" disabled style="opacity:0.5; cursor:not-allowed;">📤 Upload to Canvas</button>
                         <button class="btn" onclick="togglePreviewMode('aiGeneratedSyllabusContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
+                        <button class="btn" onclick="openImagePanel('syllabus')" style="background: var(--purple); color: white;">📷✨ Add AI Image</button>
                         <button class="btn" onclick="cancelAISyllabus()" style="background: #666; color: white;">Cancel</button>
                     </div>
                 </div>
@@ -2481,6 +2588,29 @@ Participation: 10%" style="min-height: 80px;"></textarea>
     </div>
     <!-- /dashboard -->
 
+    <!-- G1 Zone 3: Soft Flag Confirmation Modal -->
+    <div id="g1SoftFlagModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10000; align-items:center; justify-content:center; padding:1rem;">
+        <div style="background:#fff; border-radius:14px; max-width:520px; width:100%; padding:28px; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <div style="font-size:1.5rem; margin-bottom:12px;">⚠️</div>
+            <h3 style="margin:0 0 12px; font-family:var(--font-heading,inherit); color:#1E3A5F;">Before this goes to your students</h3>
+            <p id="g1FlagMessage" style="margin:0 0 20px; color:#374151; line-height:1.6; font-size:0.9rem;"></p>
+            <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:14px; margin-bottom:20px;">
+                <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.875rem;">
+                    <input type="checkbox" id="g1ConfirmCheck" style="margin-top:2px; flex-shrink:0;">
+                    <span>I have reviewed this content and confirm it is appropriate for my students.</span>
+                </label>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button id="g1ConfirmUploadBtn" onclick="g1ConfirmUpload()" disabled style="flex:1; background:#1E3A5F; color:white; border:none; border-radius:8px; padding:10px; font-weight:600; cursor:pointer; opacity:0.5;">
+                    ✓ Confirmed — Upload to Canvas
+                </button>
+                <button onclick="g1CloseModal()" style="flex:1; background:white; color:#374151; border:1px solid #d1d5db; border-radius:8px; padding:10px; font-weight:600; cursor:pointer;">
+                    ✎ Let me fix it first
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Bottom Navigation (Mobile Only) -->
     <nav class="bottom-nav">
         <div class="bottom-nav-items">
@@ -2517,6 +2647,10 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         // ============================================================================
         const API_URL = 'https://facultyflow-production.up.railway.app';
         window.API_URL = API_URL; // expose for i18n.js backend persist
+        // Sync language preference from backend (overrides localStorage if different)
+        if (window.i18n && window.i18n.syncFromBackend) {
+            window.i18n.syncFromBackend();
+        }
         let authToken = localStorage.getItem('auth_token');
         let selectedCourse = null;
 
@@ -2662,7 +2796,100 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                     }
                 } catch (e) { /* non-critical — localStorage preference used */ }
             }
+
+            // Bonita onboarding phase check (F2)
+            if (authToken) {
+                try {
+                    const bp = await fetch(API_URL + '/api/faculty/profile', {
+                        headers: { 'Authorization': 'Bearer ' + authToken }
+                    });
+                    if (bp.ok) {
+                        const prof = await bp.json();
+                        const phase = prof.onboarding_phase || 'not_started';
+                        const dismissed = sessionStorage.getItem('bonitaBannerDismissed');
+                        if (!dismissed && phase !== 'interview_complete' && phase !== 'demo_shown') {
+                            const banner = document.getElementById('bonitaBanner');
+                            if (banner) banner.style.display = 'flex';
+                        }
+                    }
+                } catch (e) { /* non-critical */ }
+            }
         });
+
+        function dismissBonitaBanner() {
+            sessionStorage.setItem('bonitaBannerDismissed', '1');
+            const banner = document.getElementById('bonitaBanner');
+            if (banner) banner.style.display = 'none';
+        }
+
+        // ── G1 Content Safety: Soft Flag Modal ──────────────────────────────────
+        // g1PendingUpload stores the function to call once faculty confirms
+        let g1PendingUpload = null;
+
+        function g1ShowSoftFlagModal(flagMessage, onConfirm) {
+            document.getElementById('g1FlagMessage').textContent = flagMessage;
+            document.getElementById('g1ConfirmCheck').checked = false;
+            document.getElementById('g1ConfirmUploadBtn').disabled = true;
+            document.getElementById('g1ConfirmUploadBtn').style.opacity = '0.5';
+            document.getElementById('g1SoftFlagModal').style.display = 'flex';
+            g1PendingUpload = onConfirm;
+        }
+
+        document.getElementById('g1ConfirmCheck').addEventListener('change', function() {
+            const btn = document.getElementById('g1ConfirmUploadBtn');
+            btn.disabled = !this.checked;
+            btn.style.opacity = this.checked ? '1' : '0.5';
+        });
+
+        function g1ConfirmUpload() {
+            document.getElementById('g1SoftFlagModal').style.display = 'none';
+            if (g1PendingUpload) {
+                g1PendingUpload();
+                g1PendingUpload = null;
+            }
+        }
+
+        function g1CloseModal() {
+            document.getElementById('g1SoftFlagModal').style.display = 'none';
+            g1PendingUpload = null;
+        }
+
+        // Zone 2: Enable upload button only when both review checkboxes are checked
+        function g1UpdateUploadBtn(contentType) {
+            const review = document.getElementById(contentType + '_review_check')?.checked;
+            const accurate = document.getElementById(contentType + '_accurate_check')?.checked;
+            const btn = document.getElementById(contentType + '_upload_btn');
+            if (!btn) return;
+            const ready = review && accurate;
+            btn.disabled = !ready;
+            btn.style.opacity = ready ? '1' : '0.5';
+            btn.style.cursor = ready ? 'pointer' : 'not-allowed';
+        }
+
+        // Reset review checkboxes when new content is loaded (called from showPreview + displayQuizPreview)
+        function g1ResetReviewChecks(contentType) {
+            const r = document.getElementById(contentType + '_review_check');
+            const a = document.getElementById(contentType + '_accurate_check');
+            if (r) r.checked = false;
+            if (a) a.checked = false;
+            g1UpdateUploadBtn(contentType);
+        }
+
+        // Handle soft flag response from any upload endpoint
+        function g1HandleUploadResponse(result, retryFn) {
+            if (result.status === 'flag' && result.requires_confirmation) {
+                g1ShowSoftFlagModal(
+                    result.flag_message || 'Bonita noticed something worth reviewing before this goes to students.',
+                    () => retryFn(true)  // retryFn called with faculty_confirmed=true
+                );
+                return true;  // handled as flag
+            }
+            if (result.detail && result.detail.code === 'CONTENT_HARD_BLOCK') {
+                alert('🚫 This content can\'t be uploaded.\n\n' + result.detail.message);
+                return true;  // handled as block
+            }
+            return false;  // not a flag — caller handles normally
+        }
 
         // ============================================================================
         // APP INITIALIZATION
@@ -2836,7 +3063,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             } catch (error) { showAlert('syllabusAlert', 'error', '❌ Error: ' + error.message); }
         }
 
-        async function uploadAISyllabus() {
+        async function uploadAISyllabus(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select course first'); return; }
             const content = document.getElementById('aiGeneratedSyllabusContent').value;
             showAlert('syllabusAlert', 'info', '📤 Uploading...');
@@ -2844,9 +3071,10 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                 const response = await fetch(`${API_URL}/api/v2/canvas/syllabus`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ course_id: selectedCourse.id, syllabus_body: content })
+                    body: JSON.stringify({ course_id: selectedCourse.id, syllabus_body: content, faculty_confirmed: facultyConfirmed })
                 });
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => uploadAISyllabus(confirmed))) return;
                 if (response.ok) {
                     showAlert('syllabusAlert', 'success', `✅ Syllabus uploaded! <a href="${result.preview_url}" target="_blank">View →</a>`);
                     document.getElementById('aiSyllabusCourseName').value = '';
@@ -2887,6 +3115,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             }
         }
 
+        const _textareaToContentType = {
+            'aiGeneratedContent': 'assignment',
+            'aiGeneratedPageContent': 'page',
+            'aiGeneratedDiscussionContent': 'discussion',
+            'aiGeneratedSyllabusContent': 'syllabus',
+        };
+
         function showPreview(textareaId, content) {
             const textarea = document.getElementById(textareaId);
             const preview = document.getElementById(textareaId + 'Preview');
@@ -2894,6 +3129,9 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             preview.innerHTML = content;
             preview.style.display = 'block';
             textarea.style.display = 'none';
+            // Reset Zone 2 review checkboxes on fresh content
+            const ct = _textareaToContentType[textareaId];
+            if (ct) g1ResetReviewChecks(ct);
         }
 
         function showSection(section) {
@@ -3118,7 +3356,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             }
         }
 
-        async function uploadQuickQuiz() {
+        async function uploadQuickQuiz(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select a course first'); return; }
 
             const title = document.getElementById('quickQuizTitle').value.trim();
@@ -3151,11 +3389,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         topic: title,
                         questions: parsed,
                         num_questions: parsed.length,
-                        due_date: document.getElementById('quickQuizDueDate')?.value || null
+                        due_date: document.getElementById('quickQuizDueDate')?.value || null,
+                        faculty_confirmed: facultyConfirmed
                     })
                 });
 
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => uploadQuickQuiz(confirmed))) return;
 
                 if (response.ok) {
                     showAlert('quizAlert', 'success', `
@@ -3512,9 +3752,11 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                     ${questionsHTML}
                 </div>
             `;
+            // Reset Zone 2 review checkboxes on fresh quiz
+            g1ResetReviewChecks('quiz');
         }
 
-        async function uploadAIQuiz() {
+        async function uploadAIQuiz(facultyConfirmed = false) {
             if (!selectedCourse) {
                 showAlert('quizAlert', 'error', '❌ Please select a course first');
                 return;
@@ -3539,11 +3781,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         topic: generatedQuizData.topic,
                         questions: generatedQuizData.questions,
                         num_questions: generatedQuizData.num_questions,
-                        due_date: document.getElementById('aiQuizDueDate')?.value || null
+                        due_date: document.getElementById('aiQuizDueDate')?.value || null,
+                        faculty_confirmed: facultyConfirmed
                     })
                 });
 
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => uploadAIQuiz(confirmed))) return;
 
                 if (response.ok) {
                     // Show success with Canvas link
@@ -3602,24 +3846,28 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             return parseInt(document.getElementById('announcementTone').value) || 3;
         }
 
-        async function _submitAnnouncement(body) {
-            if (!selectedCourse) { alert('Select a course first'); return; }
+        async function _submitAnnouncement(body, facultyConfirmed = false) {
+            if (!selectedCourse) { alert('Select a course first'); return 'error'; }
             showAlert('announcementAlert', 'info', '📢 Posting announcement...');
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
                 const response = await fetch(`${API_URL}/api/v2/canvas/announcement`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ course_id: selectedCourse.id, language: currentLang, tone: _getAnnouncementTone(), ...body })
+                    body: JSON.stringify({ course_id: selectedCourse.id, language: currentLang, tone: _getAnnouncementTone(), faculty_confirmed: facultyConfirmed, ...body })
                 });
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => _submitAnnouncement(body, confirmed))) return 'flagged';
                 if (response.ok) {
                     showAlert('announcementAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank" style="color: var(--purple);">View in Canvas →</a>`);
+                    return 'success';
                 } else {
                     showAlert('announcementAlert', 'error', '❌ ' + result.detail);
+                    return 'error';
                 }
             } catch (error) {
                 showAlert('announcementAlert', 'error', '❌ Error: ' + error.message);
+                return 'error';
             }
         }
 
@@ -3627,16 +3875,16 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             const msg = document.getElementById('announcementCustomMessage').value.trim();
             if (!msg) { alert('Write your announcement first'); return; }
             showAlert('announcementAlert', 'info', '📢 Posting announcement...');
-            await _submitAnnouncement({ topic: msg.split('\n')[0].substring(0, 80), custom_message: msg, enhance: false });
-            document.getElementById('announcementCustomMessage').value = '';
+            const r = await _submitAnnouncement({ topic: msg.split('\n')[0].substring(0, 80), custom_message: msg, enhance: false });
+            if (r !== 'flagged') document.getElementById('announcementCustomMessage').value = '';
         }
 
         async function postAnnouncementPolished() {
             const msg = document.getElementById('announcementCustomMessage').value.trim();
             if (!msg) { alert('Write your announcement first'); return; }
             showAlert('announcementAlert', 'info', '✨ Polishing with AI...');
-            await _submitAnnouncement({ topic: msg.split('\n')[0].substring(0, 80), custom_message: msg, enhance: true });
-            document.getElementById('announcementCustomMessage').value = '';
+            const r = await _submitAnnouncement({ topic: msg.split('\n')[0].substring(0, 80), custom_message: msg, enhance: true });
+            if (r !== 'flagged') document.getElementById('announcementCustomMessage').value = '';
         }
 
         // AI Generate Announcement
@@ -3644,9 +3892,11 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             const topic = document.getElementById('announcementTopic').value;
             if (!topic) { alert('Enter announcement topic'); return; }
             showAlert('announcementAlert', 'info', '✨ Generating announcement...');
-            await _submitAnnouncement({ topic, details: document.getElementById('announcementDetails').value || null });
-            document.getElementById('announcementTopic').value = '';
-            document.getElementById('announcementDetails').value = '';
+            const r = await _submitAnnouncement({ topic, details: document.getElementById('announcementDetails').value || null });
+            if (r !== 'flagged') {
+                document.getElementById('announcementTopic').value = '';
+                document.getElementById('announcementDetails').value = '';
+            }
         }
 
         // Create Assignment
@@ -3723,7 +3973,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         }
 
         // Upload AI-Generated Assignment to Canvas
-        async function uploadAIAssignment() {
+        async function uploadAIAssignment(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select a course first'); return; }
 
             const topic = document.getElementById('aiAssignmentTopic').value;
@@ -3751,11 +4001,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         title: topic,
                         description: generatedContent,
                         points: points,
-                        due_date: dueDate
+                        due_date: dueDate,
+                        faculty_confirmed: facultyConfirmed
                     })
                 });
 
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => uploadAIAssignment(confirmed))) return;
 
                 if (response.ok) {
                     showAlert('assignmentAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank" style="color: var(--purple);">View in Canvas →</a>`);
@@ -3780,7 +4032,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             showAlert('assignmentAlert', 'info', 'Cancelled. You can regenerate or modify your inputs.');
         }
 
-        async function createAssignment() {
+        async function createAssignment(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select a course first'); return; }
 
             const title = document.getElementById('assignmentTitle').value;
@@ -3810,11 +4062,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         title: title,
                         description: description,
                         points: parseInt(document.getElementById('assignmentPoints').value),
-                        due_date: dueDate
+                        due_date: dueDate,
+                        faculty_confirmed: facultyConfirmed
                     })
                 });
 
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => createAssignment(confirmed))) return;
 
                 if (response.ok) {
                     showAlert('assignmentAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank" style="color: var(--purple);">View in Canvas →</a>`);
@@ -3920,7 +4174,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         }
 
         // Upload AI-Generated Page to Canvas
-        async function uploadAIPage() {
+        async function uploadAIPage(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select a course first'); return; }
 
             const title = document.getElementById('aiPageTitle').value;
@@ -3938,11 +4192,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                     body: JSON.stringify({
                         course_id: selectedCourse.id,
                         title: title,
-                        content: generatedContent
+                        content: generatedContent,
+                        faculty_confirmed: facultyConfirmed
                     })
                 });
 
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => uploadAIPage(confirmed))) return;
 
                 if (response.ok) {
                     showAlert('pageAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank" style="color: var(--purple);">View in Canvas →</a>`);
@@ -3968,7 +4224,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             showAlert('pageAlert', 'info', 'Cancelled. You can regenerate or modify your inputs.');
         }
 
-        async function createPage() {
+        async function createPage(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select a course first'); return; }
 
             const title = document.getElementById('pageTitle').value;
@@ -3987,11 +4243,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                     body: JSON.stringify({
                         course_id: selectedCourse.id,
                         title: title,
-                        content: content
+                        content: content,
+                        faculty_confirmed: facultyConfirmed
                     })
                 });
 
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => createPage(confirmed))) return;
 
                 if (response.ok) {
                     showAlert('pageAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank" style="color: var(--purple);">View in Canvas →</a>`);
@@ -4048,7 +4306,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
 
         async function regenerateAIDiscussion() { showAlert('discussionAlert', 'info', '🔄 Regenerating...'); await generateAIDiscussion(); }
 
-        async function uploadAIDiscussion() {
+        async function uploadAIDiscussion(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select a course first'); return; }
             const topic = document.getElementById('aiDiscussionTopic').value;
             const content = document.getElementById('aiGeneratedDiscussionContent').value;
@@ -4057,9 +4315,10 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                 const response = await fetch(`${API_URL}/api/v2/canvas/discussion`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ course_id: selectedCourse.id, topic, prompt: content })
+                    body: JSON.stringify({ course_id: selectedCourse.id, topic, prompt: content, faculty_confirmed: facultyConfirmed })
                 });
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => uploadAIDiscussion(confirmed))) return;
                 if (response.ok) {
                     showAlert('discussionAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank">View →</a>`);
                     document.getElementById('aiDiscussionTopic').value = '';
@@ -4075,7 +4334,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             document.getElementById('aiDiscussionForm').style.display = 'block';
         }
 
-        async function createDiscussion() {
+        async function createDiscussion(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select a course first'); return; }
 
             const topic = document.getElementById('discussionTopic').value;
@@ -4094,11 +4353,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                     body: JSON.stringify({
                         course_id: selectedCourse.id,
                         topic: topic,
-                        prompt: message
+                        prompt: message,
+                        faculty_confirmed: facultyConfirmed
                     })
                 });
 
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => createDiscussion(confirmed))) return;
 
                 if (response.ok) {
                     showAlert('discussionAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank" style="color: var(--purple);">View in Canvas →</a>`);
@@ -4973,12 +5234,15 @@ Participation: 10%" style="min-height: 80px;"></textarea>
          ONBOARDING MODAL
     ============================================================ -->
     <div id="onboarding-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; padding:1rem;">
-        <div style="background:white; border-radius:16px; max-width:540px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.3); font-family:'DM Sans',sans-serif;">
+        <div style="background:white; border-radius:16px; max-width:540px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.3); font-family:'DM Sans',sans-serif; position:relative;">
 
             <!-- Progress bar -->
             <div style="height:4px; background:#f0f0f0; border-radius:16px 16px 0 0; overflow:hidden;">
                 <div id="ob-progress" style="height:100%; background:linear-gradient(90deg,#1E3A5F,#C9A961); transition:width 0.4s ease; width:25%"></div>
             </div>
+
+            <!-- Close button -->
+            <button id="ob-close" onclick="closeOnboarding()" style="position:absolute; top:0.75rem; right:1rem; background:none; border:none; font-size:1.4rem; color:#aaa; cursor:pointer; line-height:1; padding:0.25rem 0.5rem; border-radius:4px;" title="Close">&times;</button>
 
             <!-- Step content -->
             <div id="ob-content" style="padding:2rem 2rem 1.5rem"></div>
@@ -5016,72 +5280,79 @@ Participation: 10%" style="min-height: 80px;"></textarea>
     </style>
 
     <script>
-        const OB_STEPS = [
-            {
-                icon: '👋',
-                title: 'Welcome to ReadySetClass!',
-                html: `
-                    <p class="ob-step-sub">You're set up with the AI-powered tool built for educators. Here's what you can do:</p>
-                    <ul class="ob-feature-list">
-                        <li><span>🎓</span><span><strong>Build courses</strong> — generate quizzes, assignments, modules, and syllabi in minutes, not hours.</span></li>
-                        <li><span>✨</span><span><strong>AI Grading</strong> — let AI grade student submissions against your rubric. You review and approve before anything posts.</span></li>
-                        <li><span>📢</span><span><strong>Announcements & Discussions</strong> — draft and publish Canvas content without logging into Canvas directly.</span></li>
-                        <li><span>🔗</span><span><strong>Direct Canvas sync</strong> — everything publishes straight to your Canvas course. No copy-paste.</span></li>
-                    </ul>
-                    <div class="ob-callout">Works with <strong>K-12 and university Canvas</strong> accounts — any school using Instructure Canvas LMS.</div>
-                `
-            },
-            {
-                icon: '🔗',
-                title: 'Connect Your Canvas Account',
-                html: `
-                    <p class="ob-step-sub">ReadySetClass needs your Canvas URL and an API access token to sync with your courses.</p>
-                    <strong style="font-size:0.9rem; color:#1E3A5F;">How to get your Canvas API token:</strong>
-                    <ol class="ob-token-steps">
-                        <li>Log into your Canvas account at your school's Canvas URL</li>
-                        <li>Click your <strong>profile picture</strong> (top right) → <strong>Settings</strong></li>
-                        <li>Scroll down to <strong>Approved Integrations</strong> → click <strong>+ New Access Token</strong></li>
-                        <li>Give it a name like "ReadySetClass" → click <strong>Generate Token</strong></li>
-                        <li>Copy the token — <strong>you only see it once!</strong></li>
-                    </ol>
-                    <div class="ob-callout"><strong>Your Canvas URL</strong> looks like: <code style="background:#e8e8e8;padding:2px 6px;border-radius:4px;">https://yourschool.instructure.com</code><br>Check your browser bar when you're logged into Canvas.</div>
-                `
-            },
-            {
-                icon: '✨',
-                title: 'AI Grading — How It Works',
-                html: `
-                    <p class="ob-step-sub">When students submit assignments on Canvas, AI grades them against your rubric in minutes.</p>
-                    <ul class="ob-feature-list">
-                        <li><span>📄</span><span>Supports <strong>PDF, Word (.docx), Excel, and text</strong> submissions</span></li>
-                        <li><span>📊</span><span>Uses your <strong>Canvas rubric</strong> automatically — or you type one in manually</span></li>
-                        <li><span>👁️</span><span>You <strong>review every grade</strong> before anything posts to Canvas — AI assists, you decide</span></li>
-                        <li><span>⏱️</span><span>25 submissions = ~10 hours manual → <strong>~1 hour with AI</strong> (90% faster)</span></li>
-                    </ul>
-                    <div class="ob-callout">Find it in the sidebar: <strong>✨ AI Grader</strong> — select an assignment, confirm the rubric, and start grading.</div>
-                `
-            },
-            {
-                icon: '🚀',
-                title: "You're Ready to Go!",
-                html: `
-                    <p class="ob-step-sub">Here's your quick-start checklist:</p>
-                    <ul class="ob-feature-list">
-                        <li><span>✅</span><span>Connect Canvas (scroll down on this page → Canvas Connection)</span></li>
-                        <li><span>✅</span><span>Select a course from <strong>My Courses</strong></span></li>
-                        <li><span>✅</span><span>Create something — try <strong>📝 Create Quiz</strong> first, it's the fastest to see results</span></li>
-                        <li><span>✅</span><span>When students submit work → try <strong>✨ AI Grader</strong></span></li>
-                    </ul>
-                    <div class="ob-callout">Have questions? Visit <a href="/faq.html" style="color:#1E3A5F;font-weight:600;">readysetclass.app/faq.html</a> or click the <strong>?</strong> button anytime to replay this walkthrough.</div>
-                `
-            }
-        ];
-
         let obCurrent = 0;
 
+        function _obt(key) {
+            return (window.i18n ? window.i18n.t(key) : null) || key;
+        }
+
+        function getObSteps() {
+            return [
+                {
+                    icon: '👋',
+                    title: _obt('onboarding.step1.title'),
+                    html: `
+                        <p class="ob-step-sub">${_obt('onboarding.step1.sub')}</p>
+                        <ul class="ob-feature-list">
+                            <li><span>🎓</span><span>${_obt('onboarding.step1.item1')}</span></li>
+                            <li><span>✨</span><span>${_obt('onboarding.step1.item2')}</span></li>
+                            <li><span>📢</span><span>${_obt('onboarding.step1.item3')}</span></li>
+                            <li><span>🔗</span><span>${_obt('onboarding.step1.item4')}</span></li>
+                        </ul>
+                        <div class="ob-callout">${_obt('onboarding.step1.callout')}</div>
+                    `
+                },
+                {
+                    icon: '🔗',
+                    title: _obt('onboarding.step2.title'),
+                    html: `
+                        <p class="ob-step-sub">${_obt('onboarding.step2.sub')}</p>
+                        <strong style="font-size:0.9rem; color:#1E3A5F;">${_obt('onboarding.step2.howTo')}</strong>
+                        <ol class="ob-token-steps">
+                            <li>${_obt('onboarding.step2.s1')}</li>
+                            <li>${_obt('onboarding.step2.s2')}</li>
+                            <li>${_obt('onboarding.step2.s3')}</li>
+                            <li>${_obt('onboarding.step2.s4')}</li>
+                            <li>${_obt('onboarding.step2.s5')}</li>
+                        </ol>
+                        <div class="ob-callout">${_obt('onboarding.step2.callout')}</div>
+                    `
+                },
+                {
+                    icon: '✨',
+                    title: _obt('onboarding.step3.title'),
+                    html: `
+                        <p class="ob-step-sub">${_obt('onboarding.step3.sub')}</p>
+                        <ul class="ob-feature-list">
+                            <li><span>📄</span><span>${_obt('onboarding.step3.item1')}</span></li>
+                            <li><span>📊</span><span>${_obt('onboarding.step3.item2')}</span></li>
+                            <li><span>👁️</span><span>${_obt('onboarding.step3.item3')}</span></li>
+                            <li><span>⏱️</span><span>${_obt('onboarding.step3.item4')}</span></li>
+                        </ul>
+                        <div class="ob-callout">${_obt('onboarding.step3.callout')}</div>
+                    `
+                },
+                {
+                    icon: '🚀',
+                    title: _obt('onboarding.step4.title'),
+                    html: `
+                        <p class="ob-step-sub">${_obt('onboarding.step4.sub')}</p>
+                        <ul class="ob-feature-list">
+                            <li><span>✅</span><span>${_obt('onboarding.step4.item1')}</span></li>
+                            <li><span>✅</span><span>${_obt('onboarding.step4.item2')}</span></li>
+                            <li><span>✅</span><span>${_obt('onboarding.step4.item3')}</span></li>
+                            <li><span>✅</span><span>${_obt('onboarding.step4.item4')}</span></li>
+                        </ul>
+                        <div class="ob-callout">${_obt('onboarding.step4.callout')}</div>
+                    `
+                }
+            ];
+        }
+
         function renderObStep() {
-            const step = OB_STEPS[obCurrent];
-            const total = OB_STEPS.length;
+            const steps = getObSteps();
+            const step = steps[obCurrent];
+            const total = steps.length;
             document.getElementById('ob-progress').style.width = `${((obCurrent + 1) / total) * 100}%`;
             document.getElementById('ob-content').innerHTML = `
                 <div class="ob-step-icon">${step.icon}</div>
@@ -5089,13 +5360,20 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                 ${step.html}
             `;
             // Dots
-            document.getElementById('ob-dots').innerHTML = OB_STEPS.map((_, i) =>
+            document.getElementById('ob-dots').innerHTML = steps.map((_, i) =>
                 `<div class="ob-dot${i === obCurrent ? ' active' : ''}" onclick="obGoTo(${i})"></div>`
             ).join('');
             // Back button
-            document.getElementById('ob-back').style.visibility = obCurrent === 0 ? 'hidden' : 'visible';
-            // Next button label
-            document.getElementById('ob-next').textContent = obCurrent === total - 1 ? "Let's Go! 🎉" : 'Next →';
+            const backBtn = document.getElementById('ob-back');
+            backBtn.style.visibility = obCurrent === 0 ? 'hidden' : 'visible';
+            backBtn.textContent = _obt('onboarding.back');
+            // Next/finish button
+            document.getElementById('ob-next').textContent = obCurrent === total - 1
+                ? _obt('onboarding.finish')
+                : _obt('onboarding.next');
+            // Close button label
+            const closeBtn = document.getElementById('ob-close');
+            if (closeBtn) closeBtn.title = _obt('onboarding.close');
         }
 
         function obStep(dir) {
@@ -5676,5 +5954,359 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             }, 2000);
         });
     </script>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     C1 — AI Image Generation Panel
+     Slide-in from right. Works in both Page builder and Syllabus builder.
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="imagePanel" style="
+    position: fixed; top: 0; right: -420px; width: 400px; height: 100vh;
+    background: white; box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+    z-index: 9999; transition: right 0.3s ease; display: flex; flex-direction: column;
+    border-left: 3px solid var(--purple);
+">
+    <!-- Header -->
+    <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid #e9ecef; background: var(--purple);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-weight: 700; font-size: 1rem; color: white;">📷✨ AI Image Generator</div>
+                <div style="display: flex; align-items: center; gap: 0.6rem; margin-top: 2px;">
+                    <span id="imagePanelCredits" style="font-size: 0.8rem; color: rgba(255,255,255,0.8);"></span>
+                    <button onclick="openCreditPackModal()" style="font-size: 0.72rem; background: rgba(255,255,255,0.25); color: white; border: none; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-weight: 600;">Buy Credits</button>
+                </div>
+            </div>
+            <button onclick="closeImagePanel()" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center;">✕</button>
+        </div>
+        <!-- Tabs -->
+        <div style="display: flex; gap: 0; margin-top: 1rem; background: rgba(255,255,255,0.15); border-radius: 6px; padding: 3px;">
+            <button id="imgTabGenerate" onclick="switchImageTab('generate')" style="flex: 1; padding: 0.4rem; border: none; border-radius: 4px; font-size: 0.85rem; font-weight: 600; cursor: pointer; background: white; color: var(--purple);">Generate New</button>
+            <button id="imgTabMine" onclick="switchImageTab('mine')" style="flex: 1; padding: 0.4rem; border: none; border-radius: 4px; font-size: 0.85rem; font-weight: 600; cursor: pointer; background: transparent; color: white;">My Images</button>
+        </div>
+    </div>
+
+    <!-- Generate New Tab -->
+    <div id="imgTabGenerateContent" style="flex: 1; overflow-y: auto; padding: 1.25rem;">
+        <div style="margin-bottom: 1rem;">
+            <label style="font-size: 0.85rem; font-weight: 600; color: var(--dark); display: block; margin-bottom: 0.4rem;">Describe the image</label>
+            <textarea id="imgPrompt" placeholder="e.g. A wide banner for a Media Ethics course showing social media icons and a newspaper, modern flat style" style="width: 100%; min-height: 90px; padding: 0.6rem; border: 1px solid #ddd; border-radius: 6px; font-family: inherit; font-size: 0.9rem; resize: vertical; box-sizing: border-box;"></textarea>
+        </div>
+        <div style="margin-bottom: 1.25rem;">
+            <label style="font-size: 0.85rem; font-weight: 600; color: var(--dark); display: block; margin-bottom: 0.5rem;">Style</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <label id="style-banner" class="img-style-btn selected-style" onclick="selectStyle('banner')" style="padding: 0.5rem 0.75rem; border: 2px solid var(--purple); border-radius: 6px; cursor: pointer; font-size: 0.82rem; font-weight: 600; text-align: center; background: #f0ebff; color: var(--purple);">🖼 Banner</label>
+                <label id="style-illustration" class="img-style-btn" onclick="selectStyle('illustration')" style="padding: 0.5rem 0.75rem; border: 2px solid #ddd; border-radius: 6px; cursor: pointer; font-size: 0.82rem; font-weight: 600; text-align: center; background: white; color: #555;">✏️ Illustration</label>
+                <label id="style-icon_set" class="img-style-btn" onclick="selectStyle('icon_set')" style="padding: 0.5rem 0.75rem; border: 2px solid #ddd; border-radius: 6px; cursor: pointer; font-size: 0.82rem; font-weight: 600; text-align: center; background: white; color: #555;">🔷 Icon Set</label>
+                <label id="style-photo" class="img-style-btn" onclick="selectStyle('photo')" style="padding: 0.5rem 0.75rem; border: 2px solid #ddd; border-radius: 6px; cursor: pointer; font-size: 0.82rem; font-weight: 600; text-align: center; background: white; color: #555;">📸 Photo-style</label>
+            </div>
+        </div>
+
+        <!-- Generate button -->
+        <button id="imgGenerateBtn" onclick="generateImage()" style="width: 100%; padding: 0.75rem; background: var(--purple); color: white; border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 700; cursor: pointer; margin-bottom: 1.25rem;">
+            ✨ Generate Image <span style="font-size: 0.8rem; opacity: 0.85;">(1 credit)</span>
+        </button>
+
+        <!-- Generated preview -->
+        <div id="imgGeneratedPreview" style="display: none;">
+            <div style="border-radius: 8px; overflow: hidden; border: 2px solid var(--purple); margin-bottom: 1rem;">
+                <img id="imgGeneratedImg" src="" alt="" style="width: 100%; display: block; max-height: 260px; object-fit: cover;">
+            </div>
+            <div style="margin-bottom: 0.75rem;">
+                <label style="font-size: 0.82rem; font-weight: 600; color: var(--dark); display: block; margin-bottom: 0.35rem;">Alt text (required for accessibility)</label>
+                <input id="imgAltText" type="text" placeholder="Describe the image for screen readers..." style="width: 100%; padding: 0.5rem 0.65rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.88rem; box-sizing: border-box;">
+            </div>
+            <div style="display: flex; gap: 0.6rem;">
+                <button onclick="insertGeneratedImage()" style="flex: 1; padding: 0.6rem; background: var(--green, #28a745); color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.9rem;">✅ Insert</button>
+                <button onclick="generateImage()" style="flex: 1; padding: 0.6rem; background: var(--coral); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">🔄 Retry</button>
+            </div>
+        </div>
+
+        <!-- Generating spinner -->
+        <div id="imgGeneratingSpinner" style="display: none; text-align: center; padding: 2rem 0;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎨</div>
+            <div style="font-size: 0.9rem; color: #666;">Generating your image…<br><span style="font-size: 0.8rem; color: #999;">This takes 10-20 seconds</span></div>
+        </div>
+    </div>
+
+    <!-- My Images Tab -->
+    <div id="imgTabMineContent" style="flex: 1; overflow-y: auto; padding: 1.25rem; display: none;">
+        <div id="myImagesGrid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div style="color: #999; font-size: 0.85rem; grid-column: 1/-1; text-align: center; padding: 2rem 0;">Loading your images…</div>
+        </div>
+    </div>
+</div>
+
+<!-- Overlay to close panel on click outside -->
+<div id="imagePanelOverlay" onclick="closeImagePanel()" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.2); z-index: 9998;"></div>
+
+<script>
+// ─── C1 Image Generation Panel ───────────────────────────────────────────────
+
+let _imgPanelContext = 'page'; // 'page' | 'syllabus'
+let _imgSelectedStyle = 'banner';
+let _imgCurrentDataUrl = null;
+let _imgCurrentMediaId = null;
+
+function openImagePanel(context) {
+    _imgPanelContext = context || 'page';
+    document.getElementById('imagePanel').style.right = '0';
+    document.getElementById('imagePanelOverlay').style.display = 'block';
+    // Load credit count
+    const status = window._genStatus;
+    if (status) {
+        const c = status.image_credits || 0;
+        document.getElementById('imagePanelCredits').textContent = `${c} image credit${c !== 1 ? 's' : ''} remaining`;
+    } else {
+        fetchGenStatus().then(() => {
+            const s = window._genStatus;
+            const c = (s && s.image_credits) || 0;
+            document.getElementById('imagePanelCredits').textContent = `${c} image credit${c !== 1 ? 's' : ''} remaining`;
+        });
+    }
+    // Load My Images in background
+    loadMyImages();
+}
+
+function closeImagePanel() {
+    document.getElementById('imagePanel').style.right = '-420px';
+    document.getElementById('imagePanelOverlay').style.display = 'none';
+}
+
+function switchImageTab(tab) {
+    const isGenerate = tab === 'generate';
+    document.getElementById('imgTabGenerateContent').style.display = isGenerate ? 'block' : 'none';
+    document.getElementById('imgTabMineContent').style.display = isGenerate ? 'none' : 'block';
+    const btnGen = document.getElementById('imgTabGenerate');
+    const btnMine = document.getElementById('imgTabMine');
+    btnGen.style.background = isGenerate ? 'white' : 'transparent';
+    btnGen.style.color = isGenerate ? 'var(--purple)' : 'white';
+    btnMine.style.background = isGenerate ? 'transparent' : 'white';
+    btnMine.style.color = isGenerate ? 'white' : 'var(--purple)';
+    if (!isGenerate) loadMyImages();
+}
+
+function selectStyle(style) {
+    _imgSelectedStyle = style;
+    document.querySelectorAll('.img-style-btn').forEach(el => {
+        const isSelected = el.id === `style-${style}`;
+        el.style.border = isSelected ? '2px solid var(--purple)' : '2px solid #ddd';
+        el.style.background = isSelected ? '#f0ebff' : 'white';
+        el.style.color = isSelected ? 'var(--purple)' : '#555';
+    });
+}
+
+async function generateImage() {
+    const prompt = document.getElementById('imgPrompt').value.trim();
+    if (!prompt) {
+        alert('Please describe the image you want to generate.');
+        return;
+    }
+    document.getElementById('imgGeneratedPreview').style.display = 'none';
+    document.getElementById('imgGeneratingSpinner').style.display = 'block';
+    document.getElementById('imgGenerateBtn').disabled = true;
+    try {
+        const resp = await fetch('/api/v2/generate-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+            body: JSON.stringify({ prompt, style: _imgSelectedStyle, context: _imgPanelContext })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            if (resp.status === 402) {
+                alert('Not enough image credits. Purchase a credit pack to continue.');
+            } else {
+                alert(data.detail || 'Image generation failed. Please try again.');
+            }
+            return;
+        }
+        _imgCurrentDataUrl = data.image_url;
+        _imgCurrentMediaId = data.media_id;
+        document.getElementById('imgGeneratedImg').src = data.image_url;
+        document.getElementById('imgAltText').value = prompt;
+        document.getElementById('imgGeneratedPreview').style.display = 'block';
+        // Update credits display
+        document.getElementById('imagePanelCredits').textContent = `${data.credits_remaining} image credit${data.credits_remaining !== 1 ? 's' : ''} remaining`;
+        if (window._genStatus) window._genStatus.image_credits = data.credits_remaining;
+    } catch (err) {
+        alert('Network error. Please check your connection and try again.');
+        console.error('Image generation error:', err);
+    } finally {
+        document.getElementById('imgGeneratingSpinner').style.display = 'none';
+        document.getElementById('imgGenerateBtn').disabled = false;
+    }
+}
+
+function insertGeneratedImage() {
+    const altText = document.getElementById('imgAltText').value.trim() || 'AI-generated image';
+    if (!_imgCurrentDataUrl) return;
+    insertImageIntoBuilder(_imgPanelContext, _imgCurrentDataUrl, altText);
+    closeImagePanel();
+}
+
+function insertImageIntoBuilder(context, dataUrl, altText) {
+    const imgHtml = `\n<figure style="margin: 1.5rem 0; text-align: center;">\n  <img src="${dataUrl}" alt="${altText}" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.1);">\n  <figcaption style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">${altText}</figcaption>\n</figure>`;
+
+    let textareaId, previewId;
+    if (context === 'page') {
+        textareaId = 'aiGeneratedPageContent';
+        previewId = 'aiGeneratedPageContentPreview';
+    } else {
+        textareaId = 'aiGeneratedSyllabusContent';
+        previewId = 'aiGeneratedSyllabusContentPreview';
+    }
+
+    // Append to textarea
+    const ta = document.getElementById(textareaId);
+    if (ta) ta.value = (ta.value || '') + imgHtml;
+
+    // Append to preview
+    const preview = document.getElementById(previewId);
+    if (preview) preview.innerHTML = (preview.innerHTML || '') + imgHtml;
+}
+
+async function loadMyImages() {
+    const grid = document.getElementById('myImagesGrid');
+    try {
+        const resp = await fetch('/api/v2/media-library', {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await resp.json();
+        if (!data.images || data.images.length === 0) {
+            grid.innerHTML = '<div style="color: #999; font-size: 0.85rem; grid-column: 1/-1; text-align: center; padding: 2rem 0;">No images yet. Generate your first one!</div>';
+            return;
+        }
+        grid.innerHTML = data.images.map(img => `
+            <div style="border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden; cursor: pointer;">
+                <img src="${img.image_url}" alt="${img.alt_text || img.prompt}" style="width: 100%; height: 100px; object-fit: cover; display: block;">
+                <div style="padding: 0.4rem 0.5rem; background: #f8f9fa;">
+                    <div style="font-size: 0.72rem; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${img.prompt}">${img.prompt}</div>
+                    <button onclick="useLibraryImage('${encodeURIComponent(img.image_url)}', '${encodeURIComponent(img.alt_text || img.prompt)}')"
+                        style="width: 100%; margin-top: 0.35rem; padding: 0.3rem; background: var(--purple); color: white; border: none; border-radius: 4px; font-size: 0.78rem; font-weight: 600; cursor: pointer;">
+                        Use
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        grid.innerHTML = '<div style="color: #999; font-size: 0.85rem; grid-column: 1/-1; text-align: center; padding: 2rem 0;">Could not load images.</div>';
+    }
+}
+
+function useLibraryImage(encodedUrl, encodedAlt) {
+    const dataUrl = decodeURIComponent(encodedUrl);
+    const altText = decodeURIComponent(encodedAlt);
+    insertImageIntoBuilder(_imgPanelContext, dataUrl, altText);
+    closeImagePanel();
+}
+
+// Close panel on Escape key
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        closeImagePanel();
+        closeCreditPackModal();
+    }
+});
+
+// ─── B3 Credit Pack Purchase Modal ─────────────────────────────────────────
+
+function openCreditPackModal() {
+    document.getElementById('creditPackModal').style.display = 'flex';
+}
+
+function closeCreditPackModal() {
+    document.getElementById('creditPackModal').style.display = 'none';
+}
+
+async function purchaseCreditPack(packId) {
+    // Map packId to Stripe price ID
+    const packPriceIds = {
+        'starter':       'price_CREDIT_STARTER',
+        'standard':      'price_CREDIT_STANDARD',
+        'power':         'price_CREDIT_POWER',
+        'institutional': 'price_CREDIT_INSTITUTIONAL',
+    };
+    const priceId = packPriceIds[packId];
+    if (!priceId) return alert('Invalid pack.');
+
+    try {
+        const resp = await fetch(`${API_URL}/api/stripe/create-checkout-credits`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+            body: JSON.stringify({
+                price_id: priceId,
+                success_url: window.location.origin + '/dashboard-v2.html?payment=credits_success',
+                cancel_url: window.location.origin + '/dashboard-v2.html?payment=canceled',
+            })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            window.location.href = data.checkout_url;
+        } else {
+            alert(data.detail || 'Error creating checkout. Please try again.');
+        }
+    } catch (err) {
+        alert('Network error. Please try again.');
+        console.error(err);
+    }
+}
+
+// Check for credit purchase success on page load
+(function() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') === 'credits_success') {
+        setTimeout(() => {
+            showAlert('alert', 'success', '✅ Image credits added to your account!');
+            fetchGenStatus();
+        }, 500);
+        window.history.replaceState({}, '', window.location.pathname);
+    }
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     B3 — Credit Pack Purchase Modal
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="creditPackModal" onclick="if(event.target===this)closeCreditPackModal()" style="
+    display: none; position: fixed; inset: 0; z-index: 10000;
+    background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
+">
+    <div style="background: white; border-radius: 16px; max-width: 520px; width: 90%; padding: 2rem; box-shadow: 0 8px 32px rgba(0,0,0,0.2); position: relative;">
+        <button onclick="closeCreditPackModal()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 1.3rem; cursor: pointer; color: #999;">✕</button>
+        <h2 style="margin: 0 0 0.5rem; font-size: 1.3rem; color: var(--dark);">📷 Image Generation Credits</h2>
+        <p style="margin: 0 0 1.5rem; font-size: 0.88rem; color: #666;">Each credit generates one AI image for your course pages.</p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <!-- Starter -->
+            <div style="border: 2px solid #e9ecef; border-radius: 12px; padding: 1.25rem; text-align: center;">
+                <div style="font-weight: 700; font-size: 1rem; color: var(--dark);">Starter</div>
+                <div style="font-size: 2rem; font-weight: 800; color: var(--purple); margin: 0.5rem 0;">10</div>
+                <div style="font-size: 0.78rem; color: #888; margin-bottom: 0.75rem;">images &middot; $0.30/ea</div>
+                <button onclick="purchaseCreditPack('starter')" style="width: 100%; padding: 0.5rem; background: var(--purple); color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.9rem;">$2.99</button>
+            </div>
+            <!-- Standard -->
+            <div style="border: 2px solid var(--purple); border-radius: 12px; padding: 1.25rem; text-align: center; background: #faf8ff;">
+                <div style="font-weight: 700; font-size: 1rem; color: var(--dark);">Standard</div>
+                <div style="font-size: 2rem; font-weight: 800; color: var(--purple); margin: 0.5rem 0;">25</div>
+                <div style="font-size: 0.78rem; color: #888; margin-bottom: 0.75rem;">images &middot; $0.40/ea</div>
+                <button onclick="purchaseCreditPack('standard')" style="width: 100%; padding: 0.5rem; background: var(--purple); color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.9rem;">$9.99</button>
+            </div>
+            <!-- Power -->
+            <div style="border: 2px solid #e9ecef; border-radius: 12px; padding: 1.25rem; text-align: center;">
+                <div style="font-weight: 700; font-size: 1rem; color: var(--dark);">Power</div>
+                <div style="font-size: 2rem; font-weight: 800; color: var(--purple); margin: 0.5rem 0;">75</div>
+                <div style="font-size: 0.78rem; color: #888; margin-bottom: 0.75rem;">images &middot; $0.33/ea</div>
+                <button onclick="purchaseCreditPack('power')" style="width: 100%; padding: 0.5rem; background: var(--purple); color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.9rem;">$24.99</button>
+            </div>
+            <!-- Institutional -->
+            <div style="border: 2px solid #e9ecef; border-radius: 12px; padding: 1.25rem; text-align: center;">
+                <div style="font-weight: 700; font-size: 1rem; color: var(--dark);">Institutional</div>
+                <div style="font-size: 2rem; font-weight: 800; color: var(--purple); margin: 0.5rem 0;">250</div>
+                <div style="font-size: 0.78rem; color: #888; margin-bottom: 0.75rem;">images &middot; $0.20/ea</div>
+                <button onclick="purchaseCreditPack('institutional')" style="width: 100%; padding: 0.5rem; background: var(--purple); color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.9rem;">$49.99</button>
+            </div>
+        </div>
+
+        <p style="margin: 1rem 0 0; font-size: 0.75rem; color: #999; text-align: center;">Credits never expire. Reuse saved images anytime at 0 credits.</p>
+    </div>
+</div>
 </body>
 </html>

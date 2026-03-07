@@ -113,6 +113,50 @@
     "finish": "Terminer",
     "preview": "Aperçu"
   },
+  "onboarding": {
+    "close": "×",
+    "back": "← Retour",
+    "next": "Suivant →",
+    "finish": "C'est parti ! 🎉",
+    "step1": {
+      "title": "Bienvenue sur ReadySetClass !",
+      "sub": "Vous êtes configuré avec l'outil IA conçu pour les éducateurs. Voici ce que vous pouvez faire :",
+      "item1": "<strong>Créer des cours</strong> — générez des quiz, devoirs, modules et syllabus en quelques minutes.",
+      "item2": "<strong>Notation par IA</strong> — laissez l'IA noter les travaux des étudiants selon votre rubrique. Vous vérifiez avant toute publication.",
+      "item3": "<strong>Annonces et Discussions</strong> — rédigez et publiez du contenu Canvas sans vous connecter directement.",
+      "item4": "<strong>Synchronisation directe Canvas</strong> — tout est publié directement dans votre cours. Sans copier-coller.",
+      "callout": "Compatible avec les comptes Canvas <strong>K-12 et universitaires</strong> — toute école utilisant Instructure Canvas LMS."
+    },
+    "step2": {
+      "title": "Connectez votre compte Canvas",
+      "sub": "ReadySetClass a besoin de votre URL Canvas et d'un jeton d'accès API pour se synchroniser avec vos cours.",
+      "howTo": "Comment obtenir votre jeton API Canvas :",
+      "s1": "Connectez-vous à votre compte Canvas à l'URL Canvas de votre établissement",
+      "s2": "Cliquez sur votre <strong>photo de profil</strong> (en haut à droite) → <strong>Paramètres</strong>",
+      "s3": "Faites défiler jusqu'à <strong>Intégrations approuvées</strong> → cliquez sur <strong>+ Nouveau jeton d'accès</strong>",
+      "s4": "Donnez-lui un nom comme « ReadySetClass » → cliquez sur <strong>Générer le jeton</strong>",
+      "s5": "Copiez le jeton — <strong>vous ne le verrez qu'une seule fois !</strong>",
+      "callout": "Votre <strong>URL Canvas</strong> ressemble à : <code>https://votreecole.instructure.com</code>. Vérifiez la barre du navigateur lorsque vous êtes dans Canvas."
+    },
+    "step3": {
+      "title": "Notation par IA — Comment ça marche",
+      "sub": "Quand les étudiants remettent des devoirs sur Canvas, l'IA les note selon votre rubrique en quelques minutes.",
+      "item1": "Supporte les soumissions en <strong>PDF, Word (.docx), Excel et texte</strong>",
+      "item2": "Utilise votre <strong>rubrique Canvas</strong> automatiquement — ou saisissez-en une manuellement",
+      "item3": "Vous <strong>vérifiez chaque note</strong> avant toute publication — l'IA aide, vous décidez",
+      "item4": "25 soumissions ≈ ~10 heures manuellement → <strong>~1 heure avec l'IA</strong> (90% plus rapide)",
+      "callout": "Trouvez-le dans la barre latérale : <strong>✨ Correcteur IA</strong> — sélectionnez un devoir, confirmez la rubrique et commencez."
+    },
+    "step4": {
+      "title": "Vous êtes prêt !",
+      "sub": "Votre liste de démarrage rapide :",
+      "item1": "Connecter Canvas (faites défiler vers le bas → Connexion Canvas)",
+      "item2": "Sélectionnez un cours dans <strong>Mes Cours</strong>",
+      "item3": "Créez quelque chose — essayez d'abord <strong>📝 Créer un Quiz</strong>",
+      "item4": "Quand les étudiants remettent leurs travaux → essayez <strong>✨ Correcteur IA</strong>",
+      "callout": "Des questions ? Cliquez sur le bouton <strong>?</strong> à tout moment pour revoir ce tutoriel."
+    }
+  },
   "footer": {
     "copyright": "© 2026 ReadySetClass. Tous droits réservés.",
     "trademark": "ReadySetClass™ est une marque déposée.",

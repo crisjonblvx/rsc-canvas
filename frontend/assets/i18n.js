@@ -1,6 +1,11 @@
 /**
  * ReadySetClass™ Internationalization (i18n) System
  * Lightweight translation library with DOM auto-apply and backend persistence.
+ *
+ * FIXED:
+ * - Added syncFromBackend() to pull preferred_language from user profile on load
+ * - Fixed API_URL race condition — sync is called explicitly after API_URL is set
+ * - Expanded supportedLanguages to all 9 supported languages
  */
 
 class I18n {
@@ -12,16 +17,21 @@ class I18n {
             'en': { name: 'English',    flag: '🇺🇸', dir: 'ltr' },
             'es': { name: 'Español',    flag: '🇪🇸', dir: 'ltr' },
             'fr': { name: 'Français',   flag: '🇫🇷', dir: 'ltr' },
+            'de': { name: 'Deutsch',    flag: '🇩🇪', dir: 'ltr' },
             'pt': { name: 'Português',  flag: '🇧🇷', dir: 'ltr' },
-            'ar': { name: 'العربية',    flag: '🇸🇦', dir: 'rtl' },
             'zh': { name: '中文',        flag: '🇨🇳', dir: 'ltr' },
+            'ja': { name: '日本語',      flag: '🇯🇵', dir: 'ltr' },
+            'ko': { name: '한국어',      flag: '🇰🇷', dir: 'ltr' },
+            'hi': { name: 'हिन्दी',       flag: '🇮🇳', dir: 'ltr' },
+            'ar': { name: 'العربية',    flag: '🇸🇦', dir: 'rtl' },
         };
     }
 
     /**
-     * Initialize — priority: localStorage → browser language → default.
-     * Note: user profile preferred_language is synced later by dashboard
-     * code once API_URL is available (i18n.js loads before main script).
+     * Initialize — priority: backend preference → localStorage → browser language → default.
+     *
+     * NOTE: syncFromBackend() must be called explicitly by the page script AFTER
+     * window.API_URL is set. init() handles the offline/pre-auth path only.
      */
     async init() {
         const savedLang = localStorage.getItem('language');
@@ -38,6 +48,52 @@ class I18n {
         }
 
         await this.loadLanguage(lang);
+    }
+
+    /**
+     * Sync language preference from backend after login/page load.
+     * Call this from your page script AFTER window.API_URL is set and the
+     * user is authenticated (auth_token exists in localStorage).
+     *
+     * Usage:
+     *   window.API_URL = 'https://api.readysetclass.app';
+     *   await i18n.syncFromBackend();
+     *
+     * This will override localStorage if the backend has a different preference,
+     * so the source of truth is always the user's saved profile.
+     */
+    async syncFromBackend() {
+        const token = localStorage.getItem('auth_token');
+        const apiBase = window.API_URL || '';
+
+        if (!token || !apiBase) return; // Not authenticated or API not ready
+
+        try {
+            const response = await fetch(`${apiBase}/api/v2/user/language`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            });
+
+            if (!response.ok) return; // Silently fail — don't break the page
+
+            const data = await response.json();
+            const backendLang = data.preferred_language;
+
+            if (backendLang && this.supportedLanguages[backendLang] && backendLang !== this.currentLang) {
+                // Pre-load default for fallback if needed
+                if (backendLang !== this.defaultLang && !this.translations[this.defaultLang]) {
+                    try {
+                        const defResp = await fetch(`/locales/${this.defaultLang}.json`);
+                        if (defResp.ok) this.translations[this.defaultLang] = await defResp.json();
+                    } catch (e) { /* non-critical */ }
+                }
+                await this.loadLanguage(backendLang);
+            }
+        } catch (e) {
+            // Network error — keep whatever language is already active
+        }
     }
 
     /**
@@ -91,49 +147,34 @@ class I18n {
      *   data-i18n-html="key"         → sets innerHTML (use sparingly)
      */
     applyTranslations() {
-        // Text content
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.getAttribute('data-i18n');
             const translated = this.t(key);
-            if (translated && translated !== key) {
-                el.textContent = translated;
-            }
+            if (translated && translated !== key) el.textContent = translated;
         });
 
-        // Input placeholders
         document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
             const key = el.getAttribute('data-i18n-placeholder');
             const translated = this.t(key);
-            if (translated && translated !== key) {
-                el.placeholder = translated;
-            }
+            if (translated && translated !== key) el.placeholder = translated;
         });
 
-        // Title attributes (tooltips)
         document.querySelectorAll('[data-i18n-title]').forEach(el => {
             const key = el.getAttribute('data-i18n-title');
             const translated = this.t(key);
-            if (translated && translated !== key) {
-                el.title = translated;
-            }
+            if (translated && translated !== key) el.title = translated;
         });
 
-        // Aria-labels
         document.querySelectorAll('[data-i18n-aria]').forEach(el => {
             const key = el.getAttribute('data-i18n-aria');
             const translated = this.t(key);
-            if (translated && translated !== key) {
-                el.setAttribute('aria-label', translated);
-            }
+            if (translated && translated !== key) el.setAttribute('aria-label', translated);
         });
 
-        // innerHTML (for strings with inline markup)
         document.querySelectorAll('[data-i18n-html]').forEach(el => {
             const key = el.getAttribute('data-i18n-html');
             const translated = this.t(key);
-            if (translated && translated !== key) {
-                el.innerHTML = translated;
-            }
+            if (translated && translated !== key) el.innerHTML = translated;
         });
     }
 
@@ -142,14 +183,12 @@ class I18n {
      * Falls back to default language, then returns key if not found.
      */
     t(keyPath, variables = {}) {
-        const resolve = (obj, keys) => {
-            return keys.reduce((o, k) => (o && typeof o === 'object' && k in o ? o[k] : undefined), obj);
-        };
+        const resolve = (obj, keys) =>
+            keys.reduce((o, k) => (o && typeof o === 'object' && k in o ? o[k] : undefined), obj);
 
         const keys = keyPath.split('.');
         let value = resolve(this.translations[this.currentLang], keys);
 
-        // Fallback to default language
         if (value === undefined && this.currentLang !== this.defaultLang) {
             value = resolve(this.translations[this.defaultLang], keys);
         }
@@ -159,7 +198,6 @@ class I18n {
             return keyPath;
         }
 
-        // Interpolate {{variable}} placeholders
         if (typeof value === 'string' && Object.keys(variables).length > 0) {
             return value.replace(/\{\{(\w+)\}\}/g, (_, name) =>
                 variables[name] !== undefined ? variables[name] : `{{${name}}}`
@@ -169,29 +207,23 @@ class I18n {
         return value;
     }
 
-    /** Get current language code */
-    getLang() { return this.currentLang; }
-
-    /** Get info about current language */
-    getLangInfo() { return this.supportedLanguages[this.currentLang]; }
-
-    /** Get list of all supported languages */
+    getLang()               { return this.currentLang; }
+    getLangInfo()           { return this.supportedLanguages[this.currentLang]; }
     getSupportedLanguages() { return this.supportedLanguages; }
 
     /**
      * Switch language — updates DOM and persists to backend.
-     * Uses window.API_URL (set by dashboard/page scripts) for the API base.
+     * window.API_URL must be set by the page script before this is called.
      */
     async setLanguage(lang) {
         if (lang === this.currentLang) return true;
         const result = await this.loadLanguage(lang);
 
-        // Persist to backend (fire-and-forget)
         if (result) {
             const token = localStorage.getItem('auth_token');
             const apiBase = window.API_URL || '';
             if (token && apiBase) {
-                fetch(apiBase + '/api/v2/user/language', {
+                fetch(`${apiBase}/api/v2/user/language`, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
@@ -209,12 +241,11 @@ class I18n {
 // Global instance
 const i18n = new I18n();
 
-// Auto-initialize when DOM is ready
+// Auto-initialize with localStorage/browser preference (no API needed)
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => i18n.init());
 } else {
     i18n.init();
 }
 
-// Make available globally
 window.i18n = i18n;

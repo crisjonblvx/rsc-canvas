@@ -1914,8 +1914,19 @@ Students should demonstrate understanding of how technology challenges tradition
                     <div id="aiQuizPreviewContent" style="background: white; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; max-height: 400px; overflow-y: auto;">
                         <!-- Quiz questions will be rendered here -->
                     </div>
+                    <div style="background:#fffbf0; border:1px solid #e8d87a; border-radius:8px; padding:0.875rem 1rem; margin-bottom:1rem;">
+                        <p style="font-size:13px; color:#6b6340; margin:0 0 0.6rem; font-weight:600;">✦ Your AI Teaching Assistant created this. Please review before it reaches students.</p>
+                        <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:0.4rem; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="quiz_review_check" onchange="g1UpdateUploadBtn('quiz')" style="margin-top:2px;">
+                            I've reviewed this content
+                        </label>
+                        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="quiz_accurate_check" onchange="g1UpdateUploadBtn('quiz')" style="margin-top:2px;">
+                            It accurately represents my course
+                        </label>
+                    </div>
                     <div style="display: flex; gap: 1rem;">
-                        <button class="btn btn-primary" onclick="uploadAIQuiz()">📤 Upload to Canvas</button>
+                        <button class="btn btn-primary" id="quiz_upload_btn" onclick="uploadAIQuiz()" disabled style="opacity:0.5; cursor:not-allowed;">📤 Upload to Canvas</button>
                         <button class="btn" onclick="cancelAIQuiz()" style="background: #666; color: white;">Cancel</button>
                     </div>
                 </div>
@@ -2098,8 +2109,19 @@ Students should demonstrate understanding of how technology challenges tradition
                         <textarea id="aiGeneratedContent" style="display: none; min-height: 300px; font-family: 'DM Sans', sans-serif; line-height: 1.6;"></textarea>
                     </div>
 
+                    <div style="background:#fffbf0; border:1px solid #e8d87a; border-radius:8px; padding:0.875rem 1rem; margin-bottom:1rem;">
+                        <p style="font-size:13px; color:#6b6340; margin:0 0 0.6rem; font-weight:600;">✦ Your AI Teaching Assistant created this. Please review before it reaches students.</p>
+                        <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:0.4rem; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="assignment_review_check" onchange="g1UpdateUploadBtn('assignment')" style="margin-top:2px;">
+                            I've reviewed this content
+                        </label>
+                        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="assignment_accurate_check" onchange="g1UpdateUploadBtn('assignment')" style="margin-top:2px;">
+                            It accurately represents my course
+                        </label>
+                    </div>
                     <div style="display: flex; gap: 1rem;">
-                        <button class="btn btn-primary" onclick="uploadAIAssignment()">📤 <span data-i18n="btn.uploadToCanvas">Upload to Canvas</span></button>
+                        <button class="btn btn-primary" id="assignment_upload_btn" onclick="uploadAIAssignment()" disabled style="opacity:0.5; cursor:not-allowed;">📤 <span data-i18n="btn.uploadToCanvas">Upload to Canvas</span></button>
                         <button class="btn" onclick="togglePreviewMode('aiGeneratedContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
                         <button class="btn" onclick="cancelAIAssignment()" style="background: #666; color: white;">Cancel</button>
                     </div>
@@ -2252,8 +2274,19 @@ Students should demonstrate understanding of how technology challenges tradition
                         <textarea id="aiGeneratedPageContent" style="display: none; min-height: 300px; font-family: 'DM Sans', sans-serif; line-height: 1.6;"></textarea>
                     </div>
 
+                    <div style="background:#fffbf0; border:1px solid #e8d87a; border-radius:8px; padding:0.875rem 1rem; margin-bottom:1rem;">
+                        <p style="font-size:13px; color:#6b6340; margin:0 0 0.6rem; font-weight:600;">✦ Your AI Teaching Assistant created this. Please review before it reaches students.</p>
+                        <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:0.4rem; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="page_review_check" onchange="g1UpdateUploadBtn('page')" style="margin-top:2px;">
+                            I've reviewed this content
+                        </label>
+                        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="page_accurate_check" onchange="g1UpdateUploadBtn('page')" style="margin-top:2px;">
+                            It accurately represents my course
+                        </label>
+                    </div>
                     <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                        <button class="btn btn-primary" onclick="uploadAIPage()">📤 <span data-i18n="btn.uploadToCanvas">Upload to Canvas</span></button>
+                        <button class="btn btn-primary" id="page_upload_btn" onclick="uploadAIPage()" disabled style="opacity:0.5; cursor:not-allowed;">📤 <span data-i18n="btn.uploadToCanvas">Upload to Canvas</span></button>
                         <button class="btn" onclick="togglePreviewMode('aiGeneratedPageContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
                         <button class="btn" onclick="openImagePanel('page')" style="background: var(--purple); color: white;">📷✨ Add AI Image</button>
                         <button class="btn" onclick="cancelAIPage()" style="background: #666; color: white;">Cancel</button>
@@ -2355,8 +2388,19 @@ Students should demonstrate understanding of how technology challenges tradition
                         <textarea id="aiGeneratedDiscussionContent" style="display: none; min-height: 300px; font-family: 'DM Sans', sans-serif; line-height: 1.6;"></textarea>
                     </div>
 
+                    <div style="background:#fffbf0; border:1px solid #e8d87a; border-radius:8px; padding:0.875rem 1rem; margin-bottom:1rem;">
+                        <p style="font-size:13px; color:#6b6340; margin:0 0 0.6rem; font-weight:600;">✦ Your AI Teaching Assistant created this. Please review before it reaches students.</p>
+                        <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:0.4rem; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="discussion_review_check" onchange="g1UpdateUploadBtn('discussion')" style="margin-top:2px;">
+                            I've reviewed this content
+                        </label>
+                        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="discussion_accurate_check" onchange="g1UpdateUploadBtn('discussion')" style="margin-top:2px;">
+                            It accurately represents my course
+                        </label>
+                    </div>
                     <div style="display: flex; gap: 1rem;">
-                        <button class="btn btn-primary" onclick="uploadAIDiscussion()">📤 Upload to Canvas</button>
+                        <button class="btn btn-primary" id="discussion_upload_btn" onclick="uploadAIDiscussion()" disabled style="opacity:0.5; cursor:not-allowed;">📤 Upload to Canvas</button>
                         <button class="btn" onclick="togglePreviewMode('aiGeneratedDiscussionContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
                         <button class="btn" onclick="cancelAIDiscussion()" style="background: #666; color: white;">Cancel</button>
                     </div>
@@ -2471,8 +2515,19 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         <div id="aiGeneratedSyllabusContentPreview" class="rendered-preview"></div>
                         <textarea id="aiGeneratedSyllabusContent" style="display: none; min-height: 400px;"></textarea>
                     </div>
+                    <div style="background:#fffbf0; border:1px solid #e8d87a; border-radius:8px; padding:0.875rem 1rem; margin-bottom:1rem;">
+                        <p style="font-size:13px; color:#6b6340; margin:0 0 0.6rem; font-weight:600;">✦ Your AI Teaching Assistant created this. Please review before it reaches students.</p>
+                        <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:0.4rem; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="syllabus_review_check" onchange="g1UpdateUploadBtn('syllabus')" style="margin-top:2px;">
+                            I've reviewed this content
+                        </label>
+                        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:13px;">
+                            <input type="checkbox" id="syllabus_accurate_check" onchange="g1UpdateUploadBtn('syllabus')" style="margin-top:2px;">
+                            It accurately represents my course
+                        </label>
+                    </div>
                     <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                        <button class="btn btn-primary" onclick="uploadAISyllabus()">📤 Upload to Canvas</button>
+                        <button class="btn btn-primary" id="syllabus_upload_btn" onclick="uploadAISyllabus()" disabled style="opacity:0.5; cursor:not-allowed;">📤 Upload to Canvas</button>
                         <button class="btn" onclick="togglePreviewMode('aiGeneratedSyllabusContent')" style="background: var(--navy); color: white;">✏️ Edit Source</button>
                         <button class="btn" onclick="openImagePanel('syllabus')" style="background: var(--purple); color: white;">📷✨ Add AI Image</button>
                         <button class="btn" onclick="cancelAISyllabus()" style="background: #666; color: white;">Cancel</button>
@@ -2532,6 +2587,29 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         </main>
     </div>
     <!-- /dashboard -->
+
+    <!-- G1 Zone 3: Soft Flag Confirmation Modal -->
+    <div id="g1SoftFlagModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10000; align-items:center; justify-content:center; padding:1rem;">
+        <div style="background:#fff; border-radius:14px; max-width:520px; width:100%; padding:28px; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <div style="font-size:1.5rem; margin-bottom:12px;">⚠️</div>
+            <h3 style="margin:0 0 12px; font-family:var(--font-heading,inherit); color:#1E3A5F;">Before this goes to your students</h3>
+            <p id="g1FlagMessage" style="margin:0 0 20px; color:#374151; line-height:1.6; font-size:0.9rem;"></p>
+            <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:14px; margin-bottom:20px;">
+                <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.875rem;">
+                    <input type="checkbox" id="g1ConfirmCheck" style="margin-top:2px; flex-shrink:0;">
+                    <span>I have reviewed this content and confirm it is appropriate for my students.</span>
+                </label>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button id="g1ConfirmUploadBtn" onclick="g1ConfirmUpload()" disabled style="flex:1; background:#1E3A5F; color:white; border:none; border-radius:8px; padding:10px; font-weight:600; cursor:pointer; opacity:0.5;">
+                    ✓ Confirmed — Upload to Canvas
+                </button>
+                <button onclick="g1CloseModal()" style="flex:1; background:white; color:#374151; border:1px solid #d1d5db; border-radius:8px; padding:10px; font-weight:600; cursor:pointer;">
+                    ✎ Let me fix it first
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Bottom Navigation (Mobile Only) -->
     <nav class="bottom-nav">
@@ -2744,6 +2822,75 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             if (banner) banner.style.display = 'none';
         }
 
+        // ── G1 Content Safety: Soft Flag Modal ──────────────────────────────────
+        // g1PendingUpload stores the function to call once faculty confirms
+        let g1PendingUpload = null;
+
+        function g1ShowSoftFlagModal(flagMessage, onConfirm) {
+            document.getElementById('g1FlagMessage').textContent = flagMessage;
+            document.getElementById('g1ConfirmCheck').checked = false;
+            document.getElementById('g1ConfirmUploadBtn').disabled = true;
+            document.getElementById('g1ConfirmUploadBtn').style.opacity = '0.5';
+            document.getElementById('g1SoftFlagModal').style.display = 'flex';
+            g1PendingUpload = onConfirm;
+        }
+
+        document.getElementById('g1ConfirmCheck').addEventListener('change', function() {
+            const btn = document.getElementById('g1ConfirmUploadBtn');
+            btn.disabled = !this.checked;
+            btn.style.opacity = this.checked ? '1' : '0.5';
+        });
+
+        function g1ConfirmUpload() {
+            document.getElementById('g1SoftFlagModal').style.display = 'none';
+            if (g1PendingUpload) {
+                g1PendingUpload();
+                g1PendingUpload = null;
+            }
+        }
+
+        function g1CloseModal() {
+            document.getElementById('g1SoftFlagModal').style.display = 'none';
+            g1PendingUpload = null;
+        }
+
+        // Zone 2: Enable upload button only when both review checkboxes are checked
+        function g1UpdateUploadBtn(contentType) {
+            const review = document.getElementById(contentType + '_review_check')?.checked;
+            const accurate = document.getElementById(contentType + '_accurate_check')?.checked;
+            const btn = document.getElementById(contentType + '_upload_btn');
+            if (!btn) return;
+            const ready = review && accurate;
+            btn.disabled = !ready;
+            btn.style.opacity = ready ? '1' : '0.5';
+            btn.style.cursor = ready ? 'pointer' : 'not-allowed';
+        }
+
+        // Reset review checkboxes when new content is loaded (called from showPreview + displayQuizPreview)
+        function g1ResetReviewChecks(contentType) {
+            const r = document.getElementById(contentType + '_review_check');
+            const a = document.getElementById(contentType + '_accurate_check');
+            if (r) r.checked = false;
+            if (a) a.checked = false;
+            g1UpdateUploadBtn(contentType);
+        }
+
+        // Handle soft flag response from any upload endpoint
+        function g1HandleUploadResponse(result, retryFn) {
+            if (result.status === 'flag' && result.requires_confirmation) {
+                g1ShowSoftFlagModal(
+                    result.flag_message || 'Bonita noticed something worth reviewing before this goes to students.',
+                    () => retryFn(true)  // retryFn called with faculty_confirmed=true
+                );
+                return true;  // handled as flag
+            }
+            if (result.detail && result.detail.code === 'CONTENT_HARD_BLOCK') {
+                alert('🚫 This content can\'t be uploaded.\n\n' + result.detail.message);
+                return true;  // handled as block
+            }
+            return false;  // not a flag — caller handles normally
+        }
+
         // ============================================================================
         // APP INITIALIZATION
         // ============================================================================
@@ -2916,7 +3063,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             } catch (error) { showAlert('syllabusAlert', 'error', '❌ Error: ' + error.message); }
         }
 
-        async function uploadAISyllabus() {
+        async function uploadAISyllabus(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select course first'); return; }
             const content = document.getElementById('aiGeneratedSyllabusContent').value;
             showAlert('syllabusAlert', 'info', '📤 Uploading...');
@@ -2924,9 +3071,10 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                 const response = await fetch(`${API_URL}/api/v2/canvas/syllabus`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ course_id: selectedCourse.id, syllabus_body: content })
+                    body: JSON.stringify({ course_id: selectedCourse.id, syllabus_body: content, faculty_confirmed: facultyConfirmed })
                 });
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => uploadAISyllabus(confirmed))) return;
                 if (response.ok) {
                     showAlert('syllabusAlert', 'success', `✅ Syllabus uploaded! <a href="${result.preview_url}" target="_blank">View →</a>`);
                     document.getElementById('aiSyllabusCourseName').value = '';
@@ -2967,6 +3115,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             }
         }
 
+        const _textareaToContentType = {
+            'aiGeneratedContent': 'assignment',
+            'aiGeneratedPageContent': 'page',
+            'aiGeneratedDiscussionContent': 'discussion',
+            'aiGeneratedSyllabusContent': 'syllabus',
+        };
+
         function showPreview(textareaId, content) {
             const textarea = document.getElementById(textareaId);
             const preview = document.getElementById(textareaId + 'Preview');
@@ -2974,6 +3129,9 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             preview.innerHTML = content;
             preview.style.display = 'block';
             textarea.style.display = 'none';
+            // Reset Zone 2 review checkboxes on fresh content
+            const ct = _textareaToContentType[textareaId];
+            if (ct) g1ResetReviewChecks(ct);
         }
 
         function showSection(section) {
@@ -3198,7 +3356,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             }
         }
 
-        async function uploadQuickQuiz() {
+        async function uploadQuickQuiz(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select a course first'); return; }
 
             const title = document.getElementById('quickQuizTitle').value.trim();
@@ -3231,11 +3389,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         topic: title,
                         questions: parsed,
                         num_questions: parsed.length,
-                        due_date: document.getElementById('quickQuizDueDate')?.value || null
+                        due_date: document.getElementById('quickQuizDueDate')?.value || null,
+                        faculty_confirmed: facultyConfirmed
                     })
                 });
 
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => uploadQuickQuiz(confirmed))) return;
 
                 if (response.ok) {
                     showAlert('quizAlert', 'success', `
@@ -3592,9 +3752,11 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                     ${questionsHTML}
                 </div>
             `;
+            // Reset Zone 2 review checkboxes on fresh quiz
+            g1ResetReviewChecks('quiz');
         }
 
-        async function uploadAIQuiz() {
+        async function uploadAIQuiz(facultyConfirmed = false) {
             if (!selectedCourse) {
                 showAlert('quizAlert', 'error', '❌ Please select a course first');
                 return;
@@ -3619,11 +3781,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         topic: generatedQuizData.topic,
                         questions: generatedQuizData.questions,
                         num_questions: generatedQuizData.num_questions,
-                        due_date: document.getElementById('aiQuizDueDate')?.value || null
+                        due_date: document.getElementById('aiQuizDueDate')?.value || null,
+                        faculty_confirmed: facultyConfirmed
                     })
                 });
 
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => uploadAIQuiz(confirmed))) return;
 
                 if (response.ok) {
                     // Show success with Canvas link
@@ -3682,24 +3846,28 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             return parseInt(document.getElementById('announcementTone').value) || 3;
         }
 
-        async function _submitAnnouncement(body) {
-            if (!selectedCourse) { alert('Select a course first'); return; }
+        async function _submitAnnouncement(body, facultyConfirmed = false) {
+            if (!selectedCourse) { alert('Select a course first'); return 'error'; }
             showAlert('announcementAlert', 'info', '📢 Posting announcement...');
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
                 const response = await fetch(`${API_URL}/api/v2/canvas/announcement`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ course_id: selectedCourse.id, language: currentLang, tone: _getAnnouncementTone(), ...body })
+                    body: JSON.stringify({ course_id: selectedCourse.id, language: currentLang, tone: _getAnnouncementTone(), faculty_confirmed: facultyConfirmed, ...body })
                 });
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => _submitAnnouncement(body, confirmed))) return 'flagged';
                 if (response.ok) {
                     showAlert('announcementAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank" style="color: var(--purple);">View in Canvas →</a>`);
+                    return 'success';
                 } else {
                     showAlert('announcementAlert', 'error', '❌ ' + result.detail);
+                    return 'error';
                 }
             } catch (error) {
                 showAlert('announcementAlert', 'error', '❌ Error: ' + error.message);
+                return 'error';
             }
         }
 
@@ -3707,16 +3875,16 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             const msg = document.getElementById('announcementCustomMessage').value.trim();
             if (!msg) { alert('Write your announcement first'); return; }
             showAlert('announcementAlert', 'info', '📢 Posting announcement...');
-            await _submitAnnouncement({ topic: msg.split('\n')[0].substring(0, 80), custom_message: msg, enhance: false });
-            document.getElementById('announcementCustomMessage').value = '';
+            const r = await _submitAnnouncement({ topic: msg.split('\n')[0].substring(0, 80), custom_message: msg, enhance: false });
+            if (r !== 'flagged') document.getElementById('announcementCustomMessage').value = '';
         }
 
         async function postAnnouncementPolished() {
             const msg = document.getElementById('announcementCustomMessage').value.trim();
             if (!msg) { alert('Write your announcement first'); return; }
             showAlert('announcementAlert', 'info', '✨ Polishing with AI...');
-            await _submitAnnouncement({ topic: msg.split('\n')[0].substring(0, 80), custom_message: msg, enhance: true });
-            document.getElementById('announcementCustomMessage').value = '';
+            const r = await _submitAnnouncement({ topic: msg.split('\n')[0].substring(0, 80), custom_message: msg, enhance: true });
+            if (r !== 'flagged') document.getElementById('announcementCustomMessage').value = '';
         }
 
         // AI Generate Announcement
@@ -3724,9 +3892,11 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             const topic = document.getElementById('announcementTopic').value;
             if (!topic) { alert('Enter announcement topic'); return; }
             showAlert('announcementAlert', 'info', '✨ Generating announcement...');
-            await _submitAnnouncement({ topic, details: document.getElementById('announcementDetails').value || null });
-            document.getElementById('announcementTopic').value = '';
-            document.getElementById('announcementDetails').value = '';
+            const r = await _submitAnnouncement({ topic, details: document.getElementById('announcementDetails').value || null });
+            if (r !== 'flagged') {
+                document.getElementById('announcementTopic').value = '';
+                document.getElementById('announcementDetails').value = '';
+            }
         }
 
         // Create Assignment
@@ -3803,7 +3973,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         }
 
         // Upload AI-Generated Assignment to Canvas
-        async function uploadAIAssignment() {
+        async function uploadAIAssignment(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select a course first'); return; }
 
             const topic = document.getElementById('aiAssignmentTopic').value;
@@ -3831,11 +4001,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         title: topic,
                         description: generatedContent,
                         points: points,
-                        due_date: dueDate
+                        due_date: dueDate,
+                        faculty_confirmed: facultyConfirmed
                     })
                 });
 
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => uploadAIAssignment(confirmed))) return;
 
                 if (response.ok) {
                     showAlert('assignmentAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank" style="color: var(--purple);">View in Canvas →</a>`);
@@ -3860,7 +4032,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             showAlert('assignmentAlert', 'info', 'Cancelled. You can regenerate or modify your inputs.');
         }
 
-        async function createAssignment() {
+        async function createAssignment(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select a course first'); return; }
 
             const title = document.getElementById('assignmentTitle').value;
@@ -3890,11 +4062,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         title: title,
                         description: description,
                         points: parseInt(document.getElementById('assignmentPoints').value),
-                        due_date: dueDate
+                        due_date: dueDate,
+                        faculty_confirmed: facultyConfirmed
                     })
                 });
 
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => createAssignment(confirmed))) return;
 
                 if (response.ok) {
                     showAlert('assignmentAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank" style="color: var(--purple);">View in Canvas →</a>`);
@@ -4000,7 +4174,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         }
 
         // Upload AI-Generated Page to Canvas
-        async function uploadAIPage() {
+        async function uploadAIPage(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select a course first'); return; }
 
             const title = document.getElementById('aiPageTitle').value;
@@ -4018,11 +4192,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                     body: JSON.stringify({
                         course_id: selectedCourse.id,
                         title: title,
-                        content: generatedContent
+                        content: generatedContent,
+                        faculty_confirmed: facultyConfirmed
                     })
                 });
 
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => uploadAIPage(confirmed))) return;
 
                 if (response.ok) {
                     showAlert('pageAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank" style="color: var(--purple);">View in Canvas →</a>`);
@@ -4048,7 +4224,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             showAlert('pageAlert', 'info', 'Cancelled. You can regenerate or modify your inputs.');
         }
 
-        async function createPage() {
+        async function createPage(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select a course first'); return; }
 
             const title = document.getElementById('pageTitle').value;
@@ -4067,11 +4243,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                     body: JSON.stringify({
                         course_id: selectedCourse.id,
                         title: title,
-                        content: content
+                        content: content,
+                        faculty_confirmed: facultyConfirmed
                     })
                 });
 
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => createPage(confirmed))) return;
 
                 if (response.ok) {
                     showAlert('pageAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank" style="color: var(--purple);">View in Canvas →</a>`);
@@ -4128,7 +4306,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
 
         async function regenerateAIDiscussion() { showAlert('discussionAlert', 'info', '🔄 Regenerating...'); await generateAIDiscussion(); }
 
-        async function uploadAIDiscussion() {
+        async function uploadAIDiscussion(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select a course first'); return; }
             const topic = document.getElementById('aiDiscussionTopic').value;
             const content = document.getElementById('aiGeneratedDiscussionContent').value;
@@ -4137,9 +4315,10 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                 const response = await fetch(`${API_URL}/api/v2/canvas/discussion`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ course_id: selectedCourse.id, topic, prompt: content })
+                    body: JSON.stringify({ course_id: selectedCourse.id, topic, prompt: content, faculty_confirmed: facultyConfirmed })
                 });
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => uploadAIDiscussion(confirmed))) return;
                 if (response.ok) {
                     showAlert('discussionAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank">View →</a>`);
                     document.getElementById('aiDiscussionTopic').value = '';
@@ -4155,7 +4334,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             document.getElementById('aiDiscussionForm').style.display = 'block';
         }
 
-        async function createDiscussion() {
+        async function createDiscussion(facultyConfirmed = false) {
             if (!selectedCourse) { alert('Select a course first'); return; }
 
             const topic = document.getElementById('discussionTopic').value;
@@ -4174,11 +4353,13 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                     body: JSON.stringify({
                         course_id: selectedCourse.id,
                         topic: topic,
-                        prompt: message
+                        prompt: message,
+                        faculty_confirmed: facultyConfirmed
                     })
                 });
 
                 const result = await response.json();
+                if (g1HandleUploadResponse(result, (confirmed) => createDiscussion(confirmed))) return;
 
                 if (response.ok) {
                     showAlert('discussionAlert', 'success', `✅ ${result.message}<br><a href="${result.preview_url}" target="_blank" style="color: var(--purple);">View in Canvas →</a>`);

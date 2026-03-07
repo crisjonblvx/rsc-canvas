@@ -1070,6 +1070,7 @@ class QuizUploadRequest(BaseModel):
     questions: list  # The generated questions from preview
     num_questions: int
     due_date: Optional[str] = None
+    faculty_confirmed: bool = False  # G1 Zone 3
 
 class QuizRequest(BaseModel):
     course_id: int
@@ -2246,6 +2247,18 @@ async def upload_quiz_to_canvas(
                 detail="Canvas not connected"
             )
 
+        # G1 Zone 3: Screen quiz topic before Canvas push
+        quiz_content_to_screen = request.topic + " " + " ".join(
+            q.get("question_text", "") for q in request.questions[:5]
+        )
+        flag = await _upload_safety_guard(
+            quiz_content_to_screen, "quiz", user_id,
+            course_id=str(request.course_id), generation_method="manual_input",
+            faculty_confirmed=request.faculty_confirmed,
+        )
+        if flag:
+            return {"status": "flag", **flag}
+
         # Upload to Canvas
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
         canvas_client = CanvasClient(credentials.canvas_url, decrypted_token)
@@ -2504,6 +2517,59 @@ def get_user_reference_context(user_id: int, db: Session, max_materials: int = 3
     except Exception:
         return ""
 
+# ── G1 Content Safety Guard ─────────────────────────────────────────────────────
+
+async def _upload_safety_guard(
+    content: str,
+    content_type: str,
+    user_id: int,
+    course_id: Optional[str] = None,
+    generation_method: str = "manual_input",
+    faculty_confirmed: bool = False,
+) -> Optional[dict]:
+    """
+    Run content safety check before any Canvas upload.
+    - Hard block: raises HTTPException(422) always.
+    - Soft flag (not confirmed): returns dict for frontend confirmation flow.
+    - Clean / confirmed: returns None (caller proceeds normally).
+    Logs to content_approvals for every push.
+    """
+    from content_integrity import check_content_safety, log_content_approval
+    result = await check_content_safety(content, content_type, anthropic_client)
+
+    # Log every upload attempt
+    try:
+        conn = get_db_connection()
+        log_content_approval(
+            conn, user_id, content_type, generation_method, content,
+            faculty_approved=result["passed"] or faculty_confirmed,
+            course_id=str(course_id) if course_id else None,
+            bonita_generated=(generation_method == "ai_generated"),
+            safety_checked=True,
+            safety_passed=result["passed"],
+            safety_flags={"level": result["level"], "reason": result.get("reason")} if not result["passed"] else None,
+        )
+        conn.close()
+    except Exception as e:
+        print(f"⚠️  content_approval log failed: {e}")
+
+    if result["level"] == "hard_block":
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "CONTENT_HARD_BLOCK",
+                "message": "This content can't be uploaded. Bonita found content that isn't appropriate for an academic platform. Please review and edit your content, then try again.",
+            }
+        )
+    if result["level"] == "soft_flag" and not faculty_confirmed:
+        return {
+            "requires_confirmation": True,
+            "flag_reason": result.get("reason"),
+            "flag_message": result.get("display_message") or "Bonita noticed something worth a second look before this goes to your students.",
+        }
+    return None
+
+
 class AnnouncementRequest(BaseModel):
     course_id: int
     topic: str
@@ -2512,6 +2578,7 @@ class AnnouncementRequest(BaseModel):
     tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
     custom_message: Optional[str] = None  # If set, use this text instead of generating
     enhance: bool = False  # If True + custom_message, AI polishes the custom message
+    faculty_confirmed: bool = False  # G1 Zone 3: faculty confirmed soft flag
 
 
 class AIPageRequest(BaseModel):
@@ -2529,6 +2596,7 @@ class PageRequest(BaseModel):
     course_id: int
     title: str
     content: str
+    faculty_confirmed: bool = False  # G1 Zone 3
 
 
 class AssignmentRequest(BaseModel):
@@ -2537,6 +2605,7 @@ class AssignmentRequest(BaseModel):
     description: str
     points: int = 100
     due_date: Optional[str] = None
+    faculty_confirmed: bool = False  # G1 Zone 3
 
 
 class ModuleRequest(BaseModel):
@@ -2549,6 +2618,7 @@ class DiscussionRequest(BaseModel):
     course_id: int
     topic: str
     prompt: str
+    faculty_confirmed: bool = False  # G1 Zone 3
 
 
 # Grading Setup Models
@@ -2646,6 +2716,16 @@ Make it:
 
 Return just the HTML content, no markdown code blocks."""
             announcement_html = await call_ai('announcement_generation', system, prompt, user_id=user_id)
+
+        # G1 Zone 2+3: Safety check before Canvas push
+        method = "ai_generated" if not request.custom_message else "manual_input"
+        flag = await _upload_safety_guard(
+            announcement_html, "announcement", user_id,
+            course_id=str(request.course_id), generation_method=method,
+            faculty_confirmed=request.faculty_confirmed,
+        )
+        if flag:
+            return {"status": "flag", **flag}
 
         # Upload to Canvas
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
@@ -2900,6 +2980,15 @@ async def create_page_v2(
         if not credentials:
             raise HTTPException(status_code=404, detail="Canvas not connected")
 
+        # G1 Zone 2+3: Safety check before Canvas push
+        flag = await _upload_safety_guard(
+            request.content, "page", user_id,
+            course_id=str(request.course_id), generation_method="manual_input",
+            faculty_confirmed=request.faculty_confirmed,
+        )
+        if flag:
+            return {"status": "flag", **flag}
+
         # Upload page to Canvas (content already provided)
         print(f"📄 Creating page: {request.title}")
 
@@ -3082,6 +3171,15 @@ Format in HTML for Canvas."""
 
             description = await call_ai('assignment_full', system, prompt, user_id=user_id)
 
+        # G1 Zone 2+3: Safety check before Canvas push
+        flag = await _upload_safety_guard(
+            description, "assignment", user_id,
+            course_id=str(request.course_id), generation_method="manual_input",
+            faculty_confirmed=request.faculty_confirmed,
+        )
+        if flag:
+            return {"status": "flag", **flag}
+
         # Upload to Canvas
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
         canvas_client = CanvasClient(credentials.canvas_url, decrypted_token)
@@ -3245,6 +3343,15 @@ Create an engaging discussion post that:
 Keep it concise but meaningful."""
 
         discussion_html = await call_ai('discussion_standard', system, prompt, user_id=user_id)
+
+        # G1 Zone 2+3: Safety check before Canvas push
+        flag = await _upload_safety_guard(
+            discussion_html, "discussion", user_id,
+            course_id=str(request.course_id), generation_method="ai_generated",
+            faculty_confirmed=request.faculty_confirmed,
+        )
+        if flag:
+            return {"status": "flag", "generated_content": discussion_html, **flag}
 
         # Upload to Canvas
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
@@ -3501,6 +3608,7 @@ class AISyllabusRequest(BaseModel):
 class SyllabusRequest(BaseModel):
     course_id: int
     syllabus_body: str
+    faculty_confirmed: bool = False  # G1 Zone 3
 
 
 @app.post("/api/v2/canvas/generate-discussion")
@@ -3661,6 +3769,15 @@ async def upload_syllabus(
             raise HTTPException(status_code=404, detail="Canvas not connected")
 
         print(f"📋 Uploading syllabus to course {request.course_id}")
+
+        # G1 Zone 2+3: Safety check before Canvas push
+        flag = await _upload_safety_guard(
+            request.syllabus_body, "syllabus", user_id,
+            course_id=str(request.course_id), generation_method="manual_input",
+            faculty_confirmed=request.faculty_confirmed,
+        )
+        if flag:
+            return {"status": "flag", **flag}
 
         decrypted_token = decrypt_token(credentials.access_token_encrypted)
         canvas_client = CanvasClient(credentials.canvas_url, decrypted_token)
@@ -5821,10 +5938,24 @@ async def interview_message(
     """Core interview endpoint. Each call = one turn of the Bonita conversation."""
     import json as _json
     import re as _re
+    from content_integrity import (
+        check_input_quality, record_quality_strike, mark_hostile_skip,
+        _BONITA_RECOVERY_RESPONSES,
+    )
     user_id = current_user['user_id']
 
     if not request.faculty_message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+    # ── Zone 1: Input quality check ──────────────────────────────────────────
+    quality_result = await check_input_quality(
+        text=request.faculty_message,
+        question_context=request.current_step,
+        groq_client=groq_client,
+    )
+    quality = quality_result["quality"]
+    quality_issue = quality_result["issue"]
+    stored_to_profile = quality == "good"
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -5845,12 +5976,40 @@ async def interview_message(
         profile_id = cursor.fetchone()[0]
         conn.commit()
 
-        # Log faculty message
+        # Log faculty message with quality metadata
         cursor.execute("""
             INSERT INTO bonita_interview_log
-                (faculty_profile_id, turn_number, speaker, message)
-            VALUES (%s, %s, 'faculty', %s)
-        """, (profile_id, request.turn_number, request.faculty_message.strip()))
+                (faculty_profile_id, turn_number, speaker, message,
+                 input_quality, quality_issue, stored_to_profile)
+            VALUES (%s, %s, 'faculty', %s, %s, %s, %s)
+        """, (profile_id, request.turn_number, request.faculty_message.strip(),
+              quality, quality_issue, stored_to_profile))
+        conn.commit()
+
+        # If low/garbage quality, record strike + return recovery response
+        if quality in ("low", "garbage"):
+            strike_result = record_quality_strike(conn, user_id, quality_issue or quality)
+            recovery = _BONITA_RECOVERY_RESPONSES.get(quality_issue or quality, _BONITA_RECOVERY_RESPONSES["low"])
+            # Log Bonita's recovery response
+            next_turn = request.turn_number + 1
+            cursor.execute("""
+                INSERT INTO bonita_interview_log
+                    (faculty_profile_id, turn_number, speaker, message)
+                VALUES (%s, %s, 'bonita', %s)
+            """, (profile_id, next_turn, recovery))
+            conn.commit()
+
+            return {
+                "bonita_message": recovery,
+                "extracted_fields": {},
+                "completed_layer": None,
+                "next_step": request.current_step,  # don't advance
+                "interview_complete": False,
+                "turn_number": next_turn,
+                "quality_flag": quality,  # for frontend to optionally show skip path
+                "show_hostile_skip": quality_issue == "hostile" or strike_result.get("garbage_count", 0) >= 3,
+            }
+        # ── End Zone 1 ────────────────────────────────────────────────────────
         conn.commit()
 
         # Load full conversation history for context
@@ -6058,21 +6217,31 @@ async def interview_complete(current_user=Depends(get_current_user_from_token)):
         conn.close()
 
 
+class InterviewSkipRequest(BaseModel):
+    hostile: bool = False  # True when faculty chose to leave after hostile-input warning
+
 @app.post("/api/faculty/interview/skip")
-async def interview_skip(current_user=Depends(get_current_user_from_token)):
+async def interview_skip(
+    request: InterviewSkipRequest = InterviewSkipRequest(),
+    current_user=Depends(get_current_user_from_token)
+):
     """Skip the interview. Bonita still works — just not personalized yet."""
     user_id = current_user['user_id']
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
+        phase = 'skipped_hostile' if request.hostile else 'demo_shown'
         cursor.execute("""
             INSERT INTO faculty_profiles (user_id, onboarding_phase)
-            VALUES (%s, 'demo_shown')
+            VALUES (%s, %s)
             ON CONFLICT (user_id) DO UPDATE SET
-                onboarding_phase = 'demo_shown',
+                onboarding_phase = %s,
                 last_updated = NOW()
-        """, (user_id,))
+        """, (user_id, phase, phase))
         conn.commit()
+        if request.hostile:
+            from content_integrity import mark_hostile_skip
+            mark_hostile_skip(conn, user_id)
         return {
             "status": "ok",
             "message": "Profile will build from usage. Bonita learns as you work.",
@@ -6457,6 +6626,133 @@ async def admin_get_onboarding_status(current_user=Depends(get_current_user_from
         cols = ['onboarding_phase', 'interview_completed', 'interview_completed_at',
                 'primary_discipline', 'generations_count']
         return dict(zip(cols, row))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- Admin: Content Integrity Dashboard (G1) ---
+
+@app.get("/api/admin/content-integrity")
+async def get_content_integrity_stats(
+    days: int = 30,
+    current_user=Depends(get_current_user_from_token)
+):
+    """Admin view of content integrity stats: onboarding quality flags + content approvals."""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Onboarding quality summary
+        cursor.execute("""
+            SELECT
+                COUNT(*) FILTER (WHERE garbage_count >= 3)  AS flagged_users,
+                COUNT(*) FILTER (WHERE hostile_count > 0)   AS hostile_users,
+                COUNT(*) FILTER (WHERE skipped_hostile)     AS hostile_skips,
+                COALESCE(SUM(garbage_count), 0)             AS total_garbage,
+                COALESCE(SUM(hostile_count), 0)             AS total_hostile
+            FROM onboarding_quality_flags
+            WHERE session_date >= NOW() - INTERVAL '%s days'
+        """, (days,))
+        oq = cursor.fetchone()
+
+        # Content approvals summary
+        cursor.execute("""
+            SELECT
+                COUNT(*)                                      AS total_approvals,
+                COUNT(*) FILTER (WHERE safety_passed = false) AS safety_failures,
+                COUNT(*) FILTER (
+                    WHERE safety_flags IS NOT NULL
+                    AND jsonb_array_length(safety_flags) > 0
+                )                                             AS soft_flags,
+                COUNT(*) FILTER (WHERE bonita_generated)      AS ai_generated,
+                COUNT(*) FILTER (WHERE NOT bonita_generated)  AS manual_input
+            FROM content_approvals
+            WHERE created_at >= NOW() - INTERVAL '%s days'
+        """, (days,))
+        ca = cursor.fetchone()
+
+        # Recent flag log (last 25)
+        cursor.execute("""
+            SELECT
+                ca.id,
+                u.email,
+                ca.content_type,
+                CASE WHEN ca.bonita_generated THEN 'AI' ELSE 'Manual' END AS source,
+                ca.safety_flags,
+                ca.safety_passed,
+                ca.created_at
+            FROM content_approvals ca
+            LEFT JOIN users u ON u.id = ca.user_id
+            WHERE (ca.safety_passed = false OR (ca.safety_flags IS NOT NULL AND jsonb_array_length(ca.safety_flags) > 0))
+            ORDER BY ca.created_at DESC
+            LIMIT 25
+        """)
+        flags = cursor.fetchall()
+
+        # Recent hostile onboarding (last 25)
+        cursor.execute("""
+            SELECT
+                oqf.id,
+                u.email,
+                oqf.garbage_count,
+                oqf.hostile_count,
+                oqf.skipped_hostile,
+                oqf.flagged_for_review,
+                oqf.session_date
+            FROM onboarding_quality_flags oqf
+            LEFT JOIN users u ON u.id = oqf.user_id
+            WHERE oqf.flagged_for_review = true OR oqf.hostile_count > 0
+            ORDER BY oqf.session_date DESC
+            LIMIT 25
+        """)
+        onboarding_flags = cursor.fetchall()
+
+        return {
+            "period_days": days,
+            "onboarding": {
+                "flagged_users": oq[0] or 0,
+                "hostile_users": oq[1] or 0,
+                "hostile_skips": oq[2] or 0,
+                "total_garbage_inputs": int(oq[3] or 0),
+                "total_hostile_inputs": int(oq[4] or 0),
+            },
+            "content_approvals": {
+                "total": ca[0] or 0,
+                "safety_failures": ca[1] or 0,
+                "soft_flags": ca[2] or 0,
+                "ai_generated": ca[3] or 0,
+                "manual_input": ca[4] or 0,
+            },
+            "recent_flags": [
+                {
+                    "id": r[0],
+                    "email": r[1],
+                    "content_type": r[2],
+                    "source": r[3],
+                    "safety_flags": r[4],
+                    "safety_passed": r[5],
+                    "created_at": r[6].isoformat() if r[6] else None,
+                }
+                for r in flags
+            ],
+            "recent_onboarding_flags": [
+                {
+                    "id": r[0],
+                    "email": r[1],
+                    "garbage_count": r[2],
+                    "hostile_count": r[3],
+                    "skipped_hostile": r[4],
+                    "flagged_for_review": r[5],
+                    "session_date": r[6].isoformat() if r[6] else None,
+                }
+                for r in onboarding_flags
+            ],
+        }
+    except Exception as e:
+        print(f"❌ content integrity stats error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()
         conn.close()

@@ -391,6 +391,39 @@
                     Preview opens the full onboarding flow in read-only mode.
                 </p>
             </div>
+
+            <!-- Content Integrity Dashboard (G1 Part 5) -->
+            <div class="table-container" style="margin-top: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2 style="margin: 0;">🛡️ Content Integrity</h2>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <label style="font-size: 0.8rem; color: var(--text-light);">Period:</label>
+                        <select id="integrityDays" onchange="loadContentIntegrity()" style="font-size: 0.8rem; padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+                            <option value="7">Last 7 days</option>
+                            <option value="30" selected>Last 30 days</option>
+                            <option value="90">Last 90 days</option>
+                        </select>
+                        <button class="btn" onclick="loadContentIntegrity()" style="padding: 4px 12px; font-size: 0.8rem; background: var(--navy); color: #fff;">↻ Refresh</button>
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div id="integrityStatsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem;">
+                    <div style="font-size: 0.85rem; color: #9ca3af;">Loading…</div>
+                </div>
+
+                <!-- Recent Content Flags -->
+                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem; color: var(--text);">Content Flags (recent)</h3>
+                <div id="integrityContentFlags" style="overflow-x: auto; margin-bottom: 1.5rem;">
+                    <div style="font-size: 0.85rem; color: #9ca3af;">Loading…</div>
+                </div>
+
+                <!-- Onboarding Quality Flags -->
+                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem; color: var(--text);">Onboarding Quality Flags (recent)</h3>
+                <div id="integrityOnboardingFlags" style="overflow-x: auto;">
+                    <div style="font-size: 0.85rem; color: #9ca3af;">Loading…</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -443,6 +476,8 @@
                 loadAnalytics();
             } else if (tabName === 'referrals') {
                 loadReferrals();
+            } else if (tabName === 'system') {
+                loadContentIntegrity();
             }
         }
 
@@ -889,6 +924,124 @@
             }
         }
 
+        // ── Content Integrity Dashboard (G1 Part 5) ─────────────────────────
+        async function loadContentIntegrity() {
+            const days = document.getElementById('integrityDays')?.value || 30;
+            try {
+                const resp = await fetch(`${API_URL}/api/admin/content-integrity?days=${days}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (!resp.ok) return;
+                const d = await resp.json();
+
+                // Stats grid
+                const oq = d.onboarding;
+                const ca = d.content_approvals;
+                document.getElementById('integrityStatsGrid').innerHTML = `
+                    <div style="background:#f8f9fb; border:1px solid #e4e7ec; border-radius:10px; padding:14px 16px; text-align:center;">
+                        <div style="font-size:1.5rem; font-weight:700; color:#1b2a5e;">${ca.total}</div>
+                        <div style="font-size:0.75rem; color:#6b7280; margin-top:2px;">Content approvals</div>
+                    </div>
+                    <div style="background:#f8f9fb; border:1px solid #e4e7ec; border-radius:10px; padding:14px 16px; text-align:center;">
+                        <div style="font-size:1.5rem; font-weight:700; color:#d97706;">${ca.soft_flags}</div>
+                        <div style="font-size:0.75rem; color:#6b7280; margin-top:2px;">Soft flags</div>
+                    </div>
+                    <div style="background:#f8f9fb; border:1px solid #e4e7ec; border-radius:10px; padding:14px 16px; text-align:center;">
+                        <div style="font-size:1.5rem; font-weight:700; color:#dc2626;">${ca.safety_failures}</div>
+                        <div style="font-size:0.75rem; color:#6b7280; margin-top:2px;">Hard blocks</div>
+                    </div>
+                    <div style="background:#f8f9fb; border:1px solid #e4e7ec; border-radius:10px; padding:14px 16px; text-align:center;">
+                        <div style="font-size:1.5rem; font-weight:700; color:#7c3aed;">${ca.ai_generated}</div>
+                        <div style="font-size:0.75rem; color:#6b7280; margin-top:2px;">AI-generated content</div>
+                    </div>
+                    <div style="background:#f8f9fb; border:1px solid #e4e7ec; border-radius:10px; padding:14px 16px; text-align:center;">
+                        <div style="font-size:1.5rem; font-weight:700; color:#1b2a5e;">${oq.flagged_users}</div>
+                        <div style="font-size:0.75rem; color:#6b7280; margin-top:2px;">Flagged onboardings</div>
+                    </div>
+                    <div style="background:#f8f9fb; border:1px solid #e4e7ec; border-radius:10px; padding:14px 16px; text-align:center;">
+                        <div style="font-size:1.5rem; font-weight:700; color:#dc2626;">${oq.hostile_users}</div>
+                        <div style="font-size:0.75rem; color:#6b7280; margin-top:2px;">Hostile users</div>
+                    </div>
+                `;
+
+                // Content flags table
+                if (!d.recent_flags.length) {
+                    document.getElementById('integrityContentFlags').innerHTML =
+                        '<div style="font-size:0.85rem; color:#9ca3af; padding:1rem 0;">No flagged content in this period.</div>';
+                } else {
+                    let rows = d.recent_flags.map(f => `
+                        <tr>
+                            <td style="padding:8px 12px; font-size:0.8rem;">${f.email || '—'}</td>
+                            <td style="padding:8px 12px; font-size:0.8rem;">${f.content_type}</td>
+                            <td style="padding:8px 12px; font-size:0.8rem;">${f.source}</td>
+                            <td style="padding:8px 12px; font-size:0.8rem;">
+                                <span style="color:${f.safety_passed ? '#16a34a' : '#dc2626'}; font-weight:600;">
+                                    ${f.safety_passed ? '✓ Passed' : '✗ Blocked'}
+                                </span>
+                            </td>
+                            <td style="padding:8px 12px; font-size:0.8rem; color:#6b7280;">
+                                ${f.created_at ? new Date(f.created_at).toLocaleDateString() : '—'}
+                            </td>
+                        </tr>
+                    `).join('');
+                    document.getElementById('integrityContentFlags').innerHTML = `
+                        <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                            <thead>
+                                <tr style="background:#f8f9fb; text-align:left;">
+                                    <th style="padding:8px 12px; font-size:0.75rem; color:#6b7280; font-weight:600;">Faculty</th>
+                                    <th style="padding:8px 12px; font-size:0.75rem; color:#6b7280; font-weight:600;">Type</th>
+                                    <th style="padding:8px 12px; font-size:0.75rem; color:#6b7280; font-weight:600;">Source</th>
+                                    <th style="padding:8px 12px; font-size:0.75rem; color:#6b7280; font-weight:600;">Result</th>
+                                    <th style="padding:8px 12px; font-size:0.75rem; color:#6b7280; font-weight:600;">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    `;
+                }
+
+                // Onboarding quality flags table
+                if (!d.recent_onboarding_flags.length) {
+                    document.getElementById('integrityOnboardingFlags').innerHTML =
+                        '<div style="font-size:0.85rem; color:#9ca3af; padding:1rem 0;">No onboarding quality flags in this period.</div>';
+                } else {
+                    let orows = d.recent_onboarding_flags.map(f => `
+                        <tr>
+                            <td style="padding:8px 12px; font-size:0.8rem;">${f.email || '—'}</td>
+                            <td style="padding:8px 12px; font-size:0.8rem; text-align:center;">${f.garbage_count}</td>
+                            <td style="padding:8px 12px; font-size:0.8rem; text-align:center; color:${f.hostile_count > 0 ? '#dc2626' : '#333'};">${f.hostile_count}</td>
+                            <td style="padding:8px 12px; font-size:0.8rem; text-align:center;">${f.skipped_hostile ? '⚠️ Yes' : '—'}</td>
+                            <td style="padding:8px 12px; font-size:0.8rem; text-align:center;">
+                                <span style="color:${f.flagged_for_review ? '#d97706' : '#16a34a'}; font-weight:600;">
+                                    ${f.flagged_for_review ? '⚑ Review' : '—'}
+                                </span>
+                            </td>
+                            <td style="padding:8px 12px; font-size:0.8rem; color:#6b7280;">
+                                ${f.session_date ? new Date(f.session_date).toLocaleDateString() : '—'}
+                            </td>
+                        </tr>
+                    `).join('');
+                    document.getElementById('integrityOnboardingFlags').innerHTML = `
+                        <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                            <thead>
+                                <tr style="background:#f8f9fb; text-align:left;">
+                                    <th style="padding:8px 12px; font-size:0.75rem; color:#6b7280; font-weight:600;">Faculty</th>
+                                    <th style="padding:8px 12px; font-size:0.75rem; color:#6b7280; font-weight:600; text-align:center;">Garbage</th>
+                                    <th style="padding:8px 12px; font-size:0.75rem; color:#6b7280; font-weight:600; text-align:center;">Hostile</th>
+                                    <th style="padding:8px 12px; font-size:0.75rem; color:#6b7280; font-weight:600; text-align:center;">Hostile Skip</th>
+                                    <th style="padding:8px 12px; font-size:0.75rem; color:#6b7280; font-weight:600; text-align:center;">Review Flag</th>
+                                    <th style="padding:8px 12px; font-size:0.75rem; color:#6b7280; font-weight:600;">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>${orows}</tbody>
+                        </table>
+                    `;
+                }
+            } catch (e) {
+                console.error('Content integrity load failed:', e);
+            }
+        }
+
         // Initialize
         async function init() {
             const hasAccess = await checkAdminAccess();
@@ -896,6 +1049,7 @@
                 loadStats();
                 loadUsers();
                 loadBonitaAdminStatus();
+                loadContentIntegrity();
             }
         }
 

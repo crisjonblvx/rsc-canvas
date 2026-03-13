@@ -863,7 +863,7 @@ class LoginResponse(BaseModel):
     user: Dict[str, Any]
 
 # ============================================================================
-# AUTH HELPERS
+# AUTH & INSTITUTION HELPERS
 # ============================================================================
 
 def get_db_connection():
@@ -872,6 +872,83 @@ def get_db_connection():
     if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
     return psycopg2.connect(DATABASE_URL)
+
+
+def resolve_institution_for_user(user: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Resolve the institution record for a given user using the institutions table.
+
+    Strategy:
+      1. Read users.institution (free-text) from the user dict
+      2. Try to match institutions.name exactly
+      3. If no match and institution name present, create minimal institutions record lazily
+      4. Return the institutions row as a dict, or None if user has no institution
+
+    This keeps existing users working as-is while enabling per-institution flags
+    like qm_mode_enabled. Data cleanup / enrichment happens in separate passes.
+    """
+    institution_name = user.get("institution")
+    if not institution_name:
+        return None
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Step 1: try to find an existing institution by exact name
+        cursor.execute(
+            """
+            SELECT id, name, domain, qm_mode_enabled, seat_limit, stripe_customer_id, created_at
+            FROM institutions
+            WHERE name = %s
+            """,
+            (institution_name,),
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            # Step 2: lazily create a minimal institution record
+            cursor.execute(
+                """
+                INSERT INTO institutions (name)
+                VALUES (%s)
+                ON CONFLICT (name) DO NOTHING
+                RETURNING id, name, domain, qm_mode_enabled, seat_limit, stripe_customer_id, created_at
+                """,
+                (institution_name,),
+            )
+            created = cursor.fetchone()
+
+            # If another process created it first, read it back
+            if not created:
+                cursor.execute(
+                    """
+                    SELECT id, name, domain, qm_mode_enabled, seat_limit, stripe_customer_id, created_at
+                    FROM institutions
+                    WHERE name = %s
+                    """,
+                    (institution_name,),
+                )
+                row = cursor.fetchone()
+            else:
+                row = created
+
+            conn.commit()
+
+        if not row:
+            return None
+
+        return {
+            "id": row[0],
+            "name": row[1],
+            "domain": row[2],
+            "qm_mode_enabled": row[3],
+            "seat_limit": row[4],
+            "stripe_customer_id": row[5],
+            "created_at": row[6],
+        }
+    finally:
+        cursor.close()
+        conn.close()
 
 
 # ============================================================================
@@ -1979,6 +2056,7 @@ class AIAssignmentRequest(BaseModel):
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
     tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
     course_name: Optional[str] = None  # Selected course name for filtering reference materials
+    use_qm_alignment: bool = False  # Per-request QM toggle (server-enforced)
 
 
 AI_TONE_MAP = {
@@ -2055,6 +2133,107 @@ def get_user_reference_context(user_id: int, db: Session, max_materials: int = 3
     except Exception:
         return ""
 
+
+QM_SYSTEM_PROMPT_FULL = """You are generating educational content with Quality Matters (QM) alignment.
+Apply the following principles to every piece of content you produce.
+
+LEARNING OBJECTIVES (QM General Standard 2)
+  - All learning objectives must be MEASURABLE. Use action verbs from
+    Bloom's Taxonomy that describe observable, assessable behavior.
+  - BANNED verbs (unmeasurable): understand, know, learn, appreciate,
+    be aware of, realize, recognize the importance of, become familiar with
+  - REQUIRED: Replace banned verbs with measurable alternatives.
+    understand → explain, analyze, describe, compare
+    know → identify, define, list, state
+    appreciate → evaluate, reflect on, argue, assess
+  - Match verb cognitive level to course level:
+    Introductory courses: define, identify, describe, explain, classify
+    Intermediate courses: apply, demonstrate, calculate, solve, construct
+    Advanced courses: analyze, evaluate, synthesize, design, critique
+  - Write objectives in learner-centered language:
+    "Upon completion, learners will be able to [verb] [specific outcome]"
+    NOT: "This module covers [topic]" or "Students will learn [topic]"
+  - Course-level objectives must connect logically to module-level objectives.
+    Do not generate module objectives that cannot trace back to a course goal.
+
+ALIGNMENT (QM Core Principle — runs through SRS 2.1, 3.1, 4.1, 5.1, 6.1)
+  - Every assessment you generate must measure one or more stated objectives.
+    Name the objective(s) each assessment addresses.
+  - Every activity you generate must help learners prepare for an assessment.
+    Explain how the activity connects to the objective and assessment.
+  - Do not generate assessments that are misaligned with their objectives.
+    Example of misalignment: objective says "deliver a speech" but assessment
+    asks learners to "write about public speaking." Flag this if it occurs.
+  - When generating a syllabus, include an alignment note for each major
+    assessment showing which course objectives it measures.
+
+ASSESSMENTS (QM General Standard 3)
+  - Include multiple assessment types when generating a full course structure:
+    formative (low-stakes, feedback-focused) + summative (graded, higher-stakes)
+  - Sequence assessments so learners build on earlier work.
+  - Grading criteria must be specific. Rubrics should describe performance
+    levels, not just point values. Vague criteria ("good analysis") fail QM.
+  - Academic integrity guidance should be included in assessment instructions.
+
+INSTRUCTIONAL MATERIALS (QM General Standard 4)
+  - When referencing materials, explain HOW they connect to the objective.
+    Not: "Read Chapter 3."
+    Yes: "Read Chapter 3 to prepare for the Module 2 discussion on X,
+         which connects to Course Objective 2."
+  - Suggest variety of material types when appropriate: text, video, audio,
+    interactive. Do not default to text-only.
+
+COURSE OVERVIEW / SYLLABUS (QM General Standard 1)
+  - Syllabi must include: how to get started, course purpose and structure,
+    communication guidelines, grading policy, technology requirements,
+    required prior knowledge, and instructor introduction placeholder.
+  - Grading policy must be internally consistent. If points are used,
+    use points throughout. Do not mix points and percentages without
+    explaining the relationship.
+
+ACCESSIBILITY (QM General Standard 8)
+  - Flag any generated content that may create accessibility issues.
+  - Learning objectives and instructions should avoid unnecessary jargon.
+  - When generating headings, maintain logical hierarchy (H1 → H2 → H3).
+
+TRANSPARENCY
+  - When generating learning objectives, briefly note which Bloom's level
+    each verb represents. This helps faculty understand the cognitive level
+    of their course.
+  - When alignment is strong, note it. When a potential alignment gap exists,
+    flag it constructively — never critically. Tone: colleague, not auditor.
+"""
+
+
+def apply_qm_prompt(content_type: str, use_qm_alignment: bool, base_system_prompt: str) -> str:
+    """
+    Inject QM system prompt content based on content_type and toggle.
+
+    content_type: one of "syllabus", "assignment", "quiz", "discussion",
+                  "lesson_plan", "study_guide", "study_pack", "exam",
+                  "announcement", "rubric", "image"
+    use_qm_alignment: already-enforced flag (institution + request)
+    base_system_prompt: existing system prompt string
+    """
+    if not use_qm_alignment:
+        return base_system_prompt
+
+    # Map content types to QM behavior (FULL / PARTIAL / NONE)
+    full_types = {"syllabus", "assignment", "lesson_plan", "rubric"}
+    partial_types = {"quiz", "discussion", "study_guide", "study_pack", "exam"}
+
+    if content_type in full_types:
+        qm_block = QM_SYSTEM_PROMPT_FULL
+    elif content_type in partial_types:
+        # TODO: For PARTIAL types, trim this block down per content type.
+        # For now we reuse the full block so behavior is safely QM-forward.
+        qm_block = QM_SYSTEM_PROMPT_FULL
+    else:
+        # NONE — no QM injection
+        return base_system_prompt
+
+    return f"{qm_block}\n\n{base_system_prompt}"
+
 class AnnouncementRequest(BaseModel):
     course_id: int
     topic: str
@@ -2074,6 +2253,7 @@ class AIPageRequest(BaseModel):
     tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
     course_name: Optional[str] = None  # Selected course name for filtering reference materials
     study_pack_sections: Optional[List[str]] = None  # hook, cases, critical, glossary, resources, closing, assignment, model_example, rubric
+    use_qm_alignment: bool = False  # Per-request QM toggle (server-enforced)
 
 
 class PageRequest(BaseModel):
@@ -2251,7 +2431,11 @@ async def generate_ai_page(
     try:
         user_id = current_user['user_id']
         check_and_increment_generation(user_id)
-        print(f"🤖 Generating AI page: {request.title}")
+
+        # Resolve institution and enforce QM toggle before building prompts
+        institution = resolve_institution_for_user(current_user)
+        institution_qm_enabled = bool(institution and institution.get("qm_mode_enabled"))
+        qm_active = bool(institution_qm_enabled and request.use_qm_alignment)
 
         # Map page types to better descriptions
         type_descriptions = {
@@ -2277,8 +2461,12 @@ async def generate_ai_page(
         reference_context = get_user_reference_context(current_user['user_id'], db, course_name=request.course_name, max_chars=ref_max_chars)
         course_label = request.course_name or "this course"
 
-        system = """You are Bonita, an AI assistant helping college professors create course pages.
+        base_system = """You are Bonita, an AI assistant helping college professors create course pages.
 Your output should be well-formatted HTML suitable for Canvas LMS."""
+
+        # Study guides map to QM content type "study_guide", everything else is "page" (NONE)
+        content_type = "study_guide" if request.page_type == "study_guide" else "page"
+        system = apply_qm_prompt(content_type, qm_active, base_system)
 
         sections = set(request.study_pack_sections or [])
 
@@ -2410,7 +2598,8 @@ Do NOT include the page title as a heading (Canvas adds it automatically)."""
 
         asset_id = save_asset(
             user_id, 'page', request.title or "Course Page",
-            generated_content, course_name=request.course_name
+            generated_content, course_name=request.course_name,
+            generation_params={"qm_mode_used": qm_active}
         )
 
         print(f"✅ Page generated (cost: ${cost:.4f})")
@@ -2419,7 +2608,8 @@ Do NOT include the page title as a heading (Canvas adds it automatically)."""
             "status": "success",
             "generated_content": generated_content,
             "asset_id": asset_id,
-            "cost": cost
+            "cost": cost,
+            "qm_mode_used": qm_active
         }
 
     except HTTPException:
@@ -2492,7 +2682,11 @@ async def generate_ai_assignment(
     """
     try:
         check_and_increment_generation(current_user['user_id'])
-        print(f"🤖 Generating AI assignment: {request.topic}")
+
+        # Resolve institution and enforce QM toggle before building prompts
+        institution = resolve_institution_for_user(current_user)
+        institution_qm_enabled = bool(institution and institution.get("qm_mode_enabled"))
+        qm_active = bool(institution_qm_enabled and request.use_qm_alignment)
 
         # Map assignment types to better descriptions
         type_descriptions = {
@@ -2518,8 +2712,9 @@ async def generate_ai_assignment(
         course_label = request.course_name or "this course"
         ref_section = f"\n\nCOURSE REFERENCE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
 
-        system = """You are Bonita, an AI assistant helping college professors create assignments.
+        base_system = """You are Bonita, an AI assistant helping college professors create assignments.
 Write in HTML formatted for Canvas LMS."""
+        system = apply_qm_prompt("assignment", qm_active, base_system)
 
         prompt = f"""Help a professor create a {assignment_type_desc} for their course.
 
@@ -2556,8 +2751,17 @@ Do NOT include the assignment title as a heading. Be practical, specific, and ac
         return {
             "status": "success",
             "generated_content": generated_content,
-            "cost": cost
+            "cost": cost,
+            "qm_mode_used": qm_active
         }
+
+    # KNOWN GAP — Assignment QM logging
+    # generate_ai_assignment returns HTML but does not call save_asset.
+    # Persistence happens at /api/v2/canvas/assignment (upload path).
+    # qm_mode_used is not currently threaded through to that write.
+    # Resolution: future brief will either (a) add a lightweight generation
+    # log table, or (b) pass qm_mode_used as a hidden field through the
+    # upload payload. Do not patch this inline — it needs a design decision.
 
     except Exception as e:
         print(f"❌ Error generating assignment: {e}")
@@ -3006,6 +3210,7 @@ class AIDiscussionRequest(BaseModel):
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
     tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
     course_name: Optional[str] = None  # Selected course name for filtering reference materials
+    use_qm_alignment: bool = False  # Per-request QM toggle (server-enforced)
 
 
 class AISyllabusRequest(BaseModel):
@@ -3016,6 +3221,7 @@ class AISyllabusRequest(BaseModel):
     language: str = "en"  # Language code: en, es, fr, pt, ar, zh
     tone: int = 3  # 1=Formal, 2=Professional, 3=Balanced, 4=Friendly, 5=Casual
     selected_course_name: Optional[str] = None  # Selected Canvas course for filtering reference materials
+    use_qm_alignment: bool = False  # Per-request QM toggle (server-enforced)
 
 
 class SyllabusRequest(BaseModel):
@@ -3033,7 +3239,11 @@ async def generate_ai_discussion(
     try:
         user_id = current_user['user_id']
         check_and_increment_generation(user_id)
-        print(f"🤖 Generating AI discussion: {request.topic}")
+
+        # Resolve institution and enforce QM toggle before building prompts
+        institution = resolve_institution_for_user(current_user)
+        institution_qm_enabled = bool(institution and institution.get("qm_mode_enabled"))
+        qm_active = bool(institution_qm_enabled and request.use_qm_alignment)
 
         language_name = LANGUAGE_MAP.get(request.language, "English")
         tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
@@ -3042,7 +3252,8 @@ async def generate_ai_discussion(
         course_label = request.course_name or "this course"
         ref_section = f"\n\nCOURSE REFERENCE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
 
-        system = "You are Bonita, helping professors create engaging class discussions."
+        base_system = "You are Bonita, helping professors create engaging class discussions."
+        system = apply_qm_prompt("discussion", qm_active, base_system)
         prompt = f"""Create a discussion topic for a college course.
 
 SELECTED COURSE: {course_label}
@@ -3067,11 +3278,18 @@ Format in HTML for Canvas. Be direct and engaging — students should know exact
 
         asset_id = save_asset(
             user_id, 'discussion', f"Discussion: {request.topic}",
-            content, course_name=request.course_name
+            content, course_name=request.course_name,
+            generation_params={"qm_mode_used": qm_active}
         )
 
         print(f"✅ Discussion generated (cost: ${cost:.4f})")
-        return {"status": "success", "generated_content": content, "asset_id": asset_id, "cost": cost}
+        return {
+            "status": "success",
+            "generated_content": content,
+            "asset_id": asset_id,
+            "cost": cost,
+            "qm_mode_used": qm_active
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -3089,7 +3307,11 @@ async def generate_ai_syllabus(
     try:
         user_id = current_user['user_id']
         check_and_increment_generation(user_id)
-        print(f"🤖 Generating AI syllabus: {request.course_name}")
+
+        # Resolve institution and enforce QM toggle before building prompts
+        institution = resolve_institution_for_user(current_user)
+        institution_qm_enabled = bool(institution and institution.get("qm_mode_enabled"))
+        qm_active = bool(institution_qm_enabled and request.use_qm_alignment)
 
         language_name = LANGUAGE_MAP.get(request.language, "English")
         tone_desc = AI_TONE_MAP.get(request.tone, AI_TONE_MAP[3])
@@ -3099,7 +3321,8 @@ async def generate_ai_syllabus(
         course_label = selected_cn or request.course_name or "this course"
         ref_section = f"\n\nEXISTING COURSE MATERIALS for {course_label} (use ONLY these — ignore content from any other courses):\n{reference_context}" if reference_context else ""
 
-        system = "You are Bonita, helping professors create course syllabi."
+        base_system = "You are Bonita, helping professors create course syllabi."
+        system = apply_qm_prompt("syllabus", qm_active, base_system)
         prompt = f"""Create a course syllabus for: {request.course_name}
 
 SELECTED COURSE: {course_label}
@@ -3127,11 +3350,18 @@ Be specific, practical, and student-friendly. No filler."""
 
         asset_id = save_asset(
             user_id, 'syllabus', f"Syllabus: {request.course_name}",
-            content, course_name=request.course_name
+            content, course_name=request.course_name,
+            generation_params={"qm_mode_used": qm_active}
         )
 
         print(f"✅ Syllabus generated (cost: ${cost:.4f})")
-        return {"status": "success", "generated_content": content, "asset_id": asset_id, "cost": cost}
+        return {
+            "status": "success",
+            "generated_content": content,
+            "asset_id": asset_id,
+            "cost": cost,
+            "qm_mode_used": qm_active
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -3473,6 +3703,100 @@ def generate_demo_password() -> str:
     """Generate a unique random password for each demo account."""
     chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'
     return ''.join(secrets.choice(chars) for _ in range(10))
+
+
+# ============================================================================
+# INSTITUTION ADMIN APIs (QM mode)
+# ============================================================================
+
+
+@app.get("/api/v2/admin/institutions")
+async def get_institutions(current_user=Depends(get_current_user_from_token)):
+    """List institutions with QM mode flag (admin only)."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT id, name, domain, qm_mode_enabled, seat_limit, stripe_customer_id, created_at
+            FROM institutions
+            ORDER BY name ASC
+            """
+        )
+        rows = cursor.fetchall()
+        institutions = [
+            {
+                "id": r[0],
+                "name": r[1],
+                "domain": r[2],
+                "qm_mode_enabled": r[3],
+                # seat_limit and stripe_customer_id are intentionally not exposed to UI yet
+                "created_at": r[6].isoformat() if r[6] else None,
+            }
+            for r in rows
+        ]
+        return {"institutions": institutions}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.patch("/api/v2/admin/institutions/{institution_id}")
+async def update_institution_qm_mode(
+    institution_id: int,
+    payload: Dict[str, Any],
+    current_user=Depends(get_current_user_from_token),
+):
+    """Update qm_mode_enabled for an institution (admin only)."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    if "qm_mode_enabled" not in payload:
+        raise HTTPException(status_code=400, detail="qm_mode_enabled is required")
+
+    qm_mode_enabled = bool(payload["qm_mode_enabled"])
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE institutions
+            SET qm_mode_enabled = %s
+            WHERE id = %s
+            RETURNING id, name, qm_mode_enabled
+            """,
+            (qm_mode_enabled, institution_id),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Institution not found")
+
+        conn.commit()
+        return {
+            "id": row[0],
+            "name": row[1],
+            "qm_mode_enabled": row[2],
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.get("/api/v2/canvas/qm-status")
+async def get_qm_status(current_user=Depends(get_current_user_from_token)):
+    """
+    Return whether QM mode is available for the current user's institution.
+
+    Response:
+        { "qm_mode_available": bool }
+    """
+    institution = resolve_institution_for_user(current_user)
+    qm_mode_available = bool(institution and institution.get("qm_mode_enabled"))
+    return {"qm_mode_available": qm_mode_available}
 
 @app.post("/api/demo/create")
 async def create_demo_account(request: Request, db: Session = Depends(get_db)):

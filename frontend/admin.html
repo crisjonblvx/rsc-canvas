@@ -228,6 +228,18 @@
             color: #991b1b;
         }
 
+        .qm-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .qm-toggle input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+        }
+
         .loading {
             text-align: center;
             padding: 3rem;
@@ -330,6 +342,7 @@
             <button class="tab" onclick="showTab('analytics')">📊 Analytics</button>
             <button class="tab" onclick="showTab('referrals')">🤝 Referrals</button>
             <button class="tab" onclick="showTab('system')">⚙️ System</button>
+            <button class="tab" onclick="showTab('institutions')">🏛️ Institutions</button>
         </div>
 
         <!-- Users Tab -->
@@ -370,6 +383,19 @@
                 <p style="color: var(--text-light); margin-top: 1rem; font-size: 0.875rem;">
                     This will permanently delete all expired demo accounts and their data.
                 </p>
+            </div>
+        </div>
+
+        <!-- Institutions Tab -->
+        <div id="institutions" class="tab-content">
+            <div class="table-container">
+                <h2 style="margin-bottom: 1rem;">Institution Settings</h2>
+                <p class="help-text" style="margin-bottom: 1rem; color: var(--text-light);">
+                    Enable or disable QM Alignment Mode for each institution. When enabled, faculty at that institution can opt in to QM-aligned generation per request.
+                </p>
+                <div id="institutionsTable">
+                    <div class="loading">Loading institutions...</div>
+                </div>
             </div>
         </div>
     </div>
@@ -423,6 +449,8 @@
                 loadAnalytics();
             } else if (tabName === 'referrals') {
                 loadReferrals();
+            } else if (tabName === 'institutions') {
+                loadInstitutions();
             }
         }
 
@@ -536,6 +564,75 @@
                 document.getElementById('usersTable').innerHTML = tableHTML;
             } catch (error) {
                 showAlert('error', 'Failed to load users');
+            }
+        }
+
+        // Load institutions and QM toggle state
+        async function loadInstitutions() {
+            try {
+                const response = await fetch(`${API_URL}/api/v2/admin/institutions`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const data = await response.json();
+
+                const tableHTML = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Domain</th>
+                                <th>QM Alignment Mode</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.institutions.map(inst => `
+                                <tr>
+                                    <td>${inst.name}</td>
+                                    <td>${inst.domain || '-'}</td>
+                                    <td>
+                                        <label class="qm-toggle">
+                                            <input type="checkbox"
+                                                ${inst.qm_mode_enabled ? 'checked' : ''}
+                                                onchange="toggleInstitutionQM(${inst.id}, this.checked)" />
+                                            <span>${inst.qm_mode_enabled ? 'Enabled' : 'Disabled'}</span>
+                                        </label>
+                                    </td>
+                                    <td>${inst.created_at ? new Date(inst.created_at).toLocaleDateString() : '—'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+
+                document.getElementById('institutionsTable').innerHTML = tableHTML;
+            } catch (error) {
+                showAlert('error', 'Failed to load institutions');
+            }
+        }
+
+        async function toggleInstitutionQM(institutionId, enabled) {
+            try {
+                const response = await fetch(`${API_URL}/api/v2/admin/institutions/${institutionId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ qm_mode_enabled: enabled })
+                });
+
+                if (response.ok) {
+                    showAlert('success', `QM Alignment Mode ${enabled ? 'enabled' : 'disabled'} for institution`);
+                    loadInstitutions();
+                } else {
+                    const data = await response.json();
+                    showAlert('error', data.detail || 'Failed to update institution');
+                    loadInstitutions();
+                }
+            } catch (error) {
+                showAlert('error', 'Failed to update institution');
+                loadInstitutions();
             }
         }
 

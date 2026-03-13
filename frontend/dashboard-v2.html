@@ -2033,6 +2033,18 @@ Students should demonstrate understanding of how technology challenges tradition
                         <input type="datetime-local" id="aiAssignmentDueDate">
                     </div>
 
+                    <div class="form-group qm-section" style="display: none; align-items: center; gap: 0.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="aiAssignmentQM">
+                            <span>
+                                <strong>QM-align this content</strong>
+                                <span style="display:block; font-size:0.8rem; color:#666;">
+                                    Applies QM alignment principles to objectives, assessments, and activities.
+                                </span>
+                            </span>
+                        </label>
+                    </div>
+
                     <button class="btn btn-primary" onclick="generateAIAssignment()">✨ Generate with AI</button>
                 </div>
 
@@ -2138,6 +2150,18 @@ Students should demonstrate understanding of how technology challenges tradition
                     <div class="form-group">
                         <label data-i18n="page.objectivesLabel">Learning Objectives (Optional)</label>
                         <textarea id="aiPageObjectives" placeholder="What should students learn from this page?" style="min-height: 80px;"></textarea>
+                    </div>
+
+                    <div class="form-group qm-section" style="display: none; align-items: center; gap: 0.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="aiPageQM">
+                            <span>
+                                <strong>QM-align this content</strong>
+                                <span style="display:block; font-size:0.8rem; color:#666;">
+                                    Applies QM alignment principles to objectives, assessments, and activities.
+                                </span>
+                            </span>
+                        </label>
                     </div>
 
                     <!-- Study Pack Builder — only shown when Study Guide is selected -->
@@ -2288,6 +2312,17 @@ Students should demonstrate understanding of how technology challenges tradition
                         <label>What should students discuss? (Brief description)</label>
                         <textarea id="aiDiscussionGoals" placeholder="Example: 'Students will debate the ethical implications of targeted advertising, considering privacy, manipulation, and consumer protection.'" style="min-height: 100px;"></textarea>
                     </div>
+                    <div class="form-group qm-section" style="display: none; align-items: center; gap: 0.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="aiDiscussionQM">
+                            <span>
+                                <strong>QM-align this content</strong>
+                                <span style="display:block; font-size:0.8rem; color:#666;">
+                                    Applies QM alignment principles to objectives, assessments, and activities.
+                                </span>
+                            </span>
+                        </label>
+                    </div>
 
                     <button class="btn btn-primary" onclick="generateAIDiscussion()">✨ Generate with AI</button>
                 </div>
@@ -2407,6 +2442,17 @@ Assignments: 30%
 Quizzes: 20%
 Participation: 10%" style="min-height: 80px;"></textarea>
                     </div>
+                    <div class="form-group qm-section" style="display: none; align-items: center; gap: 0.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="aiSyllabusQM">
+                            <span>
+                                <strong>QM-align this content</strong>
+                                <span style="display:block; font-size:0.8rem; color:#666;">
+                                    Applies QM alignment principles to objectives, assessments, and activities.
+                                </span>
+                            </span>
+                        </label>
+                    </div>
                     <button class="btn btn-primary" onclick="generateAISyllabus()">✨ Generate with AI</button>
                 </div>
 
@@ -2519,6 +2565,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
         window.API_URL = API_URL; // expose for i18n.js backend persist
         let authToken = localStorage.getItem('auth_token');
         let selectedCourse = null;
+        let qmModeAvailable = false; // institution-level QM availability
 
         // Helper function to get current course
         function getCurrentCourse() {
@@ -2591,7 +2638,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         duration: duration,
                         metadata: metadata
                     })
-                }).catch(err => console.log('Analytics error:', err));
+                }).catch(err => {/* analytics non-critical */});
             },
 
             trackFeature(feature) {
@@ -2631,7 +2678,6 @@ Participation: 10%" style="min-height: 80px;"></textarea>
 
         // Listen for language changes and update UI
         window.addEventListener('languageChanged', (e) => {
-            console.log('Language changed to:', e.detail.lang);
             // Update language selector
             const selector = document.getElementById('languageSelect');
             if (selector) {
@@ -2770,7 +2816,23 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                     }
                 }
             } catch (e) {
-                console.log('Canvas status check:', e.message);
+            }
+
+            // Load QM status for this user's institution (controls QM UI)
+            try {
+                const qmResp = await fetch(`${API_URL}/api/v2/canvas/qm-status`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (qmResp.ok) {
+                    const qmData = await qmResp.json();
+                    qmModeAvailable = !!qmData.qm_mode_available;
+                    const qmSections = document.querySelectorAll('.qm-section');
+                    qmSections.forEach(sec => {
+                        sec.style.display = qmModeAvailable ? 'flex' : 'none';
+                    });
+                }
+            } catch (e) {
+                qmModeAvailable = false;
             }
         });
 
@@ -2800,17 +2862,19 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
                 const tone = parseInt(document.getElementById('syllabusTone').value) || 3;
+                const useQM = qmModeAvailable && document.getElementById('aiSyllabusQM')?.checked;
                 const response = await fetch(`${API_URL}/api/v2/canvas/generate-syllabus`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ course_name: courseName, description, objectives, grading, language: currentLang, tone, selected_course_name: selectedCourse?.name || null })
+                    body: JSON.stringify({ course_name: courseName, description, objectives, grading, language: currentLang, tone, selected_course_name: selectedCourse?.name || null, use_qm_alignment: !!useQM })
                 });
                 const result = await response.json();
                 if (response.ok) {
                     showPreview('aiGeneratedSyllabusContent', result.generated_content);
                     document.getElementById('aiSyllabusPreview').style.display = 'block';
                     document.getElementById('aiSyllabusForm').style.display = 'none';
-                    showAlert('syllabusAlert', 'success', '✅ Syllabus ready!');
+                    const qmBadge = result.qm_mode_used ? ' <span style="font-size:0.8rem; padding:0.15rem 0.5rem; border-radius:999px; background:#eef2ff; color:#3730a3; margin-left:0.25rem;">QM-aligned</span>' : '';
+                    showAlert('syllabusAlert', 'success', `✅ Syllabus ready!${qmBadge}`);
                 } else { showAlert('syllabusAlert', 'error', '❌ ' + result.detail); }
             } catch (error) { showAlert('syllabusAlert', 'error', '❌ Error: ' + error.message); }
         }
@@ -3683,6 +3747,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
                 const tone = parseInt(document.getElementById('assignmentTone').value) || 3;
+                const useQM = qmModeAvailable && document.getElementById('aiAssignmentQM')?.checked;
                 const response = await fetch(`${API_URL}/api/v2/canvas/generate-assignment`, {
                     method: 'POST',
                     headers: {
@@ -3696,7 +3761,8 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         points: parseInt(document.getElementById('aiAssignmentPoints').value),
                         language: currentLang,
                         tone: tone,
-                        course_name: selectedCourse?.name || null
+                        course_name: selectedCourse?.name || null,
+                        use_qm_alignment: !!useQM
                     })
                 });
 
@@ -3707,7 +3773,8 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                     showPreview('aiGeneratedContent', result.generated_content);
                     document.getElementById('aiAssignmentPreview').style.display = 'block';
                     document.getElementById('aiAssignmentForm').style.display = 'none';
-                    showAlert('assignmentAlert', 'success', '✅ AI-generated content ready! Review and edit if needed, then upload.');
+                    const qmBadge = result.qm_mode_used ? ' <span style="font-size:0.8rem; padding:0.15rem 0.5rem; border-radius:999px; background:#eef2ff; color:#3730a3; margin-left:0.25rem;">QM-aligned</span>' : '';
+                    showAlert('assignmentAlert', 'success', `✅ AI-generated content ready!${qmBadge} Review and edit if needed, then upload.`);
                 } else {
                     showAlert('assignmentAlert', 'error', '❌ ' + result.detail);
                 }
@@ -3879,6 +3946,7 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
                 const tone = parseInt(document.getElementById('pageTone').value) || 3;
+                const useQM = qmModeAvailable && document.getElementById('aiPageQM')?.checked;
                 const response = await fetch(`${API_URL}/api/v2/canvas/generate-page`, {
                     method: 'POST',
                     headers: {
@@ -3893,7 +3961,8 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                         language: currentLang,
                         tone: tone,
                         course_name: selectedCourse?.name || null,
-                        study_pack_sections: studyPackSections
+                        study_pack_sections: studyPackSections,
+                        use_qm_alignment: !!useQM
                     })
                 });
 
@@ -3904,7 +3973,8 @@ Participation: 10%" style="min-height: 80px;"></textarea>
                     showPreview('aiGeneratedPageContent', result.generated_content);
                     document.getElementById('aiPagePreview').style.display = 'block';
                     document.getElementById('aiPageForm').style.display = 'none';
-                    showAlert('pageAlert', 'success', '✅ AI-generated page ready! Review and edit if needed, then upload.');
+                    const qmBadge = result.qm_mode_used ? ' <span style="font-size:0.8rem; padding:0.15rem 0.5rem; border-radius:999px; background:#eef2ff; color:#3730a3; margin-left:0.25rem;">QM-aligned</span>' : '';
+                    showAlert('pageAlert', 'success', `✅ AI-generated page ready!${qmBadge} Review and edit if needed, then upload.`);
                 } else {
                     showAlert('pageAlert', 'error', '❌ ' + result.detail);
                 }
@@ -4031,17 +4101,19 @@ Participation: 10%" style="min-height: 80px;"></textarea>
             try {
                 const currentLang = window.i18n?.getLang() || 'en';
                 const tone = parseInt(document.getElementById('discussionTone').value) || 3;
+                const useQM = qmModeAvailable && document.getElementById('aiDiscussionQM')?.checked;
                 const response = await fetch(`${API_URL}/api/v2/canvas/generate-discussion`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                    body: JSON.stringify({ topic, discussion_type: type, goals, language: currentLang, tone, course_name: selectedCourse?.name || null })
+                    body: JSON.stringify({ topic, discussion_type: type, goals, language: currentLang, tone, course_name: selectedCourse?.name || null, use_qm_alignment: !!useQM })
                 });
                 const result = await response.json();
                 if (response.ok) {
                     showPreview('aiGeneratedDiscussionContent', result.generated_content);
                     document.getElementById('aiDiscussionPreview').style.display = 'block';
                     document.getElementById('aiDiscussionForm').style.display = 'none';
-                    showAlert('discussionAlert', 'success', '✅ AI discussion ready!');
+                    const qmBadge = result.qm_mode_used ? ' <span style="font-size:0.8rem; padding:0.15rem 0.5rem; border-radius:999px; background:#eef2ff; color:#3730a3; margin-left:0.25rem;">QM-aligned</span>' : '';
+                    showAlert('discussionAlert', 'success', `✅ AI discussion ready!${qmBadge}`);
                 } else { showAlert('discussionAlert', 'error', '❌ ' + result.detail); }
             } catch (error) { showAlert('discussionAlert', 'error', '❌ Error: ' + error.message); }
         }

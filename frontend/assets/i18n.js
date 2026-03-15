@@ -8,6 +8,7 @@ class I18n {
         this.translations = {};
         this.currentLang = 'en';
         this.defaultLang = 'en';
+        this._stylesInjected = false;
         this.supportedLanguages = {
             'en': { name: 'English',    flag: '🇺🇸', dir: 'ltr' },
             'es': { name: 'Español',    flag: '🇪🇸', dir: 'ltr' },
@@ -24,6 +25,8 @@ class I18n {
      * code once API_URL is available (i18n.js loads before main script).
      */
     async init() {
+        this.ensureGlobalLanguageStyles();
+
         const savedLang = localStorage.getItem('language');
         const browserLang = navigator.language.split('-')[0];
         const lang = savedLang ||
@@ -38,6 +41,78 @@ class I18n {
         }
 
         await this.loadLanguage(lang);
+    }
+
+    /**
+     * Inject global language styles once:
+     * - Arabic RTL layout fixes
+     * - Arabic/Chinese font stacks
+     */
+    ensureGlobalLanguageStyles() {
+        if (this._stylesInjected || document.getElementById('rsc-i18n-global-styles')) {
+            this._stylesInjected = true;
+            return;
+        }
+
+        const style = document.createElement('style');
+        style.id = 'rsc-i18n-global-styles';
+        style.textContent = `
+            :lang(ar), [lang="ar"] {
+                font-family: 'Noto Sans Arabic', 'Arial', 'Tahoma', sans-serif !important;
+            }
+
+            :lang(zh), :lang(zh-CN), [lang="zh"] {
+                font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+            }
+
+            [dir="rtl"] {
+                text-align: right;
+            }
+
+            [dir="rtl"] .flex-row {
+                flex-direction: row-reverse;
+            }
+
+            /* Canvas dashboard/sidebar specific RTL corrections */
+            [dir="rtl"] .dashboard {
+                direction: rtl;
+            }
+
+            [dir="rtl"] .sidebar {
+                left: auto !important;
+                right: 0 !important;
+                border-right: none !important;
+                border-left: 1px solid rgba(0, 0, 0, 0.08) !important;
+            }
+
+            [dir="rtl"] .main-content,
+            [dir="rtl"] .header,
+            [dir="rtl"] .content-wrapper {
+                direction: rtl;
+            }
+
+            [dir="rtl"] .nav-item {
+                border-right: none !important;
+                border-left: 3px solid transparent !important;
+            }
+
+            [dir="rtl"] .nav-item.active {
+                border-right: none !important;
+                border-left-color: var(--purple, #1E3A5F) !important;
+            }
+
+            [dir="rtl"] .icon-directional {
+                transform: scaleX(-1);
+            }
+
+            [dir="rtl"] .pl-4 { padding-left: 0 !important; padding-right: 1rem !important; }
+            [dir="rtl"] .pr-4 { padding-right: 0 !important; padding-left: 1rem !important; }
+            [dir="rtl"] .ml-2 { margin-left: 0 !important; margin-right: 0.5rem !important; }
+            [dir="rtl"] .mr-2 { margin-right: 0 !important; margin-left: 0.5rem !important; }
+        `;
+
+        (document.head || document.documentElement).appendChild(style);
+        this._stylesInjected = true;
     }
 
     /**

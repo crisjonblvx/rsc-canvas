@@ -132,7 +132,7 @@ LANGUAGE_MAP = {
     "fr": "French",
     "pt": "Portuguese",
     "ar": "Arabic",
-    "zh": "Chinese"
+    "zh": "Chinese (Simplified)"
 }
 
 # ============================================================================
